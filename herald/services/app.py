@@ -30,7 +30,7 @@ def _load_registry() -> dict:
 
 def create_app(brief_store: BriefStore, result_store: ResultStore,
                admin_token: str = None, results_token: str = None,
-               cors_origins=None) -> FastAPI:
+               cors_origins=None, allow_open_writes: bool = False) -> FastAPI:
     app = FastAPI(title="Herald Brief Board")
 
     # Public read endpoints are consumed cross-origin by the landing page.
@@ -44,7 +44,12 @@ def create_app(brief_store: BriefStore, result_store: ResultStore,
     )
 
     def _check(expected, token):
-        if expected and not (token and secrets.compare_digest(token, expected)):
+        if not expected:
+            if allow_open_writes:
+                return  # local dev only
+            raise HTTPException(status_code=503,
+                                detail="write endpoint disabled: set its token (or HERALD_ALLOW_OPEN_WRITES for local dev)")
+        if not (token and secrets.compare_digest(token, expected)):
             raise HTTPException(status_code=401, detail="unauthorized")
 
     def _check_admin(token):
@@ -120,4 +125,5 @@ app = create_app(
     admin_token=os.getenv("HERALD_ADMIN_TOKEN"),
     results_token=os.getenv("HERALD_RESULTS_TOKEN"),
     cors_origins=os.getenv("HERALD_CORS_ORIGINS"),
+    allow_open_writes=os.getenv("HERALD_ALLOW_OPEN_WRITES", "").lower() in ("1", "true", "yes"),
 )

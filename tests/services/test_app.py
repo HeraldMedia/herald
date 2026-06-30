@@ -10,8 +10,19 @@ def client(tmp_path):
     app = create_app(
         BriefStore(str(tmp_path / "b.json")),
         ResultStore(str(tmp_path / "r.json")),
+        allow_open_writes=True,  # local-dev mode: exercise endpoints without tokens
     )
     return TestClient(app)
+
+
+def test_write_endpoints_closed_without_token_by_default(tmp_path):
+    # No token configured and no dev override -> mutating endpoints must fail closed,
+    # so a public deployment can't be posted fake "verified" articles.
+    app = create_app(BriefStore(str(tmp_path / "b.json")), ResultStore(str(tmp_path / "r.json")))
+    c = TestClient(app)
+    assert c.post("/results", json={"article_id": "a", "hotkey": "h"}).status_code == 503
+    assert c.post("/admin/briefs", json={"title": "x"}).status_code == 503
+    assert c.get("/public/articles").status_code == 200  # reads stay open
 
 
 def test_create_fund_and_list_open_brief(client):
