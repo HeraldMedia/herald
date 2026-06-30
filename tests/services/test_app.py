@@ -36,6 +36,17 @@ def test_results_proof_and_leaderboard(client):
     assert "articles" in export and "leaderboard" in export
 
 
+def test_html_board_and_page(client):
+    bid = client.post("/admin/briefs", json={"title": "Coverage push", "tier": 1}).json()["id"]
+    client.post(f"/admin/briefs/{bid}/fund")
+    client.post("/results", json={"article_id": "a", "hotkey": "hkA", "url": "https://nyt.com/a",
+                                  "tier": 1, "status": "vesting", "usd": 500.0})
+    board = client.get("/board")
+    assert board.status_code == 200 and "Coverage push" in board.text
+    page = client.get("/page")
+    assert page.status_code == 200 and "https://nyt.com/a" in page.text and "hkA" in page.text
+
+
 def test_admin_token_enforced(tmp_path):
     app = create_app(
         BriefStore(str(tmp_path / "b.json")),

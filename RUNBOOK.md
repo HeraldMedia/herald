@@ -138,9 +138,10 @@ are treated as unbacked and pay nothing.
 ```bash
 ./scripts/status.sh                 # pm2 process list
 pm2 logs herald_validator
-curl -s localhost:8093/public/articles      # verified articles (proof)
-curl -s localhost:8093/public/leaderboard   # miner leaderboard
-curl -s localhost:8093/reporting/export     # exportable report
+curl -s localhost:8093/public/articles      # verified articles (proof, JSON)
+curl -s localhost:8093/public/leaderboard   # miner leaderboard (JSON)
+curl -s localhost:8093/reporting/export     # exportable report (JSON)
+#   Web pages: http://<host>:8093/board (open briefs) and /page (proof + leaderboard)
 ./scripts/stop.sh                   # stop all Herald processes
 ```
 

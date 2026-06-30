@@ -3,7 +3,9 @@
 import os
 
 from fastapi import Body, FastAPI, Header, HTTPException
+from fastapi.responses import HTMLResponse
 
+from .render import render_board, render_page
 from .store import BriefStore, ResultStore
 
 
@@ -50,6 +52,14 @@ def create_app(brief_store: BriefStore, result_store: ResultStore, admin_token: 
     @app.get("/reporting/export")
     def reporting_export():
         return {"articles": result_store.articles(), "leaderboard": result_store.leaderboard()}
+
+    @app.get("/board", response_class=HTMLResponse)
+    def board_page():
+        return render_board(brief_store.open_briefs())
+
+    @app.get("/page", response_class=HTMLResponse)
+    def proof_page():
+        return render_page(result_store.articles(), result_store.leaderboard())
 
     return app
 
