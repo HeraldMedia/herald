@@ -28,6 +28,7 @@ services:
       "--wallet.hotkey", "${HOTKEY_NAME:-default}",
       "--netuid", "${NETUID:-69}",
       "--subtensor.network", "${SUBTENSOR_NETWORK:-finney}",
+      "--axon.port", "8092",
       "--neuron.disable_auto_update",
     ]
     ports:

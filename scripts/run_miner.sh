@@ -45,7 +45,7 @@ fi
 
 DISABLE_AUTO_UPDATE_FLAG=""
 if [ "${DISABLE_AUTO_UPDATE,,}" = "true" ]; then
-    DISABLE_AUTO_UPDATE_FLAG="--disable_auto_update"
+    DISABLE_AUTO_UPDATE_FLAG="--neuron.disable_auto_update"
 fi
 
 # Check if required environment variables are set
