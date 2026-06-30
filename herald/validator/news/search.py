@@ -73,9 +73,9 @@ def in_index(article_url: str, epoch=None) -> SearchResult:
     total_results = 0
     for provider in providers:
         try:
-            links = provider(target, HERALD_SEARCH_TOP_N)
+            links = [l for l in provider(target, HERALD_SEARCH_TOP_N) if isinstance(l, str)]
         except Exception:
-            continue
+            continue  # a non-list or other malformed response just doesn't contribute
         total_results += len(links)
         if any(canonicalize(l) == target for l in links):
             matched_in += 1
