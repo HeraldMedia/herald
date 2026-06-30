@@ -55,6 +55,24 @@ def test_reassign_to_earlier_committer():
     assert v.entry("art1").uid == 2
 
 
+def test_reassign_after_vest_epochs_change_cannot_overpay():
+    # If the ledger divisor changes mid-flight (operator edits HERALD_VEST_EPOCHS + restart;
+    # config is now the source of truth), a later earliest-commit reassignment must not
+    # recompute the installment against the new divisor while keeping the old remaining —
+    # lifetime payout must still never exceed total_usd.
+    v = VestingLedger(vest_epochs=10)
+    v.start("art", uid=1, total_usd=300.0, hotkey="hk1", commit_epoch=5)
+    paid = sum(v.release("art", epoch=e) for e in range(1, 6))  # 5 x 30 = 150, remaining 5
+    v.vest_epochs = 2  # operator lowered the schedule and restarted
+    v.start("art", uid=2, total_usd=300.0, hotkey="hk2", commit_epoch=3)  # earlier -> reassign
+    e = 5
+    while v.status("art") == "VESTING":
+        e += 1
+        paid += v.release("art", epoch=e)
+    assert paid <= 300.0 + 1e-9
+    assert v.entry("art").uid == 2  # the payee still got reassigned
+
+
 def test_start_is_idempotent_same_committer():
     v = VestingLedger(vest_epochs=4)
     v.start("art1", uid=1, total_usd=400.0, commit_epoch=5)

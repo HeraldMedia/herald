@@ -1,0 +1,21 @@
+# Reverse proxy + automatic HTTPS for the Herald public API (the landing-page data source).
+#
+# The brief board (uvicorn herald.services.app:app on :8093) serves the public read endpoints
+# the marketing site consumes — /public/articles, /public/leaderboard, /public/stats, /briefs,
+# /registry/outlets.json. Run it co-located with the DSV validator (which POSTs verified results
+# to it), and put this in front for TLS at herald-api.herald.network.
+#
+# Usage:
+#   1) Run the service (pm2 or compose), e.g.:
+#        HERALD_CORS_ORIGINS=https://herald.network ./scripts/run_brief_board.sh
+#      or:  docker compose --profile services up -d brief_board
+#   2) Install Caddy, point this Caddyfile at it, reload:
+#        caddy run --config deploy/herald-api.Caddyfile
+#   3) Set the site's NEXT_PUBLIC_HERALD_API_URL=https://herald-api.herald.network and rebuild.
+#
+# CORS is handled by the app (HERALD_CORS_ORIGINS); Caddy only terminates TLS + proxies.
+
+herald-api.herald.network {
+	encode gzip
+	reverse_proxy 127.0.0.1:8093
+}

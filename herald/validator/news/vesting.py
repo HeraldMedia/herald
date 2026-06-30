@@ -37,14 +37,15 @@ class VestingLedger:
               commit_epoch=0, start_epoch=0):
         existing = self._entries.get(article_id)
         if existing is not None:
-            # earliest commit wins even if it reveals in a later cycle
+            # earliest commit wins even if it reveals in a later cycle: reassign the payee
+            # only, keep the original installment schedule. Recomputing installment_usd against
+            # the current vest_epochs while keeping the old remaining could release more than
+            # total_usd if the divisor changed since the entry was created.
             if existing.status == VESTING and commit_epoch < existing.commit_epoch:
                 existing.uid = uid
                 existing.hotkey = hotkey
                 existing.commit_epoch = commit_epoch
                 existing.brief_id = brief_id
-                existing.total_usd = total_usd
-                existing.installment_usd = total_usd / self.vest_epochs
             return
         self._entries[article_id] = VestEntry(
             uid=uid,

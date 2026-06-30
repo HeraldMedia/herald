@@ -103,6 +103,12 @@ curl -s -XPOST localhost:8093/admin/briefs/<BRIEF_ID>/fund
 Point validators at it: `HERALD_BRIEFS_ENDPOINT=http://<host>:8093/api/v2/validator/briefs`.
 For the public proof page, set `HERALD_RESULTS_ENDPOINT=http://<host>:8093` on the validator.
 
+**Public API for the landing page.** The same service exposes the read endpoints the marketing
+site (`../herald-site`) consumes — `/public/articles`, `/public/leaderboard`, `/public/stats`,
+`/briefs`, `/registry/outlets.json`. Set `HERALD_CORS_ORIGINS=https://herald.network` (the site's
+origin) so the browser can fetch it cross-origin, run it behind TLS at `herald-api.herald.network`
+(see `deploy/herald-api.Caddyfile`), and set the site's `NEXT_PUBLIC_HERALD_API_URL` to that host.
+
 ## 8. Run the validator
 
 ```bash
