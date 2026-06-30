@@ -4,12 +4,6 @@ import bittensor as bt
 from pydantic import BaseModel
 
 
-class AccessTokenSynapse(bt.Synapse):
-    """Legacy YouTube token synapse (unused by Herald; retained for the youtube platform)."""
-
-    YT_access_tokens: typing.Optional[typing.List[str]] = None
-
-
 class ClaimRecord(BaseModel):
     """A miner's reveal linking a published article to a prior on-chain commitment."""
 

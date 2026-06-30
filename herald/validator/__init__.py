@@ -1,1 +1,1 @@
-from .forward import forward
+from .news.forward import forward
