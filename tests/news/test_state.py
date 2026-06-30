@@ -10,7 +10,7 @@ def test_fresh_state_is_empty():
 def test_save_load_roundtrip(tmp_path):
     path = str(tmp_path / "herald_state.json")
     s = HeraldState.fresh()
-    s.commit_index.observe(100, {"hkA": "v1"})
+    s.commit_index.observe({"hkA": ("v1", 100)})
     s.vesting.start("art1", uid=1, total_usd=400.0, url="https://x/a", hotkey="hkA")
     s.slash.slash("hkB", until_epoch=9)
     s.save(path)

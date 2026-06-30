@@ -39,7 +39,7 @@ indexed = lambda u: SimpleNamespace(in_index=True, matched_url=u, num_results=5,
 
 def index_for(commitments, block=100):
     idx = CommitIndex(epoch_len=10)
-    idx.observe(block, commitments)
+    idx.observe({hk: (v, block) for hk, v in commitments.items()})
     return idx
 
 
@@ -58,8 +58,8 @@ def test_same_url_earliest_commit_wins():
     c1 = claim("nyt", "https://www.nytimes.com/a", "hkA")
     c2 = claim("nyt", "https://www.nytimes.com/a", "hkB")
     idx = CommitIndex(epoch_len=10)
-    idx.observe(50, {"hkB": onchain(c2)})    # B committed earlier
-    idx.observe(100, {"hkA": onchain(c1)})
+    idx.observe({"hkB": (onchain(c2), 50)})    # B committed earlier
+    idx.observe({"hkA": (onchain(c1), 100)})
     usd = score_claims(
         {1: [c1], 2: [c2]}, {"hkA": onchain(c1), "hkB": onchain(c2)}, idx,
         {1: "hkA", 2: "hkB"}, {1: 1.0, 2: 1.0}, BRIEFS, REGISTRY, fetch_fn=live, search_fn=indexed)

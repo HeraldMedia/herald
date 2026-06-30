@@ -14,6 +14,7 @@ from herald.validator.utils.config import (
     VALIDATOR_STEPS_INTERVAL,
     VALIDATOR_WAIT,
 )
+from .chain import get_commitments_with_block
 from .emission import apply_brief_caps, compute_weights
 from .fetch import fetch
 from .judge import judge, llm_available
@@ -73,8 +74,9 @@ async def forward(self):
         commit_index, vesting, slash = state.commit_index, state.vesting, state.slash
         block = self.subtensor.get_current_block()
         epoch = block // EPOCH_LEN
-        commitments = self.subtensor.get_all_commitments(self.config.netuid)
-        commit_index.observe(block, commitments)
+        commitments_with_block = get_commitments_with_block(self.subtensor, self.config.netuid)
+        commit_index.observe(commitments_with_block)
+        commitments = {hk: v for hk, (v, _b) in commitments_with_block.items()}
 
         authority = os.getenv("HERALD_REGISTRY_AUTHORITY_HOTKEY")
         anchor_value = commitments.get(authority) if authority else None

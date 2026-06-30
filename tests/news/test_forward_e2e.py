@@ -25,9 +25,16 @@ def onchain(c):
         bond_atto=c.bond_atto, version_id=c.version_id))
 
 
-def make_self(claim_by_uid, commitments, block=1000):
+def make_self(claim_by_uid, commitments, block=1000, monkeypatch=None):
     captured = {}
     block_state = {"v": block}
+
+    # forward reads commitments-with-block from chain; supply {hotkey: (value, block)}
+    if monkeypatch is not None:
+        monkeypatch.setattr(
+            fwd, "get_commitments_with_block",
+            lambda subtensor, netuid: {hk: (v, block) for hk, v in commitments.items()},
+        )
 
     async def fake_dendrite(axons, synapse, deserialize, timeout):
         return [SimpleNamespace(claims=[claim_by_uid[axons[0]]])]
@@ -37,7 +44,6 @@ def make_self(claim_by_uid, commitments, block=1000):
         config=SimpleNamespace(netuid=69),
         block_state=block_state,
         subtensor=SimpleNamespace(
-            get_all_commitments=lambda netuid: commitments,
             get_current_block=lambda: block_state["v"],
         ),
         metagraph=SimpleNamespace(
@@ -66,7 +72,7 @@ async def test_forward_vests_first_installment(monkeypatch):
     monkeypatch.setattr(fetchmod, "_http_get", lambda url: (200, url, b"news " * 200))
     c1 = make_claim("nytimes", "https://www.nytimes.com/a", "hkA")   # tier 1 -> 500
     c2 = make_claim("techcrunch", "https://techcrunch.com/b", "hkB")  # tier 2 -> 250
-    self, captured = make_self({1: c1, 2: c2}, {"hkA": onchain(c1), "hkB": onchain(c2)})
+    self, captured = make_self({1: c1, 2: c2}, {"hkA": onchain(c1), "hkB": onchain(c2)}, monkeypatch=monkeypatch)
 
     await fwd.forward(self)
 
@@ -83,6 +89,8 @@ async def test_forward_burns_remainder_to_uid0(monkeypatch):
     monkeypatch.setattr(fetchmod, "_http_get", lambda url: (200, url, b"news " * 200))
 
     c1 = make_claim("nytimes", "https://www.nytimes.com/a", "hkA")  # tier 1, 500 / 2 = 250
+    monkeypatch.setattr(fwd, "get_commitments_with_block",
+                        lambda subtensor, netuid: {"hkA": (onchain(c1), 1000)})
 
     async def fake_dendrite(axons, synapse, deserialize, timeout):
         return [SimpleNamespace(claims=[c1] if axons[0] == 1 else [])]
@@ -91,10 +99,7 @@ async def test_forward_burns_remainder_to_uid0(monkeypatch):
     self = SimpleNamespace(
         step=0,
         config=SimpleNamespace(netuid=69),
-        subtensor=SimpleNamespace(
-            get_all_commitments=lambda netuid: {"hkA": onchain(c1)},
-            get_current_block=lambda: 1000,
-        ),
+        subtensor=SimpleNamespace(get_current_block=lambda: 1000),
         metagraph=SimpleNamespace(
             hotkeys={0: "burn", 1: "hkA"}, axons={0: 0, 1: 1}, alpha_stake={0: 0.0, 1: 1.0},
         ),
@@ -116,6 +121,8 @@ async def test_forward_applies_brief_cap(monkeypatch):
     monkeypatch.setattr(fetchmod, "_http_get", lambda url: (200, url, b"news " * 200))
 
     c1 = make_claim("nytimes", "https://www.nytimes.com/a", "hkA")  # tier1 500/2=250 installment
+    monkeypatch.setattr(fwd, "get_commitments_with_block",
+                        lambda subtensor, netuid: {"hkA": (onchain(c1), 1000)})
 
     async def fake_dendrite(axons, synapse, deserialize, timeout):
         return [SimpleNamespace(claims=[c1] if axons[0] == 1 else [])]
@@ -124,10 +131,7 @@ async def test_forward_applies_brief_cap(monkeypatch):
     self = SimpleNamespace(
         step=0,
         config=SimpleNamespace(netuid=69),
-        subtensor=SimpleNamespace(
-            get_all_commitments=lambda netuid: {"hkA": onchain(c1)},
-            get_current_block=lambda: 1000,
-        ),
+        subtensor=SimpleNamespace(get_current_block=lambda: 1000),
         metagraph=SimpleNamespace(
             hotkeys={0: "burn", 1: "hkA"}, axons={0: 0, 1: 1}, alpha_stake={0: 0.0, 1: 1.0},
         ),
@@ -146,7 +150,7 @@ async def test_forward_applies_brief_cap(monkeypatch):
 async def test_clawback_and_slash_when_article_disappears(monkeypatch):
     c1 = make_claim("nytimes", "https://www.nytimes.com/a", "hkA")
     commitments = {"hkA": onchain(c1)}
-    self, captured = make_self({1: c1, 2: c1}, commitments)
+    self, captured = make_self({1: c1, 2: c1}, commitments, monkeypatch=monkeypatch)
 
     # cycle 1: article live -> only hkA committed, so miner 1 wins all weight
     monkeypatch.setattr(fetchmod, "_http_get", lambda url: (200, url, b"news " * 200))

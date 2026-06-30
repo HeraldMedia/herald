@@ -13,8 +13,9 @@ class CommitIndex:
     def _key(hotkey: str, value: str) -> str:
         return f"{len(hotkey)}:{hotkey}|{value}"
 
-    def observe(self, block: int, commitments: Dict[str, str]):
-        for hotkey, value in commitments.items():
+    def observe(self, commitments_with_block: Dict[str, tuple]):
+        """commitments_with_block: {hotkey: (value, on_chain_block)}."""
+        for hotkey, (value, block) in commitments_with_block.items():
             key = self._key(hotkey, value)
             prior = self._first_seen.get(key)
             if prior is None or block < prior:
