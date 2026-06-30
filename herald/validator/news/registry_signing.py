@@ -26,8 +26,8 @@ def sign(data: dict, private_key_hex: str) -> str:
 
 def verify(data: dict, public_key_hex: str) -> bool:
     signature = data.get("signature")
-    if not signature:
-        return False
+    if not isinstance(signature, str) or not signature:
+        return False  # missing / non-hex-string signature -> reject, don't raise
     pk = Ed25519PublicKey.from_public_bytes(bytes.fromhex(public_key_hex))
     try:
         pk.verify(bytes.fromhex(signature), canonical_bytes(data))
