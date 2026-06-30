@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Any, Callable, Dict
 
 from herald.commit import matches as commitment_matches
+from .bonds import min_bond_atto
 from .fetch import fetch as default_fetch
 from .real_news import is_paid
 from .scoring import article_usd
@@ -52,6 +53,9 @@ def evaluate_article(
         return _reject(claim, "commitment_invalid", evidence)
     evidence["commitment"] = True
 
+    if registry.version_id and claim.version_id != registry.version_id:
+        return _reject(claim, "stale_version", evidence)
+
     outlet = registry.lookup(claim.article_url)
     if outlet is None:
         return _reject(claim, "outlet_not_listed", evidence)
@@ -59,6 +63,10 @@ def evaluate_article(
         return _reject(claim, "outlet_mismatch", evidence)
     evidence["outlet_id"] = outlet.outlet_id
     evidence["tier"] = outlet.tier
+
+    expected_usd = article_usd(outlet.tier, True, brief.get("boost", 1.0))
+    if claim.bond_atto < min_bond_atto(expected_usd):
+        return _reject(claim, "bond_too_small", evidence)
 
     fr = fetch_fn(claim.article_url)
     evidence["http_status"] = fr.status

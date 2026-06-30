@@ -16,7 +16,7 @@ def make_claim(**over):
     fields = dict(
         brief_id="b1", target_outlet_id="nyt",
         article_url="https://www.nytimes.com/2026/01/01/world/story",
-        claimer_hotkey="5Haaa", nonce="n1", bond_atto=1000, version_id=1,
+        claimer_hotkey="5Haaa", nonce="n1", bond_atto=10**21, version_id=1,
     )
     fields.update(over)
     return SimpleNamespace(**fields)
@@ -101,3 +101,15 @@ def test_topic_mismatch_rejected():
     c = make_claim()
     r = evaluate_article(c, onchain_for(c), REGISTRY, brief, fetch_fn=live, search_fn=indexed)
     assert not r.passed and r.reason == "topic_mismatch"
+
+
+def test_bond_too_small_rejected():
+    c = make_claim(bond_atto=1000)  # far below the required ~750 alpha for a tier-1 $500 reward
+    r = evaluate_article(c, onchain_for(c), REGISTRY, BRIEF, fetch_fn=live, search_fn=indexed)
+    assert not r.passed and r.reason == "bond_too_small"
+
+
+def test_stale_version_rejected():
+    c = make_claim(version_id=999)
+    r = evaluate_article(c, onchain_for(c), REGISTRY, BRIEF, fetch_fn=live, search_fn=indexed)
+    assert not r.passed and r.reason == "stale_version"

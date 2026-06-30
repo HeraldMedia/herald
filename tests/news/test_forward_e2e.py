@@ -14,7 +14,7 @@ BRIEFS = [{"id": "b1", "boost": 1.0}]
 def make_claim(outlet, url, hotkey):
     return SimpleNamespace(
         brief_id="b1", target_outlet_id=outlet, article_url=url,
-        claimer_hotkey=hotkey, nonce="n", bond_atto=1000, version_id=1,
+        claimer_hotkey=hotkey, nonce="n", bond_atto=10**21, version_id=1,
     )
 
 
@@ -49,7 +49,7 @@ def make_self(claim_by_uid, commitments, block=1000, monkeypatch=None):
         metagraph=SimpleNamespace(
             hotkeys={1: "hkA", 2: "hkB"},
             axons={1: 1, 2: 2},
-            alpha_stake={1: 1.0, 2: 1.0},
+            alpha_stake={1: 5000.0, 2: 5000.0},
         ),
         dendrite=fake_dendrite,
         update_scores=lambda rewards, uids: captured.update(rewards=rewards, uids=uids),
@@ -101,7 +101,7 @@ async def test_forward_burns_remainder_to_uid0(monkeypatch):
         config=SimpleNamespace(netuid=69),
         subtensor=SimpleNamespace(get_current_block=lambda: 1000),
         metagraph=SimpleNamespace(
-            hotkeys={0: "burn", 1: "hkA"}, axons={0: 0, 1: 1}, alpha_stake={0: 0.0, 1: 1.0},
+            hotkeys={0: "burn", 1: "hkA"}, axons={0: 0, 1: 1}, alpha_stake={0: 0.0, 1: 5000.0},
         ),
         dendrite=fake_dendrite,
         update_scores=lambda rewards, uids: captured.update(rewards=rewards, uids=uids),
@@ -133,7 +133,7 @@ async def test_forward_applies_brief_cap(monkeypatch):
         config=SimpleNamespace(netuid=69),
         subtensor=SimpleNamespace(get_current_block=lambda: 1000),
         metagraph=SimpleNamespace(
-            hotkeys={0: "burn", 1: "hkA"}, axons={0: 0, 1: 1}, alpha_stake={0: 0.0, 1: 1.0},
+            hotkeys={0: "burn", 1: "hkA"}, axons={0: 0, 1: 1}, alpha_stake={0: 0.0, 1: 5000.0},
         ),
         dendrite=fake_dendrite,
         update_scores=lambda rewards, uids: captured.update(rewards=rewards, uids=uids),

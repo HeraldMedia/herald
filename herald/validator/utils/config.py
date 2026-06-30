@@ -136,6 +136,10 @@ HERALD_NO_SEARCH_FLOOR = float(os.getenv('HERALD_NO_SEARCH_FLOOR', '0.0'))
 HERALD_MAX_ARTICLES_PER_MINER = int(os.getenv('HERALD_MAX_ARTICLES_PER_MINER', '200'))
 
 HERALD_MIN_ALPHA_STAKE_THRESHOLD = float(os.getenv('HERALD_MIN_ALPHA_STAKE_THRESHOLD', '0'))
+# A claim's committed bond must cover SLASH_MULTIPLIER x its expected reward, converted to
+# alpha via HERALD_BOND_ALPHA_PER_USD (set near 1/alpha_price after the pilot).
+SLASH_MULTIPLIER = float(os.getenv('HERALD_SLASH_MULTIPLIER', '1.5'))
+HERALD_BOND_ALPHA_PER_USD = float(os.getenv('HERALD_BOND_ALPHA_PER_USD', '1.0'))
 HERALD_REGISTRY_URL = os.getenv('HERALD_REGISTRY_URL', f"{HERALD_API_URL}/registry/outlets.json")
 
 # Vesting over the persistence window, and slash cooldown (in evaluation epochs).
