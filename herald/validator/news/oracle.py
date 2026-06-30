@@ -34,12 +34,16 @@ def evaluate_article(
     fetch_fn: Callable = default_fetch,
     search_fn: Callable = None,
     judge_fn: Callable = None,
+    serving_hotkey: str = None,
 ) -> ArticleResult:
     if search_fn is None:
         from .search import in_index
         search_fn = in_index
 
     evidence: Dict[str, Any] = {"version_id": claim.version_id}
+
+    if serving_hotkey is not None and claim.claimer_hotkey != serving_hotkey:
+        return _reject(claim, "hotkey_mismatch", evidence)
 
     if not commitment_matches(
         onchain_value,

@@ -8,6 +8,7 @@ from herald.utils.uids import get_all_uids
 from herald.validator.utils.briefs import get_briefs
 from herald.validator.utils.config import (
     EPOCH_LEN,
+    HERALD_MAX_ARTICLES_PER_MINER,
     HERALD_TOTAL_DAILY_USD,
     SLASH_COOLDOWN_EPOCHS,
     SUBNET_BURN_UID,
@@ -50,7 +51,8 @@ async def collect_claims(self, uids):
                 timeout=12,
             )
             response = responses[0] if responses else None
-            claims_by_uid[uid] = list(response.claims or []) if response is not None else []
+            claims = list(response.claims or []) if response is not None else []
+            claims_by_uid[uid] = claims[:HERALD_MAX_ARTICLES_PER_MINER]
         except Exception as e:
             bt.logging.warning(f"Claim query failed for UID {uid}: {e}")
             claims_by_uid[uid] = []

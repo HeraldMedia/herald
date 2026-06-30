@@ -26,7 +26,7 @@ def _build_candidates(
         for claim in relevant:
             result = evaluate_article(
                 claim, onchain, registry, briefs_by_id[claim.brief_id],
-                fetch_fn, search_fn, judge_fn,
+                fetch_fn, search_fn, judge_fn, serving_hotkey=hotkey,
             )
             passed = result.passed and bonded
             commit_epoch = commit_index.commit_epoch(hotkey, onchain) if passed else None

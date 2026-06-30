@@ -113,3 +113,10 @@ def test_stale_version_rejected():
     c = make_claim(version_id=999)
     r = evaluate_article(c, onchain_for(c), REGISTRY, BRIEF, fetch_fn=live, search_fn=indexed)
     assert not r.passed and r.reason == "stale_version"
+
+
+def test_hotkey_mismatch_rejected():
+    c = make_claim(claimer_hotkey="hkVICTIM")
+    r = evaluate_article(c, onchain_for(c), REGISTRY, BRIEF, fetch_fn=live,
+                         search_fn=indexed, serving_hotkey="hkSERVING")
+    assert not r.passed and r.reason == "hotkey_mismatch"
