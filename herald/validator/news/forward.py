@@ -51,11 +51,12 @@ async def forward(self):
 
         uids = get_all_uids(self)
         hotkey_by_uid = {uid: self.metagraph.hotkeys[uid] for uid in uids}
+        alpha_stake_by_uid = {uid: float(self.metagraph.alpha_stake[uid]) for uid in uids}
         claims_by_uid = await collect_claims(self, uids)
 
         usd_by_uid = score_claims(
             claims_by_uid, commitments, self._commit_index,
-            hotkey_by_uid, briefs, registry
+            hotkey_by_uid, alpha_stake_by_uid, briefs, registry
         )
         rewards = np.array([usd_by_uid.get(uid, 0.0) for uid in uids], dtype=np.float32)
         for uid, reward in zip(uids, rewards):
