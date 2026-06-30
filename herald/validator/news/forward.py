@@ -6,7 +6,8 @@ import numpy as np
 from herald.protocol import ClaimSynapse
 from herald.utils.uids import get_all_uids
 from herald.validator.utils.briefs import get_briefs
-from herald.validator.utils.config import VALIDATOR_STEPS_INTERVAL, VALIDATOR_WAIT
+from herald.validator.utils.config import EPOCH_LEN, VALIDATOR_STEPS_INTERVAL, VALIDATOR_WAIT
+from .commit_index import CommitIndex
 from .registry import load_registry
 from .reward import score_claims
 
@@ -44,12 +45,17 @@ async def forward(self):
 
         registry = load_registry()
         commitments = self.subtensor.get_all_commitments(self.config.netuid)
+        if not hasattr(self, "_commit_index"):
+            self._commit_index = CommitIndex(epoch_len=EPOCH_LEN)
+        self._commit_index.observe(self.subtensor.get_current_block(), commitments)
+
         uids = get_all_uids(self)
         hotkey_by_uid = {uid: self.metagraph.hotkeys[uid] for uid in uids}
         claims_by_uid = await collect_claims(self, uids)
 
         usd_by_uid = score_claims(
-            claims_by_uid, commitments, hotkey_by_uid, briefs, registry
+            claims_by_uid, commitments, self._commit_index,
+            hotkey_by_uid, briefs, registry
         )
         rewards = np.array([usd_by_uid.get(uid, 0.0) for uid in uids], dtype=np.float32)
         for uid, reward in zip(uids, rewards):

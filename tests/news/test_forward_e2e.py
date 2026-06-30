@@ -48,7 +48,8 @@ async def test_forward_scores_two_miners(monkeypatch):
         step=0,
         config=SimpleNamespace(netuid=69),
         subtensor=SimpleNamespace(
-            get_all_commitments=lambda netuid: {"hkA": onchain(c1), "hkB": onchain(c2)}
+            get_all_commitments=lambda netuid: {"hkA": onchain(c1), "hkB": onchain(c2)},
+            get_current_block=lambda: 1000,
         ),
         metagraph=SimpleNamespace(hotkeys={1: "hkA", 2: "hkB"}, axons={1: 1, 2: 2}),
         dendrite=fake_dendrite,

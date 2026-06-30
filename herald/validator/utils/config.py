@@ -116,6 +116,8 @@ SUBNET_TREASURY_UID = int(os.getenv('SUBNET_TREASURY_UID', '106'))
 
 # ── Herald (verified media placement) ──────────────────────────────────────
 HERALD_EPOCH_SECONDS = int(os.getenv('HERALD_EPOCH_SECONDS', str(24 * 60 * 60)))
+# Commit-ordering granularity in blocks (~12s/block -> ~72 min).
+EPOCH_LEN = int(os.getenv('HERALD_EPOCH_LEN', '360'))
 
 SERPAPI_API_KEY = os.getenv('SERPAPI_API_KEY')
 WEB_FETCH_CACHE_EXPIRY = int(os.getenv('WEB_FETCH_CACHE_EXPIRY', str(7 * 24 * 60 * 60)))
