@@ -1,4 +1,4 @@
-"""Check whether a claimed article appears in a public search index."""
+"""Check whether a claimed article URL appears in a public search index."""
 
 from dataclasses import dataclass
 from typing import List, Optional
@@ -35,13 +35,12 @@ def _serpapi_search(query: str, num: int) -> List[str]:
     return [item.get("link") for item in data.get("organic_results", []) if item.get("link")]
 
 
-def in_index(headline: str, domain: str, article_url: str) -> SearchResult:
-    query = f'site:{domain} "{headline}"'
-    try:
-        links = _serpapi_search(query, HERALD_SEARCH_TOP_N)
-    except Exception:
-        return SearchResult(False, query, None, 0)
-
+def in_index(article_url: str) -> SearchResult:
     target = canonicalize(article_url)
+    try:
+        links = _serpapi_search(target, HERALD_SEARCH_TOP_N)
+    except Exception:
+        return SearchResult(False, target, None, 0)
+
     matched = next((c for c in (canonicalize(l) for l in links) if c == target), None)
-    return SearchResult(matched is not None, query, matched, len(links))
+    return SearchResult(matched is not None, target, matched, len(links))
