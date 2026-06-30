@@ -1,7 +1,17 @@
 import typing
 
 import bittensor as bt
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, StringConstraints
+
+# A miner controls its entire ClaimSynapse response, so bound every collection/number: the
+# validator parses the whole body before its per-miner slice, and an unbounded list (or a
+# huge merkle_path / big-int) would let one miner exhaust its memory.
+MAX_CLAIMS_PER_RESPONSE = 10000  # well above the per-miner scoring slice; a DoS backstop
+MAX_MERKLE_DEPTH = 64
+MAX_BOND_ATTO = 10 ** 30  # far above any real alpha bond (atto); bounds big-int digit count
+MAX_VERSION_ID = 10 ** 9
+
+_ShortStr = typing.Annotated[str, StringConstraints(max_length=128)]
 
 
 class ClaimRecord(BaseModel):
@@ -12,14 +22,14 @@ class ClaimRecord(BaseModel):
     article_url: str = Field(max_length=2048)
     claimer_hotkey: str = Field(max_length=64)
     nonce: str = Field(max_length=128)
-    bond_atto: int = Field(ge=0)
-    version_id: int = Field(ge=0)
-    merkle_path: typing.Optional[typing.List[str]] = None
+    bond_atto: int = Field(ge=0, le=MAX_BOND_ATTO)
+    version_id: int = Field(ge=0, le=MAX_VERSION_ID)
+    merkle_path: typing.Optional[typing.List[_ShortStr]] = Field(default=None, max_length=MAX_MERKLE_DEPTH)
     claim_sig: typing.Optional[str] = Field(default=None, max_length=256)
 
 
 class ClaimSynapse(bt.Synapse):
     """Validator -> miner pull. The miner fills `claims` with its active reveals."""
 
-    request_brief_ids: typing.Optional[typing.List[str]] = None
-    claims: typing.Optional[typing.List[ClaimRecord]] = None
+    request_brief_ids: typing.Optional[typing.List[_ShortStr]] = Field(default=None, max_length=1000)
+    claims: typing.Optional[typing.List[ClaimRecord]] = Field(default=None, max_length=MAX_CLAIMS_PER_RESPONSE)
