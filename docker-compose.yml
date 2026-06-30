@@ -6,7 +6,7 @@ services:
       "python", "-u", "neurons/miner.py",
       "--wallet.name", "${WALLET_NAME:-default}",
       "--wallet.hotkey", "${HOTKEY_NAME:-default}",
-      "--netuid", "${NETUID:-93}",
+      "--netuid", "${NETUID:-69}",
       "--subtensor.network", "${SUBTENSOR_NETWORK:-finney}",
       "--neuron.disable_auto_update",
       "--logging.debug",
@@ -26,12 +26,24 @@ services:
       "python", "-u", "neurons/validator.py",
       "--wallet.name", "${WALLET_NAME:-default}",
       "--wallet.hotkey", "${HOTKEY_NAME:-default}",
-      "--netuid", "${NETUID:-93}",
+      "--netuid", "${NETUID:-69}",
       "--subtensor.network", "${SUBTENSOR_NETWORK:-finney}",
       "--neuron.disable_auto_update",
     ]
     ports:
       - "8092:8092"
+    environment:
+      PYTHONUNBUFFERED: "1"
+    env_file: .env
+    tty: true
+
+  brief_board:
+    build: .
+    profiles: ["services"]
+    entrypoint: []
+    command: ["uvicorn", "herald.services.app:app", "--host", "0.0.0.0", "--port", "8093"]
+    ports:
+      - "${BRIEF_BOARD_PORT:-8093}:8093"
     environment:
       PYTHONUNBUFFERED: "1"
     env_file: .env

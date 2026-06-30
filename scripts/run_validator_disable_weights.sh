@@ -8,8 +8,8 @@ PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PROJECT_PARENT="$(cd "$PROJECT_ROOT/.." && pwd)"
 
 # Load environment variables from .env file
-if [ -f "$PROJECT_ROOT/herald/validator/.env" ]; then
-  export $(grep -v '^#' "$PROJECT_ROOT/herald/validator/.env" | sed 's/ *= */=/g' | xargs)
+if [ -f "$PROJECT_ROOT/.env" ]; then
+  export $(grep -v '^#' "$PROJECT_ROOT/.env" | sed 's/ *= */=/g' | xargs)
 fi
 
 # Set default values if variables are not set
@@ -27,18 +27,6 @@ echo "Activating virtual environment..."
 source "$VENV_PATH/bin/activate"
 
 # Ensure required environment variables are set
-if [ -z "$RAPID_API_KEY" ]; then
-  echo "Error: RAPID_API_KEY is not set in the .env file."
-  exit 1
-fi
-if [ -z "$CHUTES_API_KEY" ]; then
-  echo "Error: CHUTES_API_KEY is not set in the .env file."
-  exit 1
-fi
-if [ -z "$WANDB_API_KEY" ]; then
-  echo "Error: WANDB_API_KEY is not set in the .env file."
-  exit 1
-fi
 if [ -z "$WALLET_NAME" ]; then
   echo "Error: WALLET_NAME is not set in the .env file."
   exit 1
@@ -49,7 +37,7 @@ if [ -z "$HOTKEY_NAME" ]; then
 fi
 
 # Set default values for validator parameters if not set in .env
-NETUID=${NETUID:-93}
+NETUID=${NETUID:-69}
 SUBTENSOR_NETWORK=${SUBTENSOR_NETWORK:-"finney"}
 SUBTENSOR_CHAIN_ENDPOINT=${SUBTENSOR_CHAIN_ENDPOINT:-"wss://entrypoint-finney.opentensor.ai:443"}
 PORT=${PORT:-8092}
@@ -77,10 +65,9 @@ done
 # Disable data publishing when running with disabled weights
 export ENABLE_DATA_PUBLISH=false
 
-# Login to Weights & Biases
-if ! wandb login $WANDB_API_KEY; then
-  echo "Failed to login to Weights & Biases with the provided API key."
-  exit 1
+# Login to Weights & Biases (optional)
+if [ -n "$WANDB_API_KEY" ]; then
+  wandb login "$WANDB_API_KEY" || echo "Warning: wandb login failed; continuing without it."
 fi
 
 # STOP VALIDATOR PROCESS

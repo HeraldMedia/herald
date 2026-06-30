@@ -21,11 +21,11 @@ echo "Activating virtual environment..."
 source "$VENV_PATH/bin/activate"
 
 # Source environment variables from .env file
-if [ -f "$PROJECT_ROOT/herald/miner/.env" ]; then
+if [ -f "$PROJECT_ROOT/.env" ]; then
     echo "Loading environment variables from .env file..."
-    source "$PROJECT_ROOT/herald/miner/.env"
+    source "$PROJECT_ROOT/.env"
 else
-    echo "Error: .env file not found at $PROJECT_ROOT/herald/miner/.env"
+    echo "Error: .env file not found at $PROJECT_ROOT/.env"
     exit 1
 fi
 

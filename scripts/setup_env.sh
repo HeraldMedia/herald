@@ -30,8 +30,8 @@ fi
 ############################
 
 # Load environment variables from .env file if it exists
-if [ -f "$PROJECT_ROOT/herald/validator/.env" ]; then
-  export $(grep -v '^#' "$PROJECT_ROOT/herald/validator/.env" | sed 's/ *= */=/g' | xargs)
+if [ -f "$PROJECT_ROOT/.env" ]; then
+  export $(grep -v '^#' "$PROJECT_ROOT/.env" | sed 's/ *= */=/g' | xargs)
 fi
 
 # Set default virtual environment path if not specified in .env
