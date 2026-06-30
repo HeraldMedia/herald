@@ -147,6 +147,38 @@ async def test_forward_applies_brief_cap(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_uid_reassignment_does_not_pay_new_holder(monkeypatch):
+    c1 = make_claim("nytimes", "https://www.nytimes.com/a", "hkA")
+    self, captured = make_self({1: c1, 2: c1}, {"hkA": onchain(c1)}, monkeypatch=monkeypatch)
+    monkeypatch.setattr(fetchmod, "_http_get", lambda url: (200, url, b"news " * 200))
+
+    await fwd.forward(self)  # cycle 1: placer hkA (uid 1) earns
+    assert dict(zip(captured["uids"], captured["rewards"]))[1] == pytest.approx(1.0)
+
+    self.metagraph.hotkeys[1] = "hkEVIL"          # uid 1 reassigned to a new hotkey
+    self.block_state["v"] += fwd.EPOCH_LEN + 1
+    await fwd.forward(self)  # cycle 2: installment must NOT go to the new holder
+    assert dict(zip(captured["uids"], captured["rewards"]))[1] == 0.0
+
+
+@pytest.mark.asyncio
+async def test_persistence_clawback_on_value_regression(monkeypatch):
+    c1 = make_claim("nytimes", "https://www.nytimes.com/a", "hkA")
+    self, captured = make_self({1: c1, 2: c1}, {"hkA": onchain(c1)}, monkeypatch=monkeypatch)
+    monkeypatch.setattr(fetchmod, "_http_get", lambda url: (200, url, b"news " * 200))
+    await fwd.forward(self)  # cycle 1: valuable
+    assert dict(zip(captured["uids"], captured["rewards"]))[1] == pytest.approx(1.0)
+
+    # cycle 2: still HTTP 200 but converted to sponsored content -> not valuable -> clawback
+    self.block_state["v"] += fwd.EPOCH_LEN + 1
+    monkeypatch.setattr(fetchmod, "_http_get", lambda url: (200, url, b"This is Sponsored Content " * 50))
+    await fwd.forward(self)
+    assert dict(zip(captured["uids"], captured["rewards"]))[1] == 0.0
+    epoch = self.subtensor.get_current_block() // fwd.EPOCH_LEN
+    assert self.herald_state.slash.is_slashed("hkA", epoch)
+
+
+@pytest.mark.asyncio
 async def test_clawback_and_slash_when_article_disappears(monkeypatch):
     c1 = make_claim("nytimes", "https://www.nytimes.com/a", "hkA")
     commitments = {"hkA": onchain(c1)}

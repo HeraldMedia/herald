@@ -1,4 +1,4 @@
-"""Per-article vesting: release the reward in installments while the article stays online."""
+"""Per-article vesting: release the reward in installments while the article stays valuable."""
 
 from dataclasses import asdict, dataclass
 from typing import Dict, List, Tuple
@@ -18,6 +18,8 @@ class VestEntry:
     url: str = ""
     hotkey: str = ""
     brief_id: str = ""
+    commit_epoch: int = 0
+    last_release_epoch: int = -1
 
 
 class VestingLedger:
@@ -27,8 +29,14 @@ class VestingLedger:
             k: VestEntry(**v) for k, v in (entries or {}).items()
         }
 
-    def start(self, article_id, uid, total_usd, url="", hotkey="", brief_id=""):
-        if article_id in self._entries:
+    def start(self, article_id, uid, total_usd, url="", hotkey="", brief_id="", commit_epoch=0):
+        existing = self._entries.get(article_id)
+        if existing is not None:
+            # earliest commit wins even if it reveals in a later cycle
+            if existing.status == VESTING and commit_epoch < existing.commit_epoch:
+                existing.uid = uid
+                existing.hotkey = hotkey
+                existing.commit_epoch = commit_epoch
             return
         self._entries[article_id] = VestEntry(
             uid=uid,
@@ -39,15 +47,19 @@ class VestingLedger:
             url=url,
             hotkey=hotkey,
             brief_id=brief_id,
+            commit_epoch=commit_epoch,
         )
 
-    def release(self, article_id: str, alive: bool) -> Tuple[float, bool]:
+    def release(self, article_id: str, alive: bool, epoch: int) -> Tuple[float, bool]:
         entry = self._entries.get(article_id)
         if entry is None or entry.status != VESTING:
             return 0.0, False
+        if epoch <= entry.last_release_epoch:
+            return 0.0, False  # already released this epoch
         if not alive:
             entry.status = CLAWBACK
             return 0.0, True
+        entry.last_release_epoch = epoch
         entry.remaining -= 1
         if entry.remaining <= 0:
             entry.status = COMPLETED
