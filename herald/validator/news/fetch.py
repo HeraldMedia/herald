@@ -4,7 +4,7 @@ import hashlib
 import ipaddress
 import re
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from html.parser import HTMLParser
 from urllib.parse import urlsplit
 
@@ -76,20 +76,27 @@ def _extract_text(html: str) -> str:
     return " ".join(parser.parts)
 
 
-_PUBLISHED_RE = re.compile(
-    r'"datePublished"\s*:\s*"([^"]+)"|article:published_time"\s+content="([^"]+)"'
-)
+_PUBLISHED_PATTERNS = [
+    re.compile(r'["\']datePublished["\']\s*:\s*["\']([^"\']+)["\']'),
+    re.compile(r'(?:article:published_time|og:published_time)["\']?\s+content=["\']([^"\']+)["\']', re.I),
+    re.compile(r'content=["\']([^"\']+)["\'][^>]*?(?:article:published_time|og:published_time)', re.I),
+]
 
 
 def _parse_published_ts(html: str):
-    m = _PUBLISHED_RE.search(html)
-    if not m:
-        return None
-    raw = (m.group(1) or m.group(2)).strip().replace("Z", "+00:00")
-    try:
-        return datetime.fromisoformat(raw).timestamp()
-    except ValueError:
-        return None
+    for pattern in _PUBLISHED_PATTERNS:
+        m = pattern.search(html)
+        if not m:
+            continue
+        raw = m.group(1).strip().replace("Z", "+00:00")
+        try:
+            dt = datetime.fromisoformat(raw)
+        except ValueError:
+            continue
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)  # naive dates are UTC for ALL validators
+        return dt.timestamp()
+    return None
 
 
 @dataclass

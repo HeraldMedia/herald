@@ -50,3 +50,23 @@ def test_parses_published_ts(monkeypatch):
 def test_no_published_ts_is_none(monkeypatch):
     monkeypatch.setattr(fetchmod, "_http_get", lambda url: (200, url, b"x" * 1000))
     assert fetch("https://x/a").published_ts is None
+
+
+def test_naive_published_date_is_utc(monkeypatch):
+    from datetime import datetime, timezone
+    html = b'<script>{"datePublished":"2020-01-01T00:00:00"}</script>' + b"x" * 600
+    monkeypatch.setattr(fetchmod, "_http_get", lambda url: (200, url, html))
+    # naive date must be interpreted as UTC, identically on every validator (no local-TZ drift)
+    assert fetch("https://x/a").published_ts == datetime(2020, 1, 1, tzinfo=timezone.utc).timestamp()
+
+
+def test_published_meta_tag_either_attribute_order(monkeypatch):
+    from datetime import datetime, timezone
+    expect = datetime(2026, 2, 2, tzinfo=timezone.utc).timestamp()
+    a = b'<meta property="article:published_time" content="2026-02-02T00:00:00Z">' + b"x" * 600
+    b = b'<meta content="2026-02-02T00:00:00Z" property="article:published_time">' + b"x" * 600
+    monkeypatch.setattr(fetchmod, "_http_get", lambda url: (200, url, a))
+    assert fetch("https://x/a").published_ts == expect
+    fetchmod._cache.clear()
+    monkeypatch.setattr(fetchmod, "_http_get", lambda url: (200, url, b))
+    assert fetch("https://x/b").published_ts == expect
