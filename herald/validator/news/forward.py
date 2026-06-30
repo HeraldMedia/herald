@@ -2,17 +2,19 @@ import os
 import time
 
 import bittensor as bt
-import numpy as np
 
 from herald.protocol import ClaimSynapse
 from herald.utils.uids import get_all_uids
 from herald.validator.utils.briefs import get_briefs
 from herald.validator.utils.config import (
     EPOCH_LEN,
+    HERALD_TOTAL_DAILY_USD,
     SLASH_COOLDOWN_EPOCHS,
+    SUBNET_BURN_UID,
     VALIDATOR_STEPS_INTERVAL,
     VALIDATOR_WAIT,
 )
+from .emission import compute_weights
 from .fetch import fetch
 from .registry import load_registry
 from .publish import publish_results
@@ -74,7 +76,6 @@ async def forward(self):
         commit_index.observe(block, commitments)
 
         uids = get_all_uids(self)
-        pos = {uid: i for i, uid in enumerate(uids)}
         hotkey_by_uid = {uid: self.metagraph.hotkeys[uid] for uid in uids}
         alpha_stake_by_uid = {uid: float(self.metagraph.alpha_stake[uid]) for uid in uids}
         claims_by_uid = await collect_claims(self, uids)
@@ -86,24 +87,22 @@ async def forward(self):
         for w in winners:
             vesting.start(w.article_id, w.uid, w.usd, w.url, w.hotkey)
 
-        rewards = np.zeros(len(uids), dtype=np.float32)
+        usd_by_uid = {uid: 0.0 for uid in uids}
         for article_id in list(vesting.active_article_ids()):
             entry = vesting.entry(article_id)
             alive = fetch(entry.url).ok
             installment, clawed_back = vesting.release(article_id, alive)
             if clawed_back:
                 slash.slash(entry.hotkey, epoch + SLASH_COOLDOWN_EPOCHS)
-            elif installment and entry.uid in pos:
-                rewards[pos[entry.uid]] += installment
+            elif installment and entry.uid in usd_by_uid:
+                usd_by_uid[entry.uid] += installment
 
         for uid in uids:
             if slash.is_slashed(hotkey_by_uid[uid], epoch):
-                rewards[pos[uid]] = 0.0
+                usd_by_uid[uid] = 0.0
 
-        for uid, reward in zip(uids, rewards):
-            if reward:
-                bt.logging.info(f"UID {uid}: ${reward:.2f} (vested)")
-        self.update_scores(rewards, uids)
+        weights = compute_weights(usd_by_uid, uids, HERALD_TOTAL_DAILY_USD, SUBNET_BURN_UID)
+        self.update_scores(weights, uids)
 
         endpoint = os.getenv("HERALD_RESULTS_ENDPOINT")
         if endpoint:

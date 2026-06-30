@@ -137,6 +137,11 @@ HERALD_REGISTRY_URL = os.getenv('HERALD_REGISTRY_URL', f"{HERALD_API_URL}/regist
 VEST_EPOCHS = int(os.getenv('HERALD_VEST_EPOCHS', '30'))
 SLASH_COOLDOWN_EPOCHS = int(os.getenv('HERALD_SLASH_COOLDOWN_EPOCHS', '7'))
 
+# Emissions track USD value: miners earn their share of total daily emissions
+# (valued in USD); the unclaimed remainder is burned to the burn UID.
+HERALD_TOTAL_DAILY_USD = float(os.getenv('HERALD_TOTAL_DAILY_USD', '1000'))
+SUBNET_BURN_UID = int(os.getenv('HERALD_BURN_UID', '0'))
+
 # Log out all non-sensitive config variables
 bt.logging.info(f"HERALD_BRIEFS_ENDPOINT: {HERALD_BRIEFS_ENDPOINT}")
 bt.logging.info(f"YOUTUBE_SUBMIT_ENDPOINT: {YOUTUBE_SUBMIT_ENDPOINT}")

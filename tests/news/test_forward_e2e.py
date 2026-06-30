@@ -56,6 +56,7 @@ def _setup(monkeypatch):
     monkeypatch.setattr(fwd, "get_all_uids", lambda self: [1, 2])
     monkeypatch.setattr(fwd.time, "sleep", lambda *_: None)
     monkeypatch.setattr(statemod, "VEST_EPOCHS", 2)
+    monkeypatch.setattr(fwd, "HERALD_TOTAL_DAILY_USD", 0.0)  # no burn; miners split proportionally
 
 
 @pytest.mark.asyncio
@@ -67,9 +68,42 @@ async def test_forward_vests_first_installment(monkeypatch):
 
     await fwd.forward(self)
 
-    rewards = dict(zip(captured["uids"], captured["rewards"]))
-    assert rewards[1] == pytest.approx(250.0)  # 500 / VEST_EPOCHS(2)
-    assert rewards[2] == pytest.approx(125.0)  # 250 / 2
+    # installments: tier1 500/2=250, tier2 250/2=125 -> proportional weights 2:1
+    weights = dict(zip(captured["uids"], captured["rewards"]))
+    assert weights[1] == pytest.approx(2 / 3)
+    assert weights[2] == pytest.approx(1 / 3)
+
+
+@pytest.mark.asyncio
+async def test_forward_burns_remainder_to_uid0(monkeypatch):
+    monkeypatch.setattr(fwd, "get_all_uids", lambda self: [0, 1])
+    monkeypatch.setattr(fwd, "HERALD_TOTAL_DAILY_USD", 1000.0)
+    monkeypatch.setattr(fetchmod, "_http_get", lambda url: (200, url, b"news " * 200))
+
+    c1 = make_claim("nytimes", "https://www.nytimes.com/a", "hkA")  # tier 1, 500 / 2 = 250
+
+    async def fake_dendrite(axons, synapse, deserialize, timeout):
+        return [SimpleNamespace(claims=[c1] if axons[0] == 1 else [])]
+
+    captured = {}
+    self = SimpleNamespace(
+        step=0,
+        config=SimpleNamespace(netuid=69),
+        subtensor=SimpleNamespace(
+            get_all_commitments=lambda netuid: {"hkA": onchain(c1)},
+            get_current_block=lambda: 1000,
+        ),
+        metagraph=SimpleNamespace(
+            hotkeys={0: "burn", 1: "hkA"}, axons={0: 0, 1: 1}, alpha_stake={0: 0.0, 1: 1.0},
+        ),
+        dendrite=fake_dendrite,
+        update_scores=lambda rewards, uids: captured.update(rewards=rewards, uids=uids),
+    )
+
+    await fwd.forward(self)
+    w = dict(zip(captured["uids"], captured["rewards"]))
+    assert w[1] == pytest.approx(0.25)   # 250 of 1000 daily
+    assert w[0] == pytest.approx(0.75)   # remainder burned
 
 
 @pytest.mark.asyncio
@@ -78,10 +112,10 @@ async def test_clawback_and_slash_when_article_disappears(monkeypatch):
     commitments = {"hkA": onchain(c1)}
     self, captured = make_self({1: c1, 2: c1}, commitments)
 
-    # cycle 1: article live -> first installment vests
+    # cycle 1: article live -> only hkA committed, so miner 1 wins all weight
     monkeypatch.setattr(fetchmod, "_http_get", lambda url: (200, url, b"news " * 200))
     await fwd.forward(self)
-    assert dict(zip(captured["uids"], captured["rewards"]))[1] == pytest.approx(250.0)
+    assert dict(zip(captured["uids"], captured["rewards"]))[1] == pytest.approx(1.0)
 
     # cycle 2: article gone -> clawback, slash, nothing paid
     monkeypatch.setattr(fetchmod, "_http_get", lambda url: (404, url, b""))
