@@ -163,7 +163,7 @@ and `/reporting/export` are the evidence surface.
 
 ## 13. Known residuals (operator awareness)
 
-The mechanism, services, and two adversarial-review rounds are complete, but these are
+The mechanism, services, and four adversarial-review rounds are complete, but these are
 genuinely hard or out of v1 scope and should be planned before a large mainnet rollout:
 
 - **Pre-commit front-running (and value-capping).** Earliest-commit-wins means an attacker who
@@ -172,13 +172,21 @@ genuinely hard or out of v1 scope and should be planned before a large mainnet r
   a later honest tier-1 placement on the same `(outlet, brief)` to $0 (earliest beats highest
   value). The bond (capital per commit) + one-paid-placement-per-(outlet,brief) cap throttle
   both, but neither is fully closed — they need an attribution-level proof-of-placement, or a
-  value-aware tiebreaker.
+  value-aware tiebreaker. The vesting key is `article_id` (canonical URL) alone, so the *same
+  URL* claimed under two briefs shares one entry; an earlier commit under a different brief can
+  reassign which brief's cap bucket the remaining installments consume. Total payout stays
+  bounded to one placement (no double-pay), but if briefs ever carry materially different caps,
+  key vesting by `(article_id, brief_id)`.
 - **Fetch SSRF is registry-bounded.** The oracle gates fetch on the registry (`outlet_tier`
   runs before any fetch), so validators only fetch approved-outlet domains; `is_safe_fetch_url`
   is defense-in-depth. A residual DNS-rebinding TOCTOU exists (the OS re-resolves on connect)
   but is bounded by that registry gate — keep the registry signed/anchored.
-- **Unversioned registry.** A registry published without a `version_id` (defaults to 0) makes
-  the version gate reject every claim whose `version_id != 0`. Always publish a `version_id`.
+- **Unversioned registry / unanchored editions.** A registry published without a `version_id`
+  (defaults to 0) makes the version gate reject every claim whose `version_id != 0`. Always
+  publish a `version_id`. Version pinning alone is **not** sufficient for cross-validator
+  agreement: two validators pointed at different local registry files (different `version_id`s)
+  each accept the claims matching their own edition unless the on-chain anchor is enforced.
+  Set `HERALD_REGISTRY_AUTHORITY_HOTKEY` in production so every validator binds to one edition.
 - **Claim-organic on date-less outlets.** The publication-time check only fires when the page
   exposes a parseable `datePublished`/`article:published_time`. Outlets without machine-readable
   dates bypass it. Prefer registry outlets that publish structured dates; consider a per-outlet
@@ -188,6 +196,16 @@ genuinely hard or out of v1 scope and should be planned before a large mainnet r
 - **Cross-validator fetch agreement.** Validators fetch live HTML independently; geo/CDN/paywall
   variance can still cause disagreement on the same article in an epoch. Quorum + epoch caching
   reduce but don't eliminate it; a shared content-snapshot consensus is the longer-term fix.
+  Treat the **provider set and `HERALD_QUORUM_THRESHOLD` as consensus parameters** (like
+  `HERALD_REF_MODEL_ID`): configure the *identical* providers and threshold on every validator.
+  A missing provider key relaxes the quorum clamp (`min(threshold, providers)`) and changes which
+  provider supplies `published_ts`, so a mismatched provider set can flip a claim-organic verdict.
+
+- **Slash deterrent vs vesting horizon.** A confirmed dead/paid-swap clawbacks the offending
+  article and zeroes the hotkey's *other* emissions for `HERALD_SLASH_COOLDOWN_EPOCHS` (default 7),
+  shorter than the 30-epoch vest window — so a caught miner resumes earning on its other vesting
+  articles after the cooldown. Consider setting the cooldown `>= HERALD_VEST_EPOCHS` (or scaling
+  it to the slashed bond) once pilot data sets the real numbers.
 - **Evaluation-epoch boundary skew.** Vesting/slash are gated on `(block - HERALD_EPOCH_LAG) //
   EPOCH_LEN`; the lag shrinks but doesn't remove cross-validator skew at epoch boundaries (EMA
   smooths the residual). A finalized-block-anchored epoch would close it.
