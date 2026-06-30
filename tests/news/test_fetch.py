@@ -28,3 +28,12 @@ def test_network_error_not_live(monkeypatch):
     monkeypatch.setattr(fetchmod, "_http_get", boom)
     r = fetch("https://nytimes.com/a")
     assert r.ok is False and r.status == 0
+
+
+def test_extracts_visible_text_skips_scripts(monkeypatch):
+    html = b"<html><head><style>.x{}</style></head><body><h1>Hello</h1>" \
+           b"<script>var a=1;</script><p>World news here.</p></body></html>"
+    monkeypatch.setattr(fetchmod, "_http_get", lambda url: (200, url, html + b"x" * 500))
+    r = fetch("https://nytimes.com/a")
+    assert "Hello" in r.text and "World news here." in r.text
+    assert "var a=1" not in r.text

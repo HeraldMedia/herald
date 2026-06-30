@@ -32,7 +32,8 @@ def onchain(c):
         bond_atto=c.bond_atto, version_id=c.version_id))
 
 
-live = lambda u: SimpleNamespace(ok=True, status=200, text_hash="h", body_len=2000, final_url=u)
+live = lambda u: SimpleNamespace(ok=True, status=200, text_hash="h", body_len=2000, final_url=u,
+                                 text="A normal news report.")
 indexed = lambda u: SimpleNamespace(in_index=True, matched_url=u, num_results=5, query=u)
 
 

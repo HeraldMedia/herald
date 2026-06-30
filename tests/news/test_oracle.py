@@ -31,11 +31,12 @@ def onchain_for(claim):
 
 
 def live(_url):
-    return SimpleNamespace(ok=True, status=200, text_hash="h", body_len=2000, final_url=_url)
+    return SimpleNamespace(ok=True, status=200, text_hash="h", body_len=2000,
+                           final_url=_url, text="A normal news report about world events.")
 
 
 def dead(_url):
-    return SimpleNamespace(ok=False, status=404, text_hash="", body_len=0, final_url=_url)
+    return SimpleNamespace(ok=False, status=404, text_hash="", body_len=0, final_url=_url, text="")
 
 
 def indexed(_url):
@@ -84,3 +85,19 @@ def test_not_indexed_passes_but_zero_usd():
     c = make_claim()
     r = evaluate_article(c, onchain_for(c), REGISTRY, BRIEF, fetch_fn=live, search_fn=not_indexed)
     assert r.passed and r.usd == 0.0 and r.evidence["in_index"] is False
+
+
+def test_paid_content_rejected_before_search():
+    c = make_claim(article_url="https://www.nytimes.com/sponsored/story")
+    # registry matches nytimes by domain regardless of path; paid path triggers rejection
+    called = []
+    r = evaluate_article(c, onchain_for(c), REGISTRY, BRIEF, fetch_fn=live,
+                         search_fn=lambda u: called.append(u))
+    assert not r.passed and r.reason == "paid_not_real_news" and called == []
+
+
+def test_topic_mismatch_rejected():
+    brief = {"id": "b1", "boost": 1.0, "keywords": ["bittensor"]}
+    c = make_claim()
+    r = evaluate_article(c, onchain_for(c), REGISTRY, brief, fetch_fn=live, search_fn=indexed)
+    assert not r.passed and r.reason == "topic_mismatch"

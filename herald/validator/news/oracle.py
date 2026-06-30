@@ -5,7 +5,9 @@ from typing import Any, Callable, Dict
 
 from herald.commit import matches as commitment_matches
 from .fetch import fetch as default_fetch
+from .real_news import is_paid
 from .scoring import article_usd
+from .topic_match import topic_matched
 from .url import article_id
 
 
@@ -62,6 +64,17 @@ def evaluate_article(
     evidence["text_hash"] = fr.text_hash
     if not fr.ok:
         return _reject(claim, "url_not_live", evidence)
+
+    paid, paid_reason = is_paid(claim.article_url, fr.text)
+    evidence["paid"] = paid
+    if paid:
+        evidence["paid_reason"] = paid_reason
+        return _reject(claim, "paid_not_real_news", evidence)
+
+    if not topic_matched(fr.text, brief):
+        evidence["topic_match"] = False
+        return _reject(claim, "topic_mismatch", evidence)
+    evidence["topic_match"] = True
 
     sr = search_fn(claim.article_url)
     evidence["in_index"] = sr.in_index
