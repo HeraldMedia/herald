@@ -93,14 +93,19 @@ whose hash/version doesn't match the on-chain anchor.
 
 ```bash
 ./scripts/run_brief_board.sh                       # serves on :8093
-# Operator creates and funds a brief (use HERALD_ADMIN_TOKEN header in prod)
+# Set HERALD_ADMIN_TOKEN (and HERALD_RESULTS_TOKEN) first — the /admin/* and /results write
+# endpoints are DISABLED (503) until their token is set, so a public deployment can't be
+# posted fake briefs or fake "verified" articles. (Local dev only: HERALD_ALLOW_OPEN_WRITES=true.)
 curl -s -XPOST localhost:8093/admin/briefs -H 'content-type: application/json' \
+  -H "X-Admin-Token: $HERALD_ADMIN_TOKEN" \
   -d '{"title":"Pro-Bittensor coverage","tier":1,"keywords":["bittensor"],
-       "start_date":"2026-07-01","end_date":"2026-07-31","reward_pool":5000,"boost":1.0}'
-curl -s -XPOST localhost:8093/admin/briefs/<BRIEF_ID>/fund
+       "start_date":"2026-07-01","end_date":"2026-07-31","reward_pool":5000,"boost":1.0,"cap":0.5}'
+curl -s -XPOST localhost:8093/admin/briefs/<BRIEF_ID>/fund -H "X-Admin-Token: $HERALD_ADMIN_TOKEN"
 ```
 
-Point validators at it: `HERALD_BRIEFS_ENDPOINT=http://<host>:8093/api/v2/validator/briefs`.
+Give each brief `keywords` (the topic gate) and, to bound any one brief's share of emissions,
+an optional `cap` (0–1 fraction; omitted = uncapped). Point validators at the board:
+`HERALD_BRIEFS_ENDPOINT=http://<host>:8093/api/v2/validator/briefs`.
 For the public proof page, set `HERALD_RESULTS_ENDPOINT=http://<host>:8093` on the validator.
 
 **Public API for the landing page.** The same service exposes the read endpoints the marketing
@@ -212,6 +217,11 @@ genuinely hard or out of v1 scope and should be planned before a large mainnet r
   shorter than the 30-epoch vest window — so a caught miner resumes earning on its other vesting
   articles after the cooldown. Consider setting the cooldown `>= HERALD_VEST_EPOCHS` (or scaling
   it to the slashed bond) once pilot data sets the real numbers.
+- **Brief board is a public web service — front it with a proxy.** Beyond the token gate on the
+  write endpoints, run the board behind a reverse proxy (TLS + a request-body size limit, e.g.
+  `Caddy request_body max_size`) so an authenticated-but-buggy publisher can't post oversized
+  bodies. Result storage is capped (`HERALD_MAX_RESULTS`, oldest evicted) and writes are atomic,
+  but the proxy is the right place to bound request size and rate.
 - **Evaluation-epoch boundary skew.** Vesting/slash are gated on `(block - HERALD_EPOCH_LAG) //
   EPOCH_LEN`; the lag shrinks but doesn't remove cross-validator skew at epoch boundaries (EMA
   smooths the residual). A finalized-block-anchored epoch would close it.
