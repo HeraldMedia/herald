@@ -164,6 +164,17 @@ async def test_claim_organic_article_predating_commit_rejected(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_future_dated_article_rejected(monkeypatch):
+    c1 = make_claim("nytimes", "https://www.nytimes.com/a", "hkA")
+    self, captured = make_self({1: c1, 2: c1}, {"hkA": onchain(c1)}, monkeypatch=monkeypatch)
+    # commit is 2026-01-01; a far-future 2030 date is implausible -> rejected
+    future = b'<script>{"datePublished":"2030-05-01T00:00:00Z"}</script>' + b"news " * 200
+    monkeypatch.setattr(fetchmod, "_http_get", lambda url: (200, url, future))
+    await fwd.forward(self)
+    assert dict(zip(captured["uids"], captured["rewards"])).get(1, 0.0) == 0.0
+
+
+@pytest.mark.asyncio
 async def test_uid_reassignment_does_not_pay_new_holder(monkeypatch):
     c1 = make_claim("nytimes", "https://www.nytimes.com/a", "hkA")
     self, captured = make_self({1: c1, 2: c1}, {"hkA": onchain(c1)}, monkeypatch=monkeypatch)

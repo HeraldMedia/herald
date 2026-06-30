@@ -94,10 +94,12 @@ def _extract_text(html: str) -> str:
     return " ".join(parser.parts)
 
 
+# Article-scoped meta is preferred over a bare datePublished (which a stray/unrelated JSON-LD
+# object elsewhere on the page could otherwise supply).
 _PUBLISHED_PATTERNS = [
-    re.compile(r'["\']datePublished["\']\s*:\s*["\']([^"\']+)["\']'),
     re.compile(r'(?:article:published_time|og:published_time)["\']?\s+content=["\']([^"\']+)["\']', re.I),
     re.compile(r'content=["\']([^"\']+)["\'][^>]*?(?:article:published_time|og:published_time)', re.I),
+    re.compile(r'["\']datePublished["\']\s*:\s*["\']([^"\']+)["\']'),
 ]
 
 

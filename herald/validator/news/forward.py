@@ -11,6 +11,7 @@ from herald.validator.utils.config import (
     HERALD_DEAD_CONFIRM_EPOCHS,
     HERALD_EPOCH_LAG,
     HERALD_MAX_ARTICLES_PER_MINER,
+    HERALD_MAX_PLACEMENT_DAYS,
     HERALD_TOTAL_DAILY_USD,
     HERALD_USE_LLM_JUDGE,
     HERALD_VEST_GRACE_EPOCHS,
@@ -137,8 +138,9 @@ async def forward(self):
             published_ts = fetch(w.url, epoch).published_ts
             if commit_block is not None and published_ts is not None:
                 commit_ts = self.subtensor.get_timestamp(commit_block).timestamp()
-                if published_ts <= commit_ts:
-                    bt.logging.info(f"Rejecting {w.url}: published before commit (claim-organic)")
+                max_ts = commit_ts + HERALD_MAX_PLACEMENT_DAYS * 86400
+                if published_ts <= commit_ts or published_ts > max_ts:
+                    bt.logging.info(f"Rejecting {w.url}: publication date implausible vs commit")
                     continue
             fresh_winners.append(w)
         winners = fresh_winners
