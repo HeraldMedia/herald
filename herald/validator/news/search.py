@@ -14,6 +14,13 @@ from herald.validator.utils.config import (
 from .url import canonicalize
 
 _cache = {}  # (canonical_url, epoch) -> SearchResult
+_CACHE_MAX = 50000
+
+
+def _cache_put(cache, key, value):
+    cache[key] = value
+    while len(cache) > _CACHE_MAX:
+        cache.pop(next(iter(cache)))
 
 
 @dataclass
@@ -82,5 +89,5 @@ def in_index(article_url: str, epoch=None) -> SearchResult:
         providers_matched=matched_in,
     )
     if epoch is not None:
-        _cache[(target, epoch)] = result
+        _cache_put(_cache, (target, epoch), result)
     return result

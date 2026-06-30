@@ -37,6 +37,13 @@ def is_safe_fetch_url(url: str) -> bool:
 _HEADERS = {"User-Agent": "HeraldValidator/1.0 (+https://herald.network)"}
 _SKIP_TAGS = {"script", "style", "noscript"}
 _cache = {}  # (canonical_url, epoch) -> FetchResult
+_CACHE_MAX = 50000
+
+
+def _cache_put(cache, key, value):
+    cache[key] = value
+    while len(cache) > _CACHE_MAX:
+        cache.pop(next(iter(cache)))
 
 
 class _TextExtractor(HTMLParser):
@@ -128,7 +135,7 @@ def fetch(url: str, epoch=None) -> FetchResult:
     if not is_safe_fetch_url(canon):
         result = FetchResult(False, 0, canon, "", 0)
         if epoch is not None:
-            _cache[(canon, epoch)] = result
+            _cache_put(_cache, (canon, epoch), result)
         return result
 
     providers = _providers()
@@ -155,5 +162,5 @@ def fetch(url: str, epoch=None) -> FetchResult:
         published_ts=_parse_published_ts(html),
     )
     if epoch is not None:
-        _cache[(canon, epoch)] = result
+        _cache_put(_cache, (canon, epoch), result)
     return result

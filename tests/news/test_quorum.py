@@ -73,3 +73,11 @@ def test_search_epoch_cache(monkeypatch):
     in_index("https://x/a", epoch=3)
     in_index("https://x/a", epoch=3)
     assert len(calls) == 1
+
+
+def test_fetch_cache_is_bounded(monkeypatch):
+    monkeypatch.setattr(fetchmod, "_CACHE_MAX", 3)
+    monkeypatch.setattr(fetchmod, "_providers", lambda: [lambda u: (200, u, b"x" * 1000)])
+    for i in range(10):
+        fetch(f"https://x/{i}", epoch=1)
+    assert len(fetchmod._cache) <= 3

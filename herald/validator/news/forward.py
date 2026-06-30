@@ -152,6 +152,8 @@ async def forward(self):
             usd_by_uid_brief[key] = usd_by_uid_brief.get(key, 0.0) + installment
 
         usd_by_uid = apply_brief_caps(usd_by_uid_brief, briefs, HERALD_TOTAL_DAILY_USD)
+        if SUBNET_BURN_UID not in uids:
+            bt.logging.warning(f"Burn UID {SUBNET_BURN_UID} not in metagraph; remainder will not burn")
         weights = compute_weights(usd_by_uid, uids, HERALD_TOTAL_DAILY_USD, SUBNET_BURN_UID)
         self.update_scores(weights, uids)
 
