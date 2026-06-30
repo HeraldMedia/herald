@@ -70,3 +70,15 @@ def test_published_meta_tag_either_attribute_order(monkeypatch):
     fetchmod._cache.clear()
     monkeypatch.setattr(fetchmod, "_http_get", lambda url: (200, url, b))
     assert fetch("https://x/b").published_ts == expect
+
+
+def test_published_ts_no_redos_on_pathological_body():
+    import time
+    # Many content="..." attrs with no '>' and no keyword: the reversed meta pattern must
+    # not backtrack quadratically over the body (a crafted page would otherwise pin the
+    # validator's eval thread for the whole epoch).
+    body = (b'content="x" ' * 40000).decode("utf-8")  # ~480 KB
+    start = time.perf_counter()
+    ts = fetchmod._parse_published_ts(body)
+    assert ts is None
+    assert time.perf_counter() - start < 2.0

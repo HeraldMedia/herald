@@ -98,7 +98,9 @@ def _extract_text(html: str) -> str:
 # object elsewhere on the page could otherwise supply).
 _PUBLISHED_PATTERNS = [
     re.compile(r'(?:article:published_time|og:published_time)["\']?\s+content=["\']([^"\']+)["\']', re.I),
-    re.compile(r'content=["\']([^"\']+)["\'][^>]*?(?:article:published_time|og:published_time)', re.I),
+    # Bounded quantifiers: the two attrs sit in one <meta> tag, so a missing keyword can't
+    # force a quadratic backtrack across a crafted body (ReDoS).
+    re.compile(r'content=["\']([^"\']{1,200})["\'][^>]{0,200}?(?:article:published_time|og:published_time)', re.I),
     re.compile(r'["\']datePublished["\']\s*:\s*["\']([^"\']+)["\']'),
 ]
 
