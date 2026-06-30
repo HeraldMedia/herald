@@ -1,113 +1,56 @@
-<p align="center">
-  <a href="https://www.herald.network/">
-    <img src="assets/lockup_gradient.svg" alt="Herald Logo" width="800" />
-  </a>
-</p>
+# Herald — Verified Media Placement (Bittensor netuid 69)
 
-# Herald — The Decentralized Creator Economy
+Herald is a Bittensor subnet for **verified mainstream-media placement**. Miners are PR
+operators and outlet owners who get a news article published in a real outlet, then submit
+the URL. Validators run an automatic, code-only **public-web verification oracle** on each
+claimed article and pay miners in emissions. It reuses the proven Bittensor neuron / brief /
+weight-setting shape; the new engineering is the verification oracle and commit-reveal
+attribution.
 
-Herald is a decentralized platform that incentivizes content creators to connect brands with audiences. Creators publish YouTube videos to satisfy defined briefs and earn rewards based on engagement metrics.
+## How it works
 
----
+1. **Commit.** A miner reads the open briefs and commits intent on chain — a salted hash of
+   `(brief_id, outlet, hotkey, nonce, bond, version)` — locking an alpha-stake bond. The
+   target outlet stays hidden until reveal.
+2. **Claim.** Once the article is live, the miner attaches the URL and serves the reveal when
+   a validator pulls it (`ClaimSynapse`).
+3. **Verify.** For each claim the validator runs the oracle, cheapest-first with early-exit:
+   commitment valid → outlet tier (registry) → URL live → real-news (not paid) → topic match →
+   in search index. Every score is rebuildable from saved evidence.
+4. **Attribute.** Across all claims, the earliest valid commit wins each article, with one paid
+   placement per (outlet, brief). Organic/uncommitted articles pay no one.
+5. **Vest & slash.** The reward releases in installments over a 30-day persistence window. If
+   the article disappears, remaining installments are clawed back and the hotkey is slashed
+   (zeroed across all briefs for a cooldown).
 
-## ⚙️ High-Level Architecture
+## Layout
 
-- **Miners**: Produce and publish YouTube content for one or more briefs.  
-- **Validators**: Obtain temporary OAuth tokens to securely access YouTube Analytics and validate performance.  
-- **Brands**: Define and publish content briefs (initially focused on the Bittensor ecosystem).  
-- **Briefs Server**: Hosts the [active briefs](https://www.dashboard.herald.network/briefs).  
-- **Bittensor Network**: Manages on-chain compensation, rewarding Validators and Miners with the [Herald alpha token](https://www.coingecko.com/en/coins/herald).
+- `herald/validator/news/` — the oracle (`oracle.py`), checks (`real_news`, `topic_match`,
+  `fetch`, `search`), `attribution.py`, `commit_index.py`, `bonds.py`, `vesting.py`,
+  `slashing.py`, `reward.py`, `forward.py`, `registry.py`, `state.py`.
+- `herald/miner/` — `commit.py`, `claim_store.py`, `cli.py`.
+- `herald/registry/admin.py` — operator CLI to manage and sign the outlet registry.
+- `neurons/{miner,validator}.py` — entrypoints.
 
----
+## Running
 
-## 🚀 Getting Started
+```bash
+pip install -e .
 
-### For Miners
+# Validator
+python neurons/validator.py --netuid 69 --wallet.name <w> --wallet.hotkey <hk>
 
-1. **Review Requirements**  
-   Ensure your YouTube account and videos meet the [minimum requirements](herald/miner/README.md).
+# Miner: commit to an outlet, then attach the URL once published
+python -m herald.miner.cli commit --brief <id> --outlet <outlet_id> --bond <atto>
+python -m herald.miner.cli claim --commit <onchain_value> --url <article_url>
+python neurons/miner.py --netuid 69 --wallet.name <w> --wallet.hotkey <hk>
+```
 
-2. **Publish Content**  
-   Create videos targeting one or more active briefs.
+Validators verify the outlet registry's ed25519 signature when `HERALD_REGISTRY_PUBKEY` is set.
+See `.env.example` for configuration.
 
-3. **Earn Rewards**  
-   Videos that satisfy briefs are rewarded based on **YouTube Premium revenue** stats.
+## Tests
 
-4. **Agency Operations**  
-   Run a single miner with up to 5 YouTube accounts to operate as a content agency, aggregating multiple creators under one mining operation.
-
-See the [Miner Setup Guide](herald/miner/README.md) for:
-- Installation and configuration  
-- OAuth and account integration  
-- Miner registration on the network  
-- Reward tracking and monitoring
-
-### For Validators
-
-Validators maintain the integrity of the network by:
-- Retrieving analytics data via OAuth  
-- Verifying content engagement  
-- Disbursing on-chain rewards to Miners
-
-Refer to the [Validator Setup Guide](herald/validator/README.md) for detailed instructions.
-
----
-
-## 📊 Scoring & Rewards System
-
-Herald employs a dynamic, multi-layered scoring and rewards mechanism to fairly distribute emissions and incentivize high-quality participation. The system is designed to prioritize genuine engagement and prevent manipulation.
-
-### 1. Briefs & Boost Multipliers
-
-- Every [brief](https://dashboard.herald.network/) is assigned a **boost** value.
-  - **Boost** acts as a multiplier on the score of videos that fulfill the brief, giving higher priority to briefs from sponsors or clients.
-
-### 2. Video Eligibility & Format Types
-
-- **Eligibility:**  
-  - Videos must have both their transcript and description fully satisfy the requirements of an active brief.
-- **Format Types:**  
-  Each brief specifies a required video format, which determines both eligibility and reward scaling:
-  - **Dedicated:**  
-    - Sponsor’s topic is the main focus (≥80% of video).
-    - Each YouTube account can be rewarded for up to **2 videos per dedicated brief** (oldest 2 by publish date).
-    - Receives **100% of the reward**.
-  - **Ad-Read:**  
-    - Sponsor’s message appears as a short, distinct segment.
-    - Each YouTube account can be rewarded for up to **5 videos per ad-read brief** (oldest 5 by publish date).
-    - Receives **20% of the dedicated reward**.
-  - **Integration:**  
-    - Sponsor's content is woven into the video content itself.
-    - Video limits are configured per-brief via `max_count`.
-    - Receives **20% of the dedicated reward** (same as ad-read).
-
-### 3. Performance Metrics & Anti-Exploitation Controls
-
-- **Reward Calculation:**  
-  - Rewards are based on the 7-day moving average of YouTube Premium Revenue (`estimatedRedPartnerRevenue`).
-  - For **non-YPP YouTubers**, Premium Revenue is estimated using the video’s minutes watched (`estimatedMinutesWatched`) multiplied by 0.00005.
-  - For each eligible video, the (actual or estimated) Premium Revenue is multiplied by a scaling factor to determine the daily reward (in USD).
-  - This daily USD reward is then converted into a weight relative to the subnet’s total daily miner emissions (USD).
-  - By anchoring rewards to USD, we align with industry-standard metrics (CPM), making the system more transparent and familiar for miners.
-- **Lookback & Revenue Cap:**  
-  - To prevent exploitation via fake engagement, Herald applies a lookback window:
-    - For each video, the **average premium revenue over the 7-day period is capped at the median daily revenue for the channel from the previous month**.
-    - YouTube audit and remove engagement that they deem to be fake within 1 month. The lookback factors this audit in a prevents exploitation.
-- **Reward Timing:**  
-  - Only videos matching active briefs are considered.
-  - Videos earn rewards for the first 14 days after they are published.
-  - There is a **3-day delay** in rewards (to align with YouTube's engagement verification), so rewards always lag behind video engagement by 3 days.
-
-### 4. Emissions Model
-
-- The **boost multiplier** increases the score of qualifying videos.
-- Each brief has a **maximum emissions cap**, preventing any single brief from dominating the total emissions.
-- **Unclaimed emissions** are automatically allocated to the subnet treasury.
-
----
-
-## 🤝 Contact & Support
-
-For assistance or questions, join our Discord support channel:
-
-[Herald Support on Bittensor Discord](https://discord.com/channels/799672011265015819/1362489640841380045)
+```bash
+pytest tests/news/
+```
