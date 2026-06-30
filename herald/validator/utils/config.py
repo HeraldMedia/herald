@@ -118,6 +118,9 @@ SUBNET_TREASURY_UID = int(os.getenv('SUBNET_TREASURY_UID', '106'))
 HERALD_EPOCH_SECONDS = int(os.getenv('HERALD_EPOCH_SECONDS', str(24 * 60 * 60)))
 # Commit-ordering granularity in blocks (~12s/block -> ~72 min).
 EPOCH_LEN = int(os.getenv('HERALD_EPOCH_LEN', '360'))
+# Lag the evaluation epoch behind the chain tip so a validator briefly ahead of finality
+# doesn't advance early (reduces, not eliminates, epoch-boundary weight skew).
+HERALD_EPOCH_LAG = int(os.getenv('HERALD_EPOCH_LAG', '10'))
 
 SERPAPI_API_KEY = os.getenv('SERPAPI_API_KEY')
 SCRAPINGBEE_API_KEY = os.getenv('SCRAPINGBEE_API_KEY')

@@ -22,7 +22,8 @@ def _earliest(cands: List[Candidate]) -> Candidate:
 
 
 def winning_candidates(candidates: List[Candidate]) -> List[Candidate]:
-    eligible = [c for c in candidates if c.passed and c.commit_epoch is not None]
+    # usd > 0 so a worthless (e.g. non-indexed) claim can't occupy a paid (outlet, brief) slot
+    eligible = [c for c in candidates if c.passed and c.commit_epoch is not None and c.usd > 0]
 
     by_article: Dict[str, List[Candidate]] = {}
     for c in eligible:

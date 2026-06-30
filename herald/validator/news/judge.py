@@ -33,7 +33,9 @@ def judge(question: str, text: str):
     """Return True/False, or None when the model is unavailable or unsure."""
     try:
         client = _get_client()
-        model = getattr(client, "BRIEF_EVALUATION_MODEL", None) or HERALD_REF_MODEL_ID
+        # Prefer the explicitly-pinned model so every validator uses the SAME model
+        # (a per-provider default would diverge across validators).
+        model = HERALD_REF_MODEL_ID or getattr(client, "BRIEF_EVALUATION_MODEL", None)
         prompt = f"{question}\nAnswer 'yes' or 'no' only.\n\nArticle text:\n{(text or '')[:8000]}"
         resp = client._make_request(
             model=model,

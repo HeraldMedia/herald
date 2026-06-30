@@ -51,6 +51,15 @@ def test_tie_breaks_on_uid():
     assert usd == {1: 500.0, 3: 0.0}
 
 
+def test_zero_usd_does_not_block_slot():
+    cands = [
+        cand(1, "A", "nyt", "b1", epoch=2, usd=0.0),     # attacker: earliest but worthless (non-indexed)
+        cand(2, "B", "nyt", "b1", epoch=6, usd=500.0),   # honest: later commit, real $500 placement
+    ]
+    usd = resolve_attribution(cands)
+    assert usd == {1: 0.0, 2: 500.0}
+
+
 def test_multiple_claims_sum_for_winner():
     cands = [
         cand(1, "A", "nyt", "b1", epoch=2, usd=500),
