@@ -41,10 +41,10 @@ def _persistence_status(entry, briefs_by_id, epoch, judge_fn) -> str:
     fetch/search outage never slashes an honest miner.
     """
     fr = fetch(entry.url, epoch)
-    if fr.status in (404, 410, 451):
+    if fr.status in (404, 410):
         return "dead"
     if not fr.ok:
-        return "hold"  # status 0 (no connect), 5xx, or thin body — can't confirm
+        return "hold"  # status 0/451/5xx or thin body — geo-block/no-connect: can't confirm
     if is_paid(entry.url, fr.text, judge_fn)[0]:
         return "dead"  # swapped to paid/sponsored content — slashable
     brief = briefs_by_id.get(entry.brief_id)

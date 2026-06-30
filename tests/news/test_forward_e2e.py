@@ -288,6 +288,23 @@ async def test_transient_outage_holds_without_slashing(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_geo_block_451_holds_without_slashing(monkeypatch):
+    # 451 (Unavailable For Legal Reasons) is per-validator/jurisdictional and transient; it
+    # must hold (no pay), never confirm a removal — even at a confirm threshold of 1.
+    c1 = make_claim("nytimes", "https://www.nytimes.com/a", "hkA")
+    self, captured = make_self({1: c1, 2: c1}, {"hkA": onchain(c1)}, monkeypatch=monkeypatch)
+    monkeypatch.setattr(fetchmod, "_http_get", lambda url: (200, url, b"news " * 200))
+    await fwd.forward(self)  # cycle 1: alive, pays
+
+    self.block_state["v"] += fwd.EPOCH_LEN + 1
+    monkeypatch.setattr(fetchmod, "_http_get", lambda url: (451, url, b""))
+    await fwd.forward(self)
+    epoch2 = self.subtensor.get_current_block() // fwd.EPOCH_LEN
+    assert self.herald_state.slash.is_slashed("hkA", epoch2) is False
+    assert self.herald_state.vesting.status(fwd_article_id(c1.article_url)) == "VESTING"
+
+
+@pytest.mark.asyncio
 async def test_clawback_and_slash_when_article_disappears(monkeypatch):
     c1 = make_claim("nytimes", "https://www.nytimes.com/a", "hkA")
     commitments = {"hkA": onchain(c1)}
