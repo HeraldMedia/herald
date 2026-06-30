@@ -8,10 +8,12 @@ from herald.utils.uids import get_all_uids
 from herald.validator.utils.briefs import get_briefs
 from herald.validator.utils.config import (
     EPOCH_LEN,
+    HERALD_DEAD_CONFIRM_EPOCHS,
     HERALD_EPOCH_LAG,
     HERALD_MAX_ARTICLES_PER_MINER,
     HERALD_TOTAL_DAILY_USD,
     HERALD_USE_LLM_JUDGE,
+    HERALD_VEST_GRACE_EPOCHS,
     SLASH_COOLDOWN_EPOCHS,
     SUBNET_BURN_UID,
     VALIDATOR_STEPS_INTERVAL,
@@ -105,7 +107,6 @@ async def forward(self):
         if getattr(self, "_last_scored_epoch", -1) >= epoch:
             time.sleep(VALIDATOR_WAIT)  # already scored this epoch; don't re-zero weights
             return
-        self._last_scored_epoch = epoch
         commitments_with_block = get_commitments_with_block(self.subtensor, self.config.netuid)
         commit_index.observe(commitments_with_block)
         commitments = {hk: v for hk, (v, _b) in commitments_with_block.items()}
@@ -143,21 +144,29 @@ async def forward(self):
         winners = fresh_winners
 
         for w in winners:
-            vesting.start(w.article_id, w.uid, w.usd, w.url, w.hotkey, w.brief_id, w.commit_epoch)
+            vesting.start(w.article_id, w.uid, w.usd, w.url, w.hotkey, w.brief_id,
+                          w.commit_epoch, epoch)
 
         # Pass 1: release installments and apply clawbacks/slashes for the whole cycle.
         pending = []
+        max_age = vesting.vest_epochs + HERALD_VEST_GRACE_EPOCHS
         for article_id in list(vesting.active_article_ids()):
             entry = vesting.entry(article_id)
+            if epoch - entry.start_epoch > max_age:
+                vesting.expire(article_id)  # held/incomplete far past its window — terminate
+                continue
             status = _persistence_status(entry, briefs_by_id, epoch, judge_fn)
             if status == "dead":
-                if vesting.clawback(article_id):
-                    slash.slash(entry.hotkey, epoch + SLASH_COOLDOWN_EPOCHS)
+                entry.dead_streak += 1
+                if entry.dead_streak >= HERALD_DEAD_CONFIRM_EPOCHS:
+                    if vesting.clawback(article_id):
+                        slash.slash(entry.hotkey, epoch + SLASH_COOLDOWN_EPOCHS)
             elif status == "alive":
+                entry.dead_streak = 0
                 installment = vesting.release(article_id, epoch)
                 if installment:
                     pending.append((entry, installment))
-            # "hold": transient/unconfirmed — withhold pay, no clawback, stays VESTING
+            # "hold": transient/unconfirmed — withhold pay, no clawback, keep dead_streak
 
         # Pass 2: credit only the original placer, post-slash, and only if it still holds the UID.
         usd_by_uid_brief = {}
@@ -174,6 +183,7 @@ async def forward(self):
             bt.logging.warning(f"Burn UID {SUBNET_BURN_UID} not in metagraph; remainder will not burn")
         weights = compute_weights(usd_by_uid, uids, HERALD_TOTAL_DAILY_USD, SUBNET_BURN_UID)
         self.update_scores(weights, uids)
+        self._last_scored_epoch = epoch  # only mark scored after success, so a failure retries
 
         endpoint = os.getenv("HERALD_RESULTS_ENDPOINT")
         if endpoint:

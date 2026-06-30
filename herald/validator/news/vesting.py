@@ -6,6 +6,7 @@ from typing import Dict, List, Tuple
 VESTING = "VESTING"
 COMPLETED = "COMPLETED"
 CLAWBACK = "CLAWBACK"
+EXPIRED = "EXPIRED"
 
 
 @dataclass
@@ -20,6 +21,8 @@ class VestEntry:
     brief_id: str = ""
     commit_epoch: int = 0
     last_release_epoch: int = -1
+    start_epoch: int = 0
+    dead_streak: int = 0
 
 
 class VestingLedger:
@@ -29,7 +32,8 @@ class VestingLedger:
             k: VestEntry(**v) for k, v in (entries or {}).items()
         }
 
-    def start(self, article_id, uid, total_usd, url="", hotkey="", brief_id="", commit_epoch=0):
+    def start(self, article_id, uid, total_usd, url="", hotkey="", brief_id="",
+              commit_epoch=0, start_epoch=0):
         existing = self._entries.get(article_id)
         if existing is not None:
             # earliest commit wins even if it reveals in a later cycle
@@ -38,6 +42,8 @@ class VestingLedger:
                 existing.hotkey = hotkey
                 existing.commit_epoch = commit_epoch
                 existing.brief_id = brief_id
+                existing.total_usd = total_usd
+                existing.installment_usd = total_usd / self.vest_epochs
             return
         self._entries[article_id] = VestEntry(
             uid=uid,
@@ -49,6 +55,7 @@ class VestingLedger:
             hotkey=hotkey,
             brief_id=brief_id,
             commit_epoch=commit_epoch,
+            start_epoch=start_epoch,
         )
 
     def release(self, article_id: str, epoch: int) -> float:
@@ -70,6 +77,14 @@ class VestingLedger:
         if entry is None or entry.status != VESTING:
             return False
         entry.status = CLAWBACK
+        return True
+
+    def expire(self, article_id: str) -> bool:
+        """Terminate a long-held VESTING article (no further pay/clawback)."""
+        entry = self._entries.get(article_id)
+        if entry is None or entry.status != VESTING:
+            return False
+        entry.status = EXPIRED
         return True
 
     def entry(self, article_id: str) -> VestEntry:

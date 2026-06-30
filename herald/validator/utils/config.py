@@ -151,6 +151,13 @@ HERALD_REGISTRY_URL = os.getenv('HERALD_REGISTRY_URL', f"{HERALD_API_URL}/regist
 # Vesting over the persistence window, and slash cooldown (in evaluation epochs).
 VEST_EPOCHS = int(os.getenv('HERALD_VEST_EPOCHS', '30'))
 SLASH_COOLDOWN_EPOCHS = int(os.getenv('HERALD_SLASH_COOLDOWN_EPOCHS', '7'))
+# Require this many consecutive confirmed-dead epochs before clawback+slash, so a transient
+# 404/geo-block (or a stray "sponsored" string) doesn't slash an honest miner.
+HERALD_DEAD_CONFIRM_EPOCHS = int(os.getenv('HERALD_DEAD_CONFIRM_EPOCHS', '2'))
+# Expire an article still vesting long after its window (bounds state; terminates held entries).
+HERALD_VEST_GRACE_EPOCHS = int(os.getenv('HERALD_VEST_GRACE_EPOCHS', '30'))
+# Max plausible gap between commit and publication; a far-future date is rejected as implausible.
+HERALD_MAX_PLACEMENT_DAYS = int(os.getenv('HERALD_MAX_PLACEMENT_DAYS', '90'))
 
 # Emissions track USD value: miners earn their share of total daily emissions
 # (valued in USD); the unclaimed remainder is burned to the burn UID.

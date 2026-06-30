@@ -68,6 +68,7 @@ def _setup(monkeypatch):
     monkeypatch.setattr(fwd.time, "sleep", lambda *_: None)
     monkeypatch.setattr(statemod, "VEST_EPOCHS", 2)
     monkeypatch.setattr(fwd, "HERALD_TOTAL_DAILY_USD", 0.0)  # no burn; miners split proportionally
+    monkeypatch.setattr(fwd, "HERALD_DEAD_CONFIRM_EPOCHS", 1)  # single confirmed-dead slashes (tests)
 
 
 @pytest.mark.asyncio
@@ -208,6 +209,28 @@ async def test_same_epoch_rerun_is_skipped(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_dead_must_be_confirmed_over_consecutive_epochs(monkeypatch):
+    monkeypatch.setattr(fwd, "HERALD_DEAD_CONFIRM_EPOCHS", 2)
+    c1 = make_claim("nytimes", "https://www.nytimes.com/a", "hkA")
+    self, captured = make_self({1: c1, 2: c1}, {"hkA": onchain(c1)}, monkeypatch=monkeypatch)
+    monkeypatch.setattr(fetchmod, "_http_get", lambda url: (200, url, b"news " * 200))
+    await fwd.forward(self)  # cycle 1: alive
+
+    # cycle 2: a single 404 must NOT slash (confirm threshold is 2)
+    self.block_state["v"] += fwd.EPOCH_LEN + 1
+    monkeypatch.setattr(fetchmod, "_http_get", lambda url: (404, url, b""))
+    await fwd.forward(self)
+    e2 = self.subtensor.get_current_block() // fwd.EPOCH_LEN
+    assert self.herald_state.slash.is_slashed("hkA", e2) is False
+
+    # cycle 3: a second consecutive 404 -> confirmed dead -> slash
+    self.block_state["v"] += fwd.EPOCH_LEN + 1
+    await fwd.forward(self)
+    e3 = self.subtensor.get_current_block() // fwd.EPOCH_LEN
+    assert self.herald_state.slash.is_slashed("hkA", e3) is True
+
+
+@pytest.mark.asyncio
 async def test_transient_outage_holds_without_slashing(monkeypatch):
     c1 = make_claim("nytimes", "https://www.nytimes.com/a", "hkA")
     self, captured = make_self({1: c1, 2: c1}, {"hkA": onchain(c1)}, monkeypatch=monkeypatch)
@@ -247,3 +270,23 @@ async def test_clawback_and_slash_when_article_disappears(monkeypatch):
     await fwd.forward(self)
     assert dict(zip(captured["uids"], captured["rewards"]))[1] == 0.0
     assert self.herald_state.slash.is_slashed("hkA", self.subtensor.get_current_block() // fwd.EPOCH_LEN)
+
+
+@pytest.mark.asyncio
+async def test_failed_cycle_retries_same_epoch(monkeypatch):
+    c1 = make_claim("nytimes", "https://www.nytimes.com/a", "hkA")
+    self, captured = make_self({1: c1, 2: c1}, {"hkA": onchain(c1)}, monkeypatch=monkeypatch)
+    monkeypatch.setattr(fetchmod, "_http_get", lambda url: (200, url, b"news " * 200))
+    calls = {"n": 0}
+
+    def flaky(rewards, uids):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise RuntimeError("rpc down")        # first attempt fails after partial work
+        captured.update(rewards=rewards, uids=uids)
+
+    self.update_scores = flaky
+    await fwd.forward(self)                         # attempt 1 throws (swallowed); epoch NOT marked
+    assert captured == {}
+    await fwd.forward(self)                         # same epoch must RETRY, not skip
+    assert captured.get("rewards") is not None

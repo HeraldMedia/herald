@@ -77,3 +77,12 @@ def test_roundtrip():
     v.release("art1", epoch=1)
     restored = VestingLedger.from_dict(v.to_dict())
     assert restored.entry("art1").remaining == 3 and restored.vest_epochs == 4
+
+
+def test_expire_terminates_held_entry():
+    v = VestingLedger(vest_epochs=2)
+    v.start("a", uid=1, total_usd=100.0, start_epoch=0)
+    assert v.expire("a") is True
+    assert v.status("a") == "EXPIRED"
+    assert v.active_article_ids() == []
+    assert v.release("a", epoch=5) == 0.0  # terminal: no further pay
