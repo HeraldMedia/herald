@@ -161,10 +161,28 @@ and `/reporting/export` are the evidence surface.
   `HERALD_REGISTRY_PUBKEY`; re-sign with the matching key.
 - **No scores set**: the validator found no open/funded briefs — fund one on the brief board.
 
-## 13. Deferred (operator awareness)
+## 13. Known residuals (operator awareness)
 
-These are intentionally not in v1 and should be planned before a large mainnet rollout:
-on-chain brief funding/settlement (the brief board's `funded` flag is the trusted signal),
-the on-chain registry hash anchor, multi-provider fetch/search quorum + epoch caching, the
-LLM tier for the real-news / topic-match checks, and the USD→weight emission conversion with
-per-brief caps and burn-to-UID-0 (the validator currently L1-normalizes vested installments).
+The mechanism, services, and two adversarial-review rounds are complete, but these are
+genuinely hard or out of v1 scope and should be planned before a large mainnet rollout:
+
+- **Pre-commit front-running.** Earliest-commit-wins means an attacker who blanket-pre-commits
+  to `(outlet, brief)` and later reveals the *same URL* an honest miner placed can win
+  attribution. The bond (capital per commit) + one-paid-placement-per-(outlet,brief) cap
+  throttle this, but it isn't fully closed — it needs an attribution-level proof-of-placement.
+- **Claim-organic on date-less outlets.** The publication-time check only fires when the page
+  exposes a parseable `datePublished`/`article:published_time`. Outlets without machine-readable
+  dates bypass it. Prefer registry outlets that publish structured dates; consider a per-outlet
+  "requires date" flag.
+- **Brief authoring.** A brief with no `keywords` makes the rules-only topic check pass every
+  article. Always give briefs keywords (and/or enable the LLM tier uniformly).
+- **Cross-validator fetch agreement.** Validators fetch live HTML independently; geo/CDN/paywall
+  variance can still cause disagreement on the same article in an epoch. Quorum + epoch caching
+  reduce but don't eliminate it; a shared content-snapshot consensus is the longer-term fix.
+- **Evaluation-epoch boundary skew.** Vesting/slash are gated on `(block - HERALD_EPOCH_LAG) //
+  EPOCH_LEN`; the lag shrinks but doesn't remove cross-validator skew at epoch boundaries (EMA
+  smooths the residual). A finalized-block-anchored epoch would close it.
+- **On-chain brief funding/settlement.** The brief board's `funded` flag is the trusted signal;
+  on-chain alpha/TAO settlement (and BTC/stables) is designed-for but not built in v1.
+- **LLM judgement determinism.** If `HERALD_USE_LLM_JUDGE=true`, set the SAME `HERALD_REF_MODEL_ID`
+  and `LLM_PROVIDER` on every validator (model output drives consensus).
