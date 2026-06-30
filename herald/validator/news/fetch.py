@@ -19,8 +19,23 @@ from herald.validator.utils.config import (
 from .url import canonicalize
 
 
+def _ip_blocked(ip_str: str) -> bool:
+    ip = ipaddress.ip_address(ip_str)
+    return (ip.is_private or ip.is_loopback or ip.is_link_local
+            or ip.is_reserved or ip.is_multicast or ip.is_unspecified)
+
+
+def _resolve_ips(host: str):
+    import socket
+    return [info[4][0] for info in socket.getaddrinfo(host, None)]
+
+
 def is_safe_fetch_url(url: str) -> bool:
-    """Reject non-http(s) schemes and literal private/loopback/link-local hosts (SSRF guard)."""
+    """SSRF guard: http(s) only, and the host must resolve only to public IPs.
+
+    Resolving catches decimal/hex/octal IP encodings (e.g. http://2130706433/ -> 127.0.0.1)
+    and hostnames that point at internal addresses, not just literal dotted-quad IPs.
+    """
     parts = urlsplit(url)
     if parts.scheme not in ("http", "https"):
         return False
@@ -28,11 +43,14 @@ def is_safe_fetch_url(url: str) -> bool:
     if not host:
         return False
     try:
-        ip = ipaddress.ip_address(host)
+        return not _ip_blocked(host)  # literal IP
     except ValueError:
-        return True  # hostname (not a literal IP)
-    return not (ip.is_private or ip.is_loopback or ip.is_link_local
-                or ip.is_reserved or ip.is_multicast)
+        pass
+    try:
+        ips = _resolve_ips(host)
+    except Exception:
+        return False  # unresolvable -> block
+    return bool(ips) and all(not _ip_blocked(ip) for ip in ips)
 
 _HEADERS = {"User-Agent": "HeraldValidator/1.0 (+https://herald.network)"}
 _SKIP_TAGS = {"script", "style", "noscript"}
@@ -112,10 +130,24 @@ class FetchResult:
 
 
 def _http_get(url: str):
-    r = httpx.get(url, follow_redirects=True, timeout=20.0, headers=_HEADERS)
-    if not is_safe_fetch_url(str(r.url)):  # a redirect may have pivoted to an internal host
-        raise ValueError(f"unsafe redirect target: {r.url}")
-    return r.status_code, str(r.url), r.content[:HERALD_MAX_BODY_BYTES]
+    # Follow redirects manually so each hop is SSRF-checked BEFORE we connect to it,
+    # and stream the body so a huge response can't exhaust memory.
+    current = url
+    for _ in range(5):
+        if not is_safe_fetch_url(current):
+            raise ValueError(f"unsafe fetch target: {current}")
+        with httpx.stream("GET", current, follow_redirects=False, timeout=20.0, headers=_HEADERS) as r:
+            if r.is_redirect and r.next_request is not None:
+                current = str(r.next_request.url)
+                continue
+            chunks, total = [], 0
+            for chunk in r.iter_bytes():
+                chunks.append(chunk)
+                total += len(chunk)
+                if total >= HERALD_MAX_BODY_BYTES:
+                    break
+            return r.status_code, str(r.url), b"".join(chunks)[:HERALD_MAX_BODY_BYTES]
+    raise ValueError("too many redirects")
 
 
 def _scrapingbee_get(url: str):
