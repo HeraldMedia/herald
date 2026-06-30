@@ -35,3 +35,11 @@ def test_article_id_is_stable_and_hex():
 
 def test_host_of():
     assert host_of("https://www.nytimes.com/2026/01/01/x") == "www.nytimes.com"
+
+
+def test_idn_host_stable_with_punycode():
+    assert canonicalize("http://☃.com/a") == canonicalize("http://xn--n3h.com/a")
+
+
+def test_ipv6_brackets_preserved():
+    assert canonicalize("http://[2606:4700:4700::1111]/a") == "http://[2606:4700:4700::1111]/a"

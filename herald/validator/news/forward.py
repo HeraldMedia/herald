@@ -10,6 +10,7 @@ from herald.validator.utils.config import (
     EPOCH_LEN,
     HERALD_MAX_ARTICLES_PER_MINER,
     HERALD_TOTAL_DAILY_USD,
+    HERALD_USE_LLM_JUDGE,
     SLASH_COOLDOWN_EPOCHS,
     SUBNET_BURN_UID,
     VALIDATOR_STEPS_INTERVAL,
@@ -18,7 +19,7 @@ from herald.validator.utils.config import (
 from .chain import get_commitments_with_block
 from .emission import apply_brief_caps, compute_weights
 from .fetch import fetch
-from .judge import judge, llm_available
+from .judge import judge
 from .real_news import is_paid
 from .registry import load_registry
 from .publish import publish_results
@@ -103,7 +104,7 @@ async def forward(self):
         alpha_stake_by_uid = {uid: float(self.metagraph.alpha_stake[uid]) for uid in uids}
         claims_by_uid = await collect_claims(self, uids)
 
-        judge_fn = judge if llm_available() else None
+        judge_fn = judge if HERALD_USE_LLM_JUDGE else None
         briefs_by_id = {b["id"]: b for b in briefs}
 
         winners = winning_articles(

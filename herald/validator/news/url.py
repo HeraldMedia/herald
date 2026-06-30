@@ -18,13 +18,18 @@ def canonicalize(url: str) -> str:
     parts = urlsplit(url.strip())
     scheme = parts.scheme.lower()
     host = parts.hostname or ""
+    try:
+        host = host.encode("idna").decode("ascii")  # stable host across Unicode/punycode forms
+    except Exception:
+        pass
+    bracket = f"[{host}]" if ":" in host else host  # preserve IPv6 brackets
 
-    netloc = host
+    netloc = bracket
     if parts.port and not (
         (scheme == "http" and parts.port == 80)
         or (scheme == "https" and parts.port == 443)
     ):
-        netloc = f"{host}:{parts.port}"
+        netloc = f"{bracket}:{parts.port}"
 
     query_pairs = sorted(
         (k, v) for k, v in parse_qsl(parts.query, keep_blank_values=True) if _keep_param(k)

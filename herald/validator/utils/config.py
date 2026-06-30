@@ -127,6 +127,8 @@ HERALD_MIN_BODY_BYTES = int(os.getenv('HERALD_MIN_BODY_BYTES', '500'))
 HERALD_MAX_BODY_BYTES = int(os.getenv('HERALD_MAX_BODY_BYTES', str(5_000_000)))
 # Fallback model id for the LLM judgement tier (the provider's pinned model is preferred).
 HERALD_REF_MODEL_ID = os.getenv('HERALD_REF_MODEL_ID', '')
+# The LLM judgement tier must be enabled identically across validators, or weights diverge.
+HERALD_USE_LLM_JUDGE = os.getenv('HERALD_USE_LLM_JUDGE', 'false').lower() == 'true'
 # Quorum: number of providers that must agree before a verdict is accepted (clamped
 # to the number configured). Defaults to 1 (single provider).
 HERALD_QUORUM_THRESHOLD = int(os.getenv('HERALD_QUORUM_THRESHOLD', '1'))
