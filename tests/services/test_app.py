@@ -47,6 +47,19 @@ def test_html_board_and_page(client):
     assert page.status_code == 200 and "https://nyt.com/a" in page.text and "hkA" in page.text
 
 
+def test_results_token_enforced(tmp_path):
+    app = create_app(
+        BriefStore(str(tmp_path / "b.json")),
+        ResultStore(str(tmp_path / "r.json")),
+        results_token="rsecret",
+    )
+    c = TestClient(app)
+    assert c.post("/results", json={"article_id": "a", "hotkey": "h"}).status_code == 401
+    ok = c.post("/results", json={"article_id": "a", "hotkey": "h"},
+                headers={"X-Results-Token": "rsecret"})
+    assert ok.status_code == 200
+
+
 def test_admin_token_enforced(tmp_path):
     app = create_app(
         BriefStore(str(tmp_path / "b.json")),

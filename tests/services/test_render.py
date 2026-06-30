@@ -12,6 +12,14 @@ def test_board_escapes_html():
     assert "<script>x</script>" not in html and "&lt;script&gt;" in html
 
 
+def test_page_blocks_javascript_href():
+    html = render_page(
+        articles=[{"url": "javascript:alert(1)", "tier": 1, "hotkey": "hkA", "status": "vesting"}],
+        leaderboard=[],
+    )
+    assert "href=\"javascript:" not in html and "<a href" not in html
+
+
 def test_page_lists_articles_and_leaderboard():
     html = render_page(
         articles=[{"url": "https://nyt.com/a", "tier": 1, "hotkey": "hkA", "status": "vesting"}],

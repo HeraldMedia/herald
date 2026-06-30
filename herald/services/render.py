@@ -1,6 +1,7 @@
 """Minimal server-rendered HTML for the brief board and public proof page."""
 
 import html
+from urllib.parse import urlsplit
 
 _STYLE = "<style>body{font-family:sans-serif;margin:2rem}table{border-collapse:collapse}" \
          "td,th{border:1px solid #ccc;padding:4px 8px}</style>"
@@ -8,6 +9,13 @@ _STYLE = "<style>body{font-family:sans-serif;margin:2rem}table{border-collapse:c
 
 def _esc(value) -> str:
     return html.escape(str(value))
+
+
+def _article_cell(url) -> str:
+    # only make http(s) URLs clickable; never emit a javascript:/data: href
+    if urlsplit(str(url)).scheme in ("http", "https"):
+        return f"<a href=\"{_esc(url)}\">{_esc(url)}</a>"
+    return _esc(url)
 
 
 def render_board(briefs) -> str:
@@ -26,7 +34,7 @@ def render_board(briefs) -> str:
 
 def render_page(articles, leaderboard) -> str:
     arows = "".join(
-        f"<tr><td><a href=\"{_esc(a.get('url', ''))}\">{_esc(a.get('url', ''))}</a></td>"
+        f"<tr><td>{_article_cell(a.get('url', ''))}</td>"
         f"<td>{_esc(a.get('tier', ''))}</td><td>{_esc(a.get('hotkey', ''))}</td>"
         f"<td>{_esc(a.get('status', ''))}</td></tr>"
         for a in articles

@@ -1,6 +1,7 @@
 """Herald supporting services: brief board, operator admin, public proof page, reporting."""
 
 import os
+import secrets
 
 from fastapi import Body, FastAPI, Header, HTTPException
 from fastapi.responses import HTMLResponse
@@ -9,12 +10,16 @@ from .render import render_board, render_page
 from .store import BriefStore, ResultStore
 
 
-def create_app(brief_store: BriefStore, result_store: ResultStore, admin_token: str = None) -> FastAPI:
+def create_app(brief_store: BriefStore, result_store: ResultStore,
+               admin_token: str = None, results_token: str = None) -> FastAPI:
     app = FastAPI(title="Herald Brief Board")
 
+    def _check(expected, token):
+        if expected and not (token and secrets.compare_digest(token, expected)):
+            raise HTTPException(status_code=401, detail="unauthorized")
+
     def _check_admin(token):
-        if admin_token and token != admin_token:
-            raise HTTPException(status_code=401, detail="invalid admin token")
+        _check(admin_token, token)
 
     @app.post("/admin/briefs")
     def create_brief(brief: dict = Body(...), x_admin_token: str = Header(None)):
@@ -37,7 +42,8 @@ def create_app(brief_store: BriefStore, result_store: ResultStore, admin_token: 
         return {"items": brief_store.open_briefs()}
 
     @app.post("/results")
-    def ingest_result(item: dict = Body(...)):
+    def ingest_result(item: dict = Body(...), x_results_token: str = Header(None)):
+        _check(results_token, x_results_token)
         result_store.add(item)
         return {"ok": True}
 
@@ -67,5 +73,6 @@ def create_app(brief_store: BriefStore, result_store: ResultStore, admin_token: 
 app = create_app(
     BriefStore(os.getenv("HERALD_BRIEF_STORE", "brief_store.json")),
     ResultStore(os.getenv("HERALD_RESULT_STORE", "result_store.json")),
-    os.getenv("HERALD_ADMIN_TOKEN"),
+    admin_token=os.getenv("HERALD_ADMIN_TOKEN"),
+    results_token=os.getenv("HERALD_RESULTS_TOKEN"),
 )
