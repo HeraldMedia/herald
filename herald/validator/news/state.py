@@ -30,9 +30,14 @@ class HeraldState:
 
     @classmethod
     def from_dict(cls, data: dict) -> "HeraldState":
+        # epoch_len / vest_epochs are consensus parameters: take them from config, never the
+        # persisted file. A divisor that drifted across an upgrade would otherwise diverge
+        # winner selection (commit_epoch) and installment size between validators.
+        ci = data.get("commit_index", {})
+        ve = data.get("vesting", {})
         return cls(
-            CommitIndex.from_dict(data["commit_index"]),
-            VestingLedger.from_dict(data["vesting"]),
+            CommitIndex(EPOCH_LEN, ci.get("first_seen", {})),
+            VestingLedger(VEST_EPOCHS, ve.get("entries", {})),
             SlashLedger.from_dict(data["slash"]),
         )
 

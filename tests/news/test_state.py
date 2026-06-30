@@ -21,6 +21,22 @@ def test_save_load_roundtrip(tmp_path):
     assert loaded.slash.is_slashed("hkB", 5) is True
 
 
+def test_consensus_divisors_come_from_config_not_persisted_state():
+    # epoch_len / vest_epochs decide commit-ordering and installment size; a drifted value
+    # persisted by an older validator must not override the current config on load, or two
+    # validators disagree on the winner / payout.
+    from herald.validator.utils.config import EPOCH_LEN, VEST_EPOCHS
+    base = HeraldState.fresh()
+    base.commit_index.observe({"hkX": ("v", 5)})
+    d = base.to_dict()
+    d["commit_index"]["epoch_len"] = EPOCH_LEN + 123  # simulate a stale/old state file
+    d["vesting"]["vest_epochs"] = VEST_EPOCHS + 7
+    s = HeraldState.from_dict(d)
+    assert s.commit_index.epoch_len == EPOCH_LEN
+    assert s.vesting.vest_epochs == VEST_EPOCHS
+    assert s.commit_index.first_seen_block("hkX", "v") == 5  # persisted data still restored
+
+
 def test_load_missing_file_returns_fresh(tmp_path):
     s = HeraldState.load(str(tmp_path / "absent.json"))
     assert s.vesting.active_article_ids() == []
