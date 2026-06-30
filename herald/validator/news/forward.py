@@ -12,6 +12,7 @@ from herald.validator.utils.config import (
     HERALD_EPOCH_LAG,
     HERALD_MAX_ARTICLES_PER_MINER,
     HERALD_MAX_PLACEMENT_DAYS,
+    HERALD_REF_MODEL_ID,
     HERALD_TOTAL_DAILY_USD,
     HERALD_USE_LLM_JUDGE,
     HERALD_VEST_GRACE_EPOCHS,
@@ -121,7 +122,11 @@ async def forward(self):
         alpha_stake_by_uid = {uid: float(self.metagraph.alpha_stake[uid]) for uid in uids}
         claims_by_uid = await collect_claims(self, uids)
 
-        judge_fn = judge if HERALD_USE_LLM_JUDGE else None
+        # Require a pinned model when the LLM tier is on, or all validators must agree on the
+        # per-provider default (they don't). Without a pin, stay rules-only (deterministic).
+        if HERALD_USE_LLM_JUDGE and not HERALD_REF_MODEL_ID:
+            bt.logging.warning("HERALD_USE_LLM_JUDGE set without HERALD_REF_MODEL_ID; LLM tier disabled")
+        judge_fn = judge if (HERALD_USE_LLM_JUDGE and HERALD_REF_MODEL_ID) else None
         briefs_by_id = {b["id"]: b for b in briefs}
 
         winners = winning_articles(

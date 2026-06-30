@@ -158,7 +158,7 @@ def _scrapingbee_get(url: str):
         params={"api_key": SCRAPINGBEE_API_KEY, "url": url, "render_js": "false"},
         timeout=30.0,
     )
-    return r.status_code, url, r.content
+    return r.status_code, url, r.content[:HERALD_MAX_BODY_BYTES]
 
 
 def _providers():
