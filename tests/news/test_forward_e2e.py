@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from types import SimpleNamespace
 
 import pytest
@@ -45,6 +46,7 @@ def make_self(claim_by_uid, commitments, block=1000, monkeypatch=None):
         block_state=block_state,
         subtensor=SimpleNamespace(
             get_current_block=lambda: block_state["v"],
+            get_timestamp=lambda b: datetime(2026, 1, 1, tzinfo=timezone.utc),
         ),
         metagraph=SimpleNamespace(
             hotkeys={1: "hkA", 2: "hkB"},
@@ -144,6 +146,19 @@ async def test_forward_applies_brief_cap(monkeypatch):
     # cap 0.1 * 1000 = 100 caps the 250 installment -> weight 0.1, rest burns
     assert w[1] == pytest.approx(0.1)
     assert w[0] == pytest.approx(0.9)
+
+
+@pytest.mark.asyncio
+async def test_claim_organic_article_predating_commit_rejected(monkeypatch):
+    c1 = make_claim("nytimes", "https://www.nytimes.com/a", "hkA")
+    self, captured = make_self({1: c1, 2: c1}, {"hkA": onchain(c1)}, monkeypatch=monkeypatch)
+    # article carries a 2020 publish date — long before the (2026) commit
+    organic = b'<script>{"datePublished":"2020-05-01T00:00:00Z"}</script>' + b"news " * 200
+    monkeypatch.setattr(fetchmod, "_http_get", lambda url: (200, url, organic))
+
+    await fwd.forward(self)
+    rewards = dict(zip(captured["uids"], captured["rewards"]))
+    assert rewards.get(1, 0.0) == 0.0  # organic article pays no one
 
 
 @pytest.mark.asyncio

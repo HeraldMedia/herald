@@ -111,6 +111,19 @@ async def forward(self):
             search_fn=lambda u: in_index(u, epoch),
             judge_fn=judge_fn,
         )
+        # Reject claim-organic: the article must be published AFTER the commit appeared.
+        fresh_winners = []
+        for w in winners:
+            commit_block = commit_index.first_seen_block(w.hotkey, commitments.get(w.hotkey, ""))
+            published_ts = fetch(w.url, epoch).published_ts
+            if commit_block is not None and published_ts is not None:
+                commit_ts = self.subtensor.get_timestamp(commit_block).timestamp()
+                if published_ts <= commit_ts:
+                    bt.logging.info(f"Rejecting {w.url}: published before commit (claim-organic)")
+                    continue
+            fresh_winners.append(w)
+        winners = fresh_winners
+
         for w in winners:
             vesting.start(w.article_id, w.uid, w.usd, w.url, w.hotkey, w.brief_id, w.commit_epoch)
 

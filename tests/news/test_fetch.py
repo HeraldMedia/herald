@@ -37,3 +37,16 @@ def test_extracts_visible_text_skips_scripts(monkeypatch):
     r = fetch("https://nytimes.com/a")
     assert "Hello" in r.text and "World news here." in r.text
     assert "var a=1" not in r.text
+
+
+def test_parses_published_ts(monkeypatch):
+    from datetime import datetime, timezone
+    html = b'<script>{"datePublished":"2026-01-05T00:00:00+00:00"}</script>' + b"x" * 600
+    monkeypatch.setattr(fetchmod, "_http_get", lambda url: (200, url, html))
+    r = fetch("https://x/a")
+    assert r.published_ts == datetime(2026, 1, 5, tzinfo=timezone.utc).timestamp()
+
+
+def test_no_published_ts_is_none(monkeypatch):
+    monkeypatch.setattr(fetchmod, "_http_get", lambda url: (200, url, b"x" * 1000))
+    assert fetch("https://x/a").published_ts is None

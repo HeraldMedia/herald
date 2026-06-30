@@ -1,7 +1,9 @@
 """Fetch a claimed article URL via a provider quorum, with epoch-keyed caching."""
 
 import hashlib
+import re
 from dataclasses import dataclass
+from datetime import datetime
 from html.parser import HTMLParser
 
 import httpx
@@ -48,6 +50,22 @@ def _extract_text(html: str) -> str:
     return " ".join(parser.parts)
 
 
+_PUBLISHED_RE = re.compile(
+    r'"datePublished"\s*:\s*"([^"]+)"|article:published_time"\s+content="([^"]+)"'
+)
+
+
+def _parse_published_ts(html: str):
+    m = _PUBLISHED_RE.search(html)
+    if not m:
+        return None
+    raw = (m.group(1) or m.group(2)).strip().replace("Z", "+00:00")
+    try:
+        return datetime.fromisoformat(raw).timestamp()
+    except ValueError:
+        return None
+
+
 @dataclass
 class FetchResult:
     ok: bool
@@ -57,6 +75,7 @@ class FetchResult:
     body_len: int
     text: str = ""
     providers_live: int = 0
+    published_ts: float = None
 
 
 def _http_get(url: str):
@@ -97,14 +116,16 @@ def fetch(url: str, epoch=None) -> FetchResult:
     ok = len(live) >= min(HERALD_QUORUM_THRESHOLD, len(providers))
     status, final_url, body = live[0] if live else (results[0] if results else (0, canon, b""))
 
+    html = body.decode("utf-8", "ignore")
     result = FetchResult(
         ok=ok,
         status=status,
         final_url=final_url,
         text_hash=hashlib.sha256(body).hexdigest(),
         body_len=len(body),
-        text=_extract_text(body.decode("utf-8", "ignore")),
+        text=_extract_text(html),
         providers_live=len(live),
+        published_ts=_parse_published_ts(html),
     )
     if epoch is not None:
         _cache[(canon, epoch)] = result
