@@ -6,6 +6,7 @@ from herald.commit import commit_hash, encode
 from herald.validator.news import fetch as fetchmod
 from herald.validator.news import forward as fwd
 from herald.validator.news import search as searchmod
+from herald.validator.news import state as statemod
 
 BRIEFS = [{"id": "b1", "boost": 1.0}]
 
@@ -54,7 +55,7 @@ def _setup(monkeypatch):
     monkeypatch.setattr(fwd, "get_briefs", lambda: BRIEFS)
     monkeypatch.setattr(fwd, "get_all_uids", lambda self: [1, 2])
     monkeypatch.setattr(fwd.time, "sleep", lambda *_: None)
-    monkeypatch.setattr(fwd, "VEST_EPOCHS", 2)
+    monkeypatch.setattr(statemod, "VEST_EPOCHS", 2)
 
 
 @pytest.mark.asyncio
@@ -86,4 +87,4 @@ async def test_clawback_and_slash_when_article_disappears(monkeypatch):
     monkeypatch.setattr(fetchmod, "_http_get", lambda url: (404, url, b""))
     await fwd.forward(self)
     assert dict(zip(captured["uids"], captured["rewards"]))[1] == 0.0
-    assert self._slash.is_slashed("hkA", self.subtensor.get_current_block() // fwd.EPOCH_LEN)
+    assert self.herald_state.slash.is_slashed("hkA", self.subtensor.get_current_block() // fwd.EPOCH_LEN)

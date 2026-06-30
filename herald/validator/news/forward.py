@@ -11,14 +11,11 @@ from herald.validator.utils.config import (
     SLASH_COOLDOWN_EPOCHS,
     VALIDATOR_STEPS_INTERVAL,
     VALIDATOR_WAIT,
-    VEST_EPOCHS,
 )
-from .commit_index import CommitIndex
 from .fetch import fetch
 from .registry import load_registry
 from .reward import winning_articles
-from .slashing import SlashLedger
-from .vesting import VestingLedger
+from .state import HeraldState
 
 
 async def collect_claims(self, uids):
@@ -39,12 +36,18 @@ async def collect_claims(self, uids):
     return claims_by_uid
 
 
-def _ledgers(self):
-    if not hasattr(self, "_commit_index"):
-        self._commit_index = CommitIndex(epoch_len=EPOCH_LEN)
-        self._vesting = VestingLedger(vest_epochs=VEST_EPOCHS)
-        self._slash = SlashLedger()
-    return self._commit_index, self._vesting, self._slash
+def _state_path(self):
+    try:
+        return self.config.neuron.full_path + "/herald_state.json"
+    except Exception:
+        return None
+
+
+def _state(self) -> HeraldState:
+    if not hasattr(self, "herald_state"):
+        path = _state_path(self)
+        self.herald_state = HeraldState.load(path) if path else HeraldState.fresh()
+    return self.herald_state
 
 
 async def forward(self):
@@ -60,7 +63,8 @@ async def forward(self):
             time.sleep(VALIDATOR_WAIT)
             return
 
-        commit_index, vesting, slash = _ledgers(self)
+        state = _state(self)
+        commit_index, vesting, slash = state.commit_index, state.vesting, state.slash
         registry = load_registry()
         block = self.subtensor.get_current_block()
         epoch = block // EPOCH_LEN
@@ -98,6 +102,10 @@ async def forward(self):
             if reward:
                 bt.logging.info(f"UID {uid}: ${reward:.2f} (vested)")
         self.update_scores(rewards, uids)
+
+        path = _state_path(self)
+        if path:
+            state.save(path)
     except Exception as e:
         bt.logging.error(f"Error in Herald forward pass: {e}")
 
