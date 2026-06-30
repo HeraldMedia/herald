@@ -1,3 +1,5 @@
+import os
+
 from herald.services.store import BriefStore, ResultStore
 
 
@@ -40,3 +42,27 @@ def test_result_upsert_by_article_id(tmp_path):
     r.add({"article_id": "a", "hotkey": "hkA", "usd": 100.0, "status": "vesting"})
     r.add({"article_id": "a", "hotkey": "hkA", "usd": 500.0, "status": "completed"})
     assert len(r.articles()) == 1 and r.articles()[0]["status"] == "completed"
+
+
+def test_leaderboard_skips_results_without_hotkey(tmp_path):
+    r = ResultStore(str(tmp_path / "results.json"))
+    r.add({"article_id": "a", "hotkey": "hkA", "usd": 100.0})
+    r.add({"article_id": "b", "usd": 50.0})  # malformed: no hotkey -> must not crash the page
+    board = r.leaderboard()
+    assert [row["hotkey"] for row in board] == ["hkA"]
+
+
+def test_result_store_caps_growth(tmp_path):
+    r = ResultStore(str(tmp_path / "results.json"), max_items=2)
+    for i in range(4):
+        r.add({"article_id": str(i), "hotkey": "h", "usd": 1.0})
+    arts = r.articles()
+    assert [a["article_id"] for a in arts] == ["2", "3"]  # bounded; oldest evicted
+
+
+def test_store_save_is_atomic(tmp_path):
+    path = str(tmp_path / "results.json")
+    ResultStore(path).add({"article_id": "a", "hotkey": "h", "usd": 1.0})
+    leftovers = [f for f in os.listdir(tmp_path) if f.endswith(".tmp")]
+    assert leftovers == [] and os.path.exists(path)
+    assert len(ResultStore(path).articles()) == 1  # reloads cleanly

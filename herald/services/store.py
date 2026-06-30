@@ -6,6 +6,9 @@ import secrets
 from typing import List, Optional
 
 
+_MAX_RESULTS = int(os.getenv("HERALD_MAX_RESULTS", "100000"))
+
+
 def _load(path, default):
     if os.path.exists(path):
         with open(path, "r", encoding="utf-8") as f:
@@ -15,8 +18,10 @@ def _load(path, default):
 
 def _save(path, data):
     os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
-    with open(path, "w", encoding="utf-8") as f:
+    tmp = path + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2)
+    os.replace(tmp, path)  # atomic: a crash never leaves a truncated store
 
 
 class BriefStore:
@@ -49,8 +54,9 @@ class BriefStore:
 
 
 class ResultStore:
-    def __init__(self, path: str):
+    def __init__(self, path: str, max_items: int = _MAX_RESULTS):
         self.path = path
+        self.max_items = max_items
         self._items = _load(path, [])
 
     def add(self, item: dict):
@@ -62,6 +68,8 @@ class ResultStore:
                     _save(self.path, self._items)
                     return
         self._items.append(item)
+        while len(self._items) > self.max_items:
+            self._items.pop(0)  # bound disk growth; evict oldest
         _save(self.path, self._items)
 
     def articles(self) -> List[dict]:
@@ -70,7 +78,10 @@ class ResultStore:
     def leaderboard(self) -> List[dict]:
         agg = {}
         for item in self._items:
-            row = agg.setdefault(item["hotkey"], {"hotkey": item["hotkey"], "articles": 0, "total_usd": 0.0})
+            hotkey = item.get("hotkey")
+            if not hotkey:
+                continue  # unattributable result: skip, don't crash the public page
+            row = agg.setdefault(hotkey, {"hotkey": hotkey, "articles": 0, "total_usd": 0.0})
             row["articles"] += 1
             row["total_usd"] += item.get("usd", 0.0)
         return sorted(agg.values(), key=lambda r: -r["total_usd"])
