@@ -1,12 +1,16 @@
 """Outlet registry: maps an article URL to an approved outlet and its tier."""
 
 import json
+import os
 import re
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import List, Optional
 from urllib.parse import urlsplit
 
 from .url import host_of
+
+_SEED_PATH = Path(__file__).parent / "outlets.seed.json"
 
 
 @dataclass
@@ -53,3 +57,8 @@ class OutletRegistry:
             if outlet.matches(url):
                 return outlet
         return None
+
+
+def load_registry() -> OutletRegistry:
+    path = os.getenv("HERALD_REGISTRY_PATH", str(_SEED_PATH))
+    return OutletRegistry.from_json_file(path)
