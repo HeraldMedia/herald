@@ -18,8 +18,13 @@ class ClaimStore:
 
     def _save(self):
         os.makedirs(os.path.dirname(self.path) or ".", exist_ok=True)
-        with open(self.path, "w", encoding="utf-8") as f:
+        # 0600 + atomic rename: the nonces are the commit salts; a crash must not truncate
+        # the file (losing unrevealable commitments) and other users must not read them.
+        tmp = self.path + ".tmp"
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
             json.dump(self._records, f, indent=2)
+        os.replace(tmp, self.path)
 
     def add(self, *, brief_id, target_outlet_id, claimer_hotkey, bond_atto, version_id) -> str:
         nonce = secrets.token_hex(16)

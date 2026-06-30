@@ -66,8 +66,10 @@ def cmd_anchor(args):
 
 
 def _write(path, data):
-    with open(path, "w", encoding="utf-8") as f:
+    tmp = path + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2)
+    os.replace(tmp, path)  # atomic: a crash never truncates the signed registry
 
 
 def build_parser():

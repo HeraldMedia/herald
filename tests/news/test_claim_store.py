@@ -34,3 +34,15 @@ def test_unique_nonce_per_add(tmp_path):
     a = store.add(**REC)
     b = store.add(**REC)
     assert a != b  # fresh nonce each time
+
+
+def test_claim_store_atomic_and_private(tmp_path):
+    import os
+    import stat
+    path = str(tmp_path / "claims.json")
+    ClaimStore(path).add(**REC)
+    leftovers = [f for f in os.listdir(tmp_path) if f.endswith(".tmp")]
+    assert leftovers == [] and os.path.exists(path)
+    # the nonce is the commit salt: the file must not be world/group-readable
+    assert stat.S_IMODE(os.stat(path).st_mode) == 0o600
+    assert len(ClaimStore(path)._records) == 1  # reloads cleanly
