@@ -37,6 +37,15 @@ def test_host_of():
     assert host_of("https://www.nytimes.com/2026/01/01/x") == "www.nytimes.com"
 
 
+def test_host_of_matches_canonical_host():
+    from urllib.parse import urlsplit
+    # registry matching (host_of) must normalize the host identically to canonicalize
+    # (article_id), or an IDN/trailing-dot outlet groups and matches inconsistently.
+    assert host_of("http://☃.com/a") == "xn--n3h.com"
+    assert host_of("http://☃.com/a") == urlsplit(canonicalize("http://☃.com/a")).hostname
+    assert host_of("https://example.com./a") == "example.com"
+
+
 def test_idn_host_stable_with_punycode():
     assert canonicalize("http://☃.com/a") == canonicalize("http://xn--n3h.com/a")
 

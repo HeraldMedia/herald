@@ -17,14 +17,18 @@ def _keep_param(key: str) -> bool:
     return not k.startswith("utm_") and k not in _TRACKING_EXACT
 
 
+def _canon_host(host: str) -> str:
+    host = (host or "").rstrip(".")  # drop fully-qualified trailing dot
+    try:
+        return host.encode("idna").decode("ascii")  # stable across Unicode/punycode forms
+    except Exception:
+        return host  # IPv6 / overlong labels: leave as-is, identically on every validator
+
+
 def canonicalize(url: str) -> str:
     parts = urlsplit(url.strip())
     scheme = parts.scheme.lower()
-    host = (parts.hostname or "").rstrip(".")  # drop fully-qualified trailing dot
-    try:
-        host = host.encode("idna").decode("ascii")  # stable host across Unicode/punycode forms
-    except Exception:
-        pass
+    host = _canon_host(parts.hostname)
     bracket = f"[{host}]" if ":" in host else host  # preserve IPv6 brackets
 
     netloc = bracket
@@ -53,4 +57,4 @@ def article_id(url: str) -> str:
 
 
 def host_of(url: str) -> str:
-    return urlsplit(url).hostname or ""
+    return _canon_host(urlsplit(url).hostname)  # same normalization as canonicalize()
