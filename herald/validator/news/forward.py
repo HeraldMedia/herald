@@ -19,6 +19,7 @@ from .fetch import fetch
 from .registry import load_registry
 from .publish import publish_results
 from .reward import winning_articles
+from .search import in_index
 from .state import HeraldState
 
 
@@ -86,6 +87,8 @@ async def forward(self):
         winners = winning_articles(
             claims_by_uid, commitments, commit_index,
             hotkey_by_uid, alpha_stake_by_uid, briefs, registry,
+            fetch_fn=lambda u: fetch(u, epoch),
+            search_fn=lambda u: in_index(u, epoch),
         )
         for w in winners:
             vesting.start(w.article_id, w.uid, w.usd, w.url, w.hotkey, w.brief_id)
@@ -93,7 +96,7 @@ async def forward(self):
         usd_by_uid_brief = {}
         for article_id in list(vesting.active_article_ids()):
             entry = vesting.entry(article_id)
-            alive = fetch(entry.url).ok
+            alive = fetch(entry.url, epoch).ok
             installment, clawed_back = vesting.release(article_id, alive)
             if clawed_back:
                 slash.slash(entry.hotkey, epoch + SLASH_COOLDOWN_EPOCHS)

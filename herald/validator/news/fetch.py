@@ -1,4 +1,4 @@
-"""Fetch a claimed article URL, report whether it is live, and extract its text."""
+"""Fetch a claimed article URL via a provider quorum, with epoch-keyed caching."""
 
 import hashlib
 from dataclasses import dataclass
@@ -6,11 +6,16 @@ from html.parser import HTMLParser
 
 import httpx
 
-from herald.validator.utils.config import HERALD_MIN_BODY_BYTES
+from herald.validator.utils.config import (
+    HERALD_MIN_BODY_BYTES,
+    HERALD_QUORUM_THRESHOLD,
+    SCRAPINGBEE_API_KEY,
+)
 from .url import canonicalize
 
 _HEADERS = {"User-Agent": "HeraldValidator/1.0 (+https://herald.network)"}
 _SKIP_TAGS = {"script", "style", "noscript"}
+_cache = {}  # (canonical_url, epoch) -> FetchResult
 
 
 class _TextExtractor(HTMLParser):
@@ -51,6 +56,7 @@ class FetchResult:
     text_hash: str
     body_len: int
     text: str = ""
+    providers_live: int = 0
 
 
 def _http_get(url: str):
@@ -58,12 +64,48 @@ def _http_get(url: str):
     return r.status_code, str(r.url), r.content
 
 
-def fetch(url: str) -> FetchResult:
+def _scrapingbee_get(url: str):
+    r = httpx.get(
+        "https://app.scrapingbee.com/api/v1",
+        params={"api_key": SCRAPINGBEE_API_KEY, "url": url, "render_js": "false"},
+        timeout=30.0,
+    )
+    return r.status_code, url, r.content
+
+
+def _providers():
+    providers = [_http_get]
+    if SCRAPINGBEE_API_KEY:
+        providers.append(_scrapingbee_get)
+    return providers
+
+
+def fetch(url: str, epoch=None) -> FetchResult:
     canon = canonicalize(url)
-    try:
-        status, final_url, body = _http_get(canon)
-    except Exception:
-        return FetchResult(False, 0, canon, "", 0)
-    ok = status == 200 and len(body) >= HERALD_MIN_BODY_BYTES
-    text = _extract_text(body.decode("utf-8", "ignore"))
-    return FetchResult(ok, status, final_url, hashlib.sha256(body).hexdigest(), len(body), text)
+    if epoch is not None and (canon, epoch) in _cache:
+        return _cache[(canon, epoch)]
+
+    providers = _providers()
+    results = []
+    for provider in providers:
+        try:
+            results.append(provider(canon))
+        except Exception:
+            pass
+
+    live = [r for r in results if r[0] == 200 and len(r[2]) >= HERALD_MIN_BODY_BYTES]
+    ok = len(live) >= min(HERALD_QUORUM_THRESHOLD, len(providers))
+    status, final_url, body = live[0] if live else (results[0] if results else (0, canon, b""))
+
+    result = FetchResult(
+        ok=ok,
+        status=status,
+        final_url=final_url,
+        text_hash=hashlib.sha256(body).hexdigest(),
+        body_len=len(body),
+        text=_extract_text(body.decode("utf-8", "ignore")),
+        providers_live=len(live),
+    )
+    if epoch is not None:
+        _cache[(canon, epoch)] = result
+    return result

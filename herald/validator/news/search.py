@@ -1,4 +1,4 @@
-"""Check whether a claimed article URL appears in a public search index."""
+"""Check whether a claimed article URL is in a search index, via a provider quorum."""
 
 from dataclasses import dataclass
 from typing import List, Optional
@@ -6,10 +6,14 @@ from typing import List, Optional
 import httpx
 
 from herald.validator.utils.config import (
+    BRAVE_API_KEY,
+    HERALD_QUORUM_THRESHOLD,
     HERALD_SEARCH_TOP_N,
     SERPAPI_API_KEY,
 )
 from .url import canonicalize
+
+_cache = {}  # (canonical_url, epoch) -> SearchResult
 
 
 @dataclass
@@ -18,29 +22,65 @@ class SearchResult:
     query: str
     matched_url: Optional[str]
     num_results: int
+    providers_matched: int = 0
 
 
 def _serpapi_search(query: str, num: int) -> List[str]:
-    params = {
-        "engine": "google",
-        "q": query,
-        "num": num,
-        "gl": "us",
-        "hl": "en",
-        "api_key": SERPAPI_API_KEY,
-    }
-    r = httpx.get("https://serpapi.com/search.json", params=params, timeout=20.0)
+    r = httpx.get(
+        "https://serpapi.com/search.json",
+        params={"engine": "google", "q": query, "num": num,
+                "gl": "us", "hl": "en", "api_key": SERPAPI_API_KEY},
+        timeout=20.0,
+    )
     r.raise_for_status()
     data = r.json()
-    return [item.get("link") for item in data.get("organic_results", []) if item.get("link")]
+    return [i.get("link") for i in data.get("organic_results", []) if i.get("link")]
 
 
-def in_index(article_url: str) -> SearchResult:
+def _brave_search(query: str, num: int) -> List[str]:
+    r = httpx.get(
+        "https://api.search.brave.com/res/v1/web/search",
+        params={"q": query, "count": num},
+        headers={"X-Subscription-Token": BRAVE_API_KEY},
+        timeout=20.0,
+    )
+    r.raise_for_status()
+    data = r.json()
+    return [i.get("url") for i in data.get("web", {}).get("results", []) if i.get("url")]
+
+
+def _providers():
+    providers = [_serpapi_search]
+    if BRAVE_API_KEY:
+        providers.append(_brave_search)
+    return providers
+
+
+def in_index(article_url: str, epoch=None) -> SearchResult:
     target = canonicalize(article_url)
-    try:
-        links = _serpapi_search(target, HERALD_SEARCH_TOP_N)
-    except Exception:
-        return SearchResult(False, target, None, 0)
+    if epoch is not None and (target, epoch) in _cache:
+        return _cache[(target, epoch)]
 
-    matched = next((c for c in (canonicalize(l) for l in links) if c == target), None)
-    return SearchResult(matched is not None, target, matched, len(links))
+    providers = _providers()
+    matched_in = 0
+    total_results = 0
+    for provider in providers:
+        try:
+            links = provider(target, HERALD_SEARCH_TOP_N)
+        except Exception:
+            continue
+        total_results += len(links)
+        if any(canonicalize(l) == target for l in links):
+            matched_in += 1
+
+    in_idx = matched_in >= min(HERALD_QUORUM_THRESHOLD, len(providers))
+    result = SearchResult(
+        in_index=in_idx,
+        query=target,
+        matched_url=target if in_idx else None,
+        num_results=total_results,
+        providers_matched=matched_in,
+    )
+    if epoch is not None:
+        _cache[(target, epoch)] = result
+    return result

@@ -27,6 +27,7 @@ def onchain(c):
 
 def make_self(claim_by_uid, commitments, block=1000):
     captured = {}
+    block_state = {"v": block}
 
     async def fake_dendrite(axons, synapse, deserialize, timeout):
         return [SimpleNamespace(claims=[claim_by_uid[axons[0]]])]
@@ -34,9 +35,10 @@ def make_self(claim_by_uid, commitments, block=1000):
     self = SimpleNamespace(
         step=0,
         config=SimpleNamespace(netuid=69),
+        block_state=block_state,
         subtensor=SimpleNamespace(
             get_all_commitments=lambda netuid: commitments,
-            get_current_block=lambda: block,
+            get_current_block=lambda: block_state["v"],
         ),
         metagraph=SimpleNamespace(
             hotkeys={1: "hkA", 2: "hkB"},
@@ -151,7 +153,8 @@ async def test_clawback_and_slash_when_article_disappears(monkeypatch):
     await fwd.forward(self)
     assert dict(zip(captured["uids"], captured["rewards"]))[1] == pytest.approx(1.0)
 
-    # cycle 2: article gone -> clawback, slash, nothing paid
+    # cycle 2: advance past the epoch boundary so the persistence re-check isn't cached
+    self.block_state["v"] += fwd.EPOCH_LEN + 1
     monkeypatch.setattr(fetchmod, "_http_get", lambda url: (404, url, b""))
     await fwd.forward(self)
     assert dict(zip(captured["uids"], captured["rewards"]))[1] == 0.0

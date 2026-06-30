@@ -120,10 +120,13 @@ HERALD_EPOCH_SECONDS = int(os.getenv('HERALD_EPOCH_SECONDS', str(24 * 60 * 60)))
 EPOCH_LEN = int(os.getenv('HERALD_EPOCH_LEN', '360'))
 
 SERPAPI_API_KEY = os.getenv('SERPAPI_API_KEY')
-WEB_FETCH_CACHE_EXPIRY = int(os.getenv('WEB_FETCH_CACHE_EXPIRY', str(7 * 24 * 60 * 60)))
-SEARCH_CACHE_EXPIRY = int(os.getenv('SEARCH_CACHE_EXPIRY', str(24 * 60 * 60)))
+SCRAPINGBEE_API_KEY = os.getenv('SCRAPINGBEE_API_KEY')
+BRAVE_API_KEY = os.getenv('BRAVE_API_KEY')
 HERALD_SEARCH_TOP_N = int(os.getenv('HERALD_SEARCH_TOP_N', '20'))
 HERALD_MIN_BODY_BYTES = int(os.getenv('HERALD_MIN_BODY_BYTES', '500'))
+# Quorum: number of providers that must agree before a verdict is accepted (clamped
+# to the number configured). Defaults to 1 (single provider).
+HERALD_QUORUM_THRESHOLD = int(os.getenv('HERALD_QUORUM_THRESHOLD', '1'))
 
 HERALD_BASE_PAYOUT_USD = float(os.getenv('HERALD_BASE_PAYOUT_USD', '500'))
 HERALD_TIER_MULTIPLIER = {1: 1.0, 2: 0.5, 3: 0.25}
