@@ -6,7 +6,7 @@ import bittensor as bt
 import random
 
 from herald.base.validator import BaseValidatorNeuron
-from herald.validator import forward
+from herald.validator.news.forward import forward
 from herald.validator.utils.config import __version__, WANDB_PROJECT
 from herald.utils.cloudwatch_logging import get_cloudwatch_handler
 from core.auto_update import run_auto_update
