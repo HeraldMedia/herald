@@ -33,3 +33,12 @@ def test_matches_roundtrip():
 
 def test_matches_rejects_unrelated_value():
     assert matches("HRLD1|deadbeef", **FIELDS) is False
+
+
+def test_no_separator_injection_collision():
+    # moving the boundary between fields must NOT collide
+    a = commit_hash(brief_id="b1\x1fnyt", target_outlet_id="x", claimer_hotkey="hk",
+                    nonce="n", bond_atto=1, version_id=1)
+    b = commit_hash(brief_id="b1", target_outlet_id="nyt\x1fx", claimer_hotkey="hk",
+                    nonce="n", bond_atto=1, version_id=1)
+    assert a != b

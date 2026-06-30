@@ -11,7 +11,7 @@ class CommitIndex:
 
     @staticmethod
     def _key(hotkey: str, value: str) -> str:
-        return f"{hotkey}\x1f{value}"
+        return f"{len(hotkey)}:{hotkey}|{value}"
 
     def observe(self, block: int, commitments: Dict[str, str]):
         for hotkey, value in commitments.items():

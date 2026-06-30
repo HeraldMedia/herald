@@ -8,6 +8,11 @@ import hashlib
 _PREFIX = "HRLD1"
 
 
+def _canonical(fields) -> bytes:
+    # Length-prefix each field so no field value can shift another field's boundary.
+    return b"".join(f"{len(f)}:{f}|".encode("utf-8") for f in fields)
+
+
 def commit_hash(
     brief_id: str,
     target_outlet_id: str,
@@ -16,10 +21,10 @@ def commit_hash(
     bond_atto: int,
     version_id: int,
 ) -> str:
-    payload = "\x1f".join(
+    payload = _canonical(
         [brief_id, target_outlet_id, claimer_hotkey, nonce, str(bond_atto), str(version_id)]
     )
-    return hashlib.blake2b(payload.encode("utf-8"), digest_size=24).hexdigest()
+    return hashlib.blake2b(payload, digest_size=24).hexdigest()
 
 
 def encode(hash_hex: str) -> str:
