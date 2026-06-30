@@ -8,6 +8,7 @@ from herald.validator.news import fetch as fetchmod
 from herald.validator.news import forward as fwd
 from herald.validator.news import search as searchmod
 from herald.validator.news import state as statemod
+from herald.validator.news.url import article_id as fwd_article_id
 
 BRIEFS = [{"id": "b1", "boost": 1.0}]
 
@@ -191,6 +192,29 @@ async def test_persistence_clawback_on_value_regression(monkeypatch):
     assert dict(zip(captured["uids"], captured["rewards"]))[1] == 0.0
     epoch = self.subtensor.get_current_block() // fwd.EPOCH_LEN
     assert self.herald_state.slash.is_slashed("hkA", epoch)
+
+
+@pytest.mark.asyncio
+async def test_transient_outage_holds_without_slashing(monkeypatch):
+    c1 = make_claim("nytimes", "https://www.nytimes.com/a", "hkA")
+    self, captured = make_self({1: c1, 2: c1}, {"hkA": onchain(c1)}, monkeypatch=monkeypatch)
+    monkeypatch.setattr(fetchmod, "_http_get", lambda url: (200, url, b"news " * 200))
+    await fwd.forward(self)  # cycle 1: pays
+    assert dict(zip(captured["uids"], captured["rewards"]))[1] == pytest.approx(1.0)
+
+    # cycle 2: provider outage (5xx) -> hold, NOT clawback/slash
+    self.block_state["v"] += fwd.EPOCH_LEN + 1
+    monkeypatch.setattr(fetchmod, "_http_get", lambda url: (503, url, b""))
+    await fwd.forward(self)
+    epoch2 = self.subtensor.get_current_block() // fwd.EPOCH_LEN
+    assert self.herald_state.slash.is_slashed("hkA", epoch2) is False
+    assert self.herald_state.vesting.status(fwd_article_id(c1.article_url)) == "VESTING"
+
+    # cycle 3: recovers -> resumes paying
+    self.block_state["v"] += fwd.EPOCH_LEN + 1
+    monkeypatch.setattr(fetchmod, "_http_get", lambda url: (200, url, b"news " * 200))
+    await fwd.forward(self)
+    assert dict(zip(captured["uids"], captured["rewards"]))[1] == pytest.approx(1.0)
 
 
 @pytest.mark.asyncio

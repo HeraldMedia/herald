@@ -29,16 +29,26 @@ from .state import HeraldState
 from .topic_match import topic_matched
 
 
-def _still_valuable(entry, briefs_by_id, epoch, judge_fn) -> bool:
+def _persistence_status(entry, briefs_by_id, epoch, judge_fn) -> str:
+    """alive (pay), dead (clawback + slash), or hold (transient/unconfirmed — do nothing).
+
+    Clawback+slash only on a CONFIRMED removal or confirmed paid-as-real, so a transient
+    fetch/search outage never slashes an honest miner.
+    """
     fr = fetch(entry.url, epoch)
+    if fr.status in (404, 410, 451):
+        return "dead"
     if not fr.ok:
-        return False
+        return "hold"  # status 0 (no connect), 5xx, or thin body — can't confirm
     if is_paid(entry.url, fr.text, judge_fn)[0]:
-        return False
+        return "dead"  # swapped to paid/sponsored content — slashable
     brief = briefs_by_id.get(entry.brief_id)
     if brief is not None and not topic_matched(fr.text, brief, judge_fn):
-        return False
-    return in_index(entry.url, epoch).in_index
+        return "hold"  # off-topic now: withhold pay but don't slash
+    sr = in_index(entry.url, epoch)
+    if sr.num_results == 0 or not sr.in_index:
+        return "hold"  # search outage or de-indexed: withhold pay, no slash
+    return "alive"
 
 
 async def collect_claims(self, uids):
@@ -134,12 +144,15 @@ async def forward(self):
         pending = []
         for article_id in list(vesting.active_article_ids()):
             entry = vesting.entry(article_id)
-            alive = _still_valuable(entry, briefs_by_id, epoch, judge_fn)
-            installment, clawed_back = vesting.release(article_id, alive, epoch)
-            if clawed_back:
-                slash.slash(entry.hotkey, epoch + SLASH_COOLDOWN_EPOCHS)
-            elif installment:
-                pending.append((entry, installment))
+            status = _persistence_status(entry, briefs_by_id, epoch, judge_fn)
+            if status == "dead":
+                if vesting.clawback(article_id):
+                    slash.slash(entry.hotkey, epoch + SLASH_COOLDOWN_EPOCHS)
+            elif status == "alive":
+                installment = vesting.release(article_id, epoch)
+                if installment:
+                    pending.append((entry, installment))
+            # "hold": transient/unconfirmed — withhold pay, no clawback, stays VESTING
 
         # Pass 2: credit only the original placer, post-slash, and only if it still holds the UID.
         usd_by_uid_brief = {}

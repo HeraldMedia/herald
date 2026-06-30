@@ -50,20 +50,26 @@ class VestingLedger:
             commit_epoch=commit_epoch,
         )
 
-    def release(self, article_id: str, alive: bool, epoch: int) -> Tuple[float, bool]:
+    def release(self, article_id: str, epoch: int) -> float:
+        """Release one installment if the article is VESTING and not already released this epoch."""
         entry = self._entries.get(article_id)
         if entry is None or entry.status != VESTING:
-            return 0.0, False
+            return 0.0
         if epoch <= entry.last_release_epoch:
-            return 0.0, False  # already released this epoch
-        if not alive:
-            entry.status = CLAWBACK
-            return 0.0, True
+            return 0.0
         entry.last_release_epoch = epoch
         entry.remaining -= 1
         if entry.remaining <= 0:
             entry.status = COMPLETED
-        return entry.installment_usd, False
+        return entry.installment_usd
+
+    def clawback(self, article_id: str) -> bool:
+        """Mark a VESTING article as clawed back (article confirmed removed or gone paid)."""
+        entry = self._entries.get(article_id)
+        if entry is None or entry.status != VESTING:
+            return False
+        entry.status = CLAWBACK
+        return True
 
     def entry(self, article_id: str) -> VestEntry:
         return self._entries[article_id]
