@@ -174,7 +174,7 @@ and `/reporting/export` are the evidence surface.
 
 ## 13. Known residuals (operator awareness)
 
-The mechanism, services, and four adversarial-review rounds are complete, but these are
+The mechanism, services, and six adversarial-review rounds are complete, but these are
 genuinely hard or out of v1 scope and should be planned before a large mainnet rollout:
 
 - **Pre-commit front-running (and value-capping).** Earliest-commit-wins means an attacker who
@@ -229,3 +229,13 @@ genuinely hard or out of v1 scope and should be planned before a large mainnet r
   on-chain alpha/TAO settlement (and BTC/stables) is designed-for but not built in v1.
 - **LLM judgement determinism.** If `HERALD_USE_LLM_JUDGE=true`, set the SAME `HERALD_REF_MODEL_ID`
   and `LLM_PROVIDER` on every validator (model output drives consensus).
+- **Validator miner-pull has no transport body cap.** `ClaimSynapse` fields are bounded in
+  `protocol.py` (so an oversized list/string/int is rejected at parse time), but bittensor's
+  dendrite has no byte limit on the raw response it reads before parsing. A malicious miner
+  streaming a multi-GB body within the 12s timeout could still spike memory. Run the validator
+  under a memory limit (systemd `MemoryMax=` / `docker --memory`) so a single abusive response
+  gets the process restarted (it resumes from `herald_state.json` next epoch) rather than thrashing.
+- **Closing a brief pauses its vesting placements.** A vesting article whose brief leaves the
+  active board (closed/defunded/budget-exhausted) is *held* — no further pay (its share burns),
+  no slash — and resumes if the brief reopens, else expires at the grace boundary. Keep a brief
+  open for the full vest window if you intend its placements to vest to completion.
