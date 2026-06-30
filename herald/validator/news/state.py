@@ -3,6 +3,8 @@
 import json
 import os
 
+import bittensor as bt
+
 from herald.validator.utils.config import EPOCH_LEN, VEST_EPOCHS
 from .commit_index import CommitIndex
 from .slashing import SlashLedger
@@ -35,12 +37,18 @@ class HeraldState:
         )
 
     def save(self, path: str):
-        with open(path, "w", encoding="utf-8") as f:
+        tmp = path + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
             json.dump(self.to_dict(), f)
+        os.replace(tmp, path)  # atomic: a crash never leaves a half-written state file
 
     @classmethod
     def load(cls, path: str) -> "HeraldState":
         if not os.path.exists(path):
             return cls.fresh()
-        with open(path, "r", encoding="utf-8") as f:
-            return cls.from_dict(json.load(f))
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                return cls.from_dict(json.load(f))
+        except Exception as e:
+            bt.logging.error(f"Corrupt Herald state at {path} ({e}); starting fresh")
+            return cls.fresh()
