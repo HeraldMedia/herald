@@ -57,21 +57,31 @@ def _persistence_status(entry, briefs_by_id, epoch, judge_fn) -> str:
 
 
 async def collect_claims(self, uids):
-    claims_by_uid = {}
+    # One concurrent dendrite call over all axons (bittensor gathers them), so a few slow or
+    # stalling miners can't serialize into a 12s-per-uid delay that blows the scoring window.
+    claims_by_uid = {uid: [] for uid in uids}
+    queryable, axons = [], []
     for uid in uids:
         try:
-            responses = await self.dendrite(
-                axons=[self.metagraph.axons[uid]],
-                synapse=ClaimSynapse(),
-                deserialize=False,
-                timeout=12,
-            )
-            response = responses[0] if responses else None
+            axons.append(self.metagraph.axons[uid])
+            queryable.append(uid)
+        except (KeyError, IndexError):
+            continue  # uid without an axon (e.g. the burn uid): no claims to pull
+    if not axons:
+        return claims_by_uid
+    try:
+        responses = await self.dendrite(
+            axons=axons, synapse=ClaimSynapse(), deserialize=False, timeout=12,
+        )
+    except Exception as e:
+        bt.logging.warning(f"Claim query failed: {e}")
+        return claims_by_uid
+    for uid, response in zip(queryable, responses or []):
+        try:
             claims = list(response.claims or []) if response is not None else []
-            claims_by_uid[uid] = claims[:HERALD_MAX_ARTICLES_PER_MINER]
-        except Exception as e:
-            bt.logging.warning(f"Claim query failed for UID {uid}: {e}")
-            claims_by_uid[uid] = []
+        except Exception:
+            claims = []
+        claims_by_uid[uid] = claims[:HERALD_MAX_ARTICLES_PER_MINER]
     return claims_by_uid
 
 

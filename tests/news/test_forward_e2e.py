@@ -39,7 +39,7 @@ def make_self(claim_by_uid, commitments, block=1000, monkeypatch=None):
         )
 
     async def fake_dendrite(axons, synapse, deserialize, timeout):
-        return [SimpleNamespace(claims=[claim_by_uid[axons[0]]])]
+        return [SimpleNamespace(claims=[claim_by_uid[a]]) for a in axons]
 
     self = SimpleNamespace(
         step=0,
@@ -97,7 +97,7 @@ async def test_forward_burns_remainder_to_uid0(monkeypatch):
                         lambda subtensor, netuid: {"hkA": (onchain(c1), 1000)})
 
     async def fake_dendrite(axons, synapse, deserialize, timeout):
-        return [SimpleNamespace(claims=[c1] if axons[0] == 1 else [])]
+        return [SimpleNamespace(claims=[c1] if a == 1 else []) for a in axons]
 
     captured = {}
     self = SimpleNamespace(
@@ -129,7 +129,7 @@ async def test_forward_applies_brief_cap(monkeypatch):
                         lambda subtensor, netuid: {"hkA": (onchain(c1), 1000)})
 
     async def fake_dendrite(axons, synapse, deserialize, timeout):
-        return [SimpleNamespace(claims=[c1] if axons[0] == 1 else [])]
+        return [SimpleNamespace(claims=[c1] if a == 1 else []) for a in axons]
 
     captured = {}
     self = SimpleNamespace(
