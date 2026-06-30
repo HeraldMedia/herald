@@ -68,6 +68,11 @@ def load_registry(anchor_value: str = None) -> OutletRegistry:
         from .registry_signing import verify
         if not verify(data, pubkey):
             raise ValueError("outlet registry signature verification failed")
+    elif os.getenv("HERALD_REQUIRE_SIGNED_REGISTRY", "false").lower() == "true":
+        raise ValueError("HERALD_REGISTRY_PUBKEY required but not set")
+    else:
+        import bittensor as bt
+        bt.logging.warning("Loading UNSIGNED outlet registry; set HERALD_REGISTRY_PUBKEY in production")
     if anchor_value:
         from .registry_anchor import verify_anchor
         if not verify_anchor(data, anchor_value):

@@ -19,6 +19,16 @@ def test_add_sign_verify_flow(tmp_path):
     data = json.loads(src.read_text())
     assert data["version_id"] == 2 and data["outlets"][0]["status"] == "probation"
 
-    run(["sign", str(src), "--key", priv, "--out", str(out)])
+    key_file = tmp_path / "reg.key"
+    key_file.write_text(priv)
+    run(["sign", str(src), "--key-file", str(key_file), "--out", str(out)])
     signed = json.loads(out.read_text())
     assert verify(signed, pub) is True
+
+
+def test_gen_key_writes_private_to_mode_600_file(tmp_path):
+    import os
+    out_key = tmp_path / "k.key"
+    run(["gen-key", "--out-key", str(out_key)])
+    assert out_key.exists()
+    assert (os.stat(out_key).st_mode & 0o777) == 0o600

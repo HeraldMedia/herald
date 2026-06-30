@@ -2,6 +2,7 @@
 
 import argparse
 import json
+import os
 
 from herald.validator.news.registry_anchor import content_hash, encode_anchor
 from herald.validator.news.registry_signing import generate_keypair, sign, verify
@@ -9,8 +10,21 @@ from herald.validator.news.registry_signing import generate_keypair, sign, verif
 
 def cmd_genkey(args):
     priv, pub = generate_keypair()
-    print(f"private: {priv}")
+    fd = os.open(args.out_key, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w") as f:
+        f.write(priv)
     print(f"public:  {pub}")
+    print(f"private key written to {args.out_key} (mode 600) — keep it offline")
+
+
+def _read_key(args) -> str:
+    if args.key_file:
+        with open(args.key_file, "r", encoding="utf-8") as f:
+            return f.read().strip()
+    key = os.getenv("HERALD_REGISTRY_PRIVKEY")
+    if not key:
+        raise SystemExit("provide the signing key via --key-file or HERALD_REGISTRY_PRIVKEY")
+    return key
 
 
 def cmd_add(args):
@@ -31,7 +45,7 @@ def cmd_add(args):
 def cmd_sign(args):
     with open(args.infile, "r", encoding="utf-8") as f:
         data = json.load(f)
-    data["signature"] = sign(data, args.key)
+    data["signature"] = sign(data, _read_key(args))
     _write(args.out, data)
     print(f"signed version {data.get('version_id')} -> {args.out}")
 
@@ -60,7 +74,9 @@ def build_parser():
     p = argparse.ArgumentParser(prog="herald-registry")
     sub = p.add_subparsers(dest="cmd", required=True)
 
-    sub.add_parser("gen-key").set_defaults(func=cmd_genkey)
+    g = sub.add_parser("gen-key")
+    g.add_argument("--out-key", dest="out_key", default="herald_registry.key")
+    g.set_defaults(func=cmd_genkey)
 
     a = sub.add_parser("add")
     a.add_argument("infile")
@@ -71,7 +87,7 @@ def build_parser():
 
     s = sub.add_parser("sign")
     s.add_argument("infile")
-    s.add_argument("--key", required=True)
+    s.add_argument("--key-file", dest="key_file", default=None)
     s.add_argument("--out", required=True)
     s.set_defaults(func=cmd_sign)
 

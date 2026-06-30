@@ -67,6 +67,15 @@ def test_load_registry_rejects_bad_signature(tmp_path, monkeypatch):
         load_registry()
 
 
+def test_require_signed_registry_fails_closed(tmp_path, monkeypatch):
+    path = tmp_path / "outlets.json"
+    path.write_text(json.dumps(OUTLETS))  # unsigned
+    monkeypatch.setenv("HERALD_REGISTRY_PATH", str(path))
+    monkeypatch.setenv("HERALD_REQUIRE_SIGNED_REGISTRY", "true")
+    with pytest.raises(ValueError):
+        load_registry()
+
+
 def test_load_registry_checks_onchain_anchor(tmp_path, monkeypatch):
     path = tmp_path / "outlets.json"
     path.write_text(json.dumps(OUTLETS))
