@@ -33,3 +33,10 @@ def test_results_articles_and_leaderboard(tmp_path):
     board = r.leaderboard()
     assert board[0]["hotkey"] == "hkA" and board[0]["articles"] == 2 and board[0]["total_usd"] == 750.0
     assert board[1]["hotkey"] == "hkB"
+
+
+def test_result_upsert_by_article_id(tmp_path):
+    r = ResultStore(str(tmp_path / "results.json"))
+    r.add({"article_id": "a", "hotkey": "hkA", "usd": 100.0, "status": "vesting"})
+    r.add({"article_id": "a", "hotkey": "hkA", "usd": 500.0, "status": "completed"})
+    assert len(r.articles()) == 1 and r.articles()[0]["status"] == "completed"

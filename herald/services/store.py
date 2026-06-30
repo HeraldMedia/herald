@@ -54,6 +54,13 @@ class ResultStore:
         self._items = _load(path, [])
 
     def add(self, item: dict):
+        article_id = item.get("article_id")
+        if article_id is not None:
+            for i, existing in enumerate(self._items):
+                if existing.get("article_id") == article_id:
+                    self._items[i] = item
+                    _save(self.path, self._items)
+                    return
         self._items.append(item)
         _save(self.path, self._items)
 

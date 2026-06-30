@@ -1,3 +1,4 @@
+import os
 import time
 
 import bittensor as bt
@@ -14,6 +15,7 @@ from herald.validator.utils.config import (
 )
 from .fetch import fetch
 from .registry import load_registry
+from .publish import publish_results
 from .reward import winning_articles
 from .state import HeraldState
 
@@ -102,6 +104,14 @@ async def forward(self):
             if reward:
                 bt.logging.info(f"UID {uid}: ${reward:.2f} (vested)")
         self.update_scores(rewards, uids)
+
+        endpoint = os.getenv("HERALD_RESULTS_ENDPOINT")
+        if endpoint:
+            publish_results(endpoint, [{
+                "article_id": w.article_id, "hotkey": w.hotkey, "brief_id": w.brief_id,
+                "outlet_id": w.outlet_id, "url": w.url, "usd": w.usd,
+                "status": vesting.entry(w.article_id).status,
+            } for w in winners])
 
         path = _state_path(self)
         if path:
