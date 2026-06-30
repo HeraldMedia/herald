@@ -1,19 +1,38 @@
 """Fetch a claimed article URL via a provider quorum, with epoch-keyed caching."""
 
 import hashlib
+import ipaddress
 import re
 from dataclasses import dataclass
 from datetime import datetime
 from html.parser import HTMLParser
+from urllib.parse import urlsplit
 
 import httpx
 
 from herald.validator.utils.config import (
+    HERALD_MAX_BODY_BYTES,
     HERALD_MIN_BODY_BYTES,
     HERALD_QUORUM_THRESHOLD,
     SCRAPINGBEE_API_KEY,
 )
 from .url import canonicalize
+
+
+def is_safe_fetch_url(url: str) -> bool:
+    """Reject non-http(s) schemes and literal private/loopback/link-local hosts (SSRF guard)."""
+    parts = urlsplit(url)
+    if parts.scheme not in ("http", "https"):
+        return False
+    host = parts.hostname
+    if not host:
+        return False
+    try:
+        ip = ipaddress.ip_address(host)
+    except ValueError:
+        return True  # hostname (not a literal IP)
+    return not (ip.is_private or ip.is_loopback or ip.is_link_local
+                or ip.is_reserved or ip.is_multicast)
 
 _HEADERS = {"User-Agent": "HeraldValidator/1.0 (+https://herald.network)"}
 _SKIP_TAGS = {"script", "style", "noscript"}
@@ -80,7 +99,9 @@ class FetchResult:
 
 def _http_get(url: str):
     r = httpx.get(url, follow_redirects=True, timeout=20.0, headers=_HEADERS)
-    return r.status_code, str(r.url), r.content
+    if not is_safe_fetch_url(str(r.url)):  # a redirect may have pivoted to an internal host
+        raise ValueError(f"unsafe redirect target: {r.url}")
+    return r.status_code, str(r.url), r.content[:HERALD_MAX_BODY_BYTES]
 
 
 def _scrapingbee_get(url: str):
@@ -103,6 +124,12 @@ def fetch(url: str, epoch=None) -> FetchResult:
     canon = canonicalize(url)
     if epoch is not None and (canon, epoch) in _cache:
         return _cache[(canon, epoch)]
+
+    if not is_safe_fetch_url(canon):
+        result = FetchResult(False, 0, canon, "", 0)
+        if epoch is not None:
+            _cache[(canon, epoch)] = result
+        return result
 
     providers = _providers()
     results = []
