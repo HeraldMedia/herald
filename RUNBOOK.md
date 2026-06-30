@@ -78,6 +78,17 @@ Point validators at the signed file and the public key:
 `HERALD_REGISTRY_PATH=outlets.signed.json` and `HERALD_REGISTRY_PUBKEY=<PUBLIC_HEX>` in `.env`.
 (Without a pubkey the seed file loads unsigned — dev only.)
 
+Optionally anchor the version→hash on chain so all validators provably agree on the edition:
+
+```bash
+python -m herald.registry.admin anchor outlets.signed.json --effective-block <BLOCK>
+# -> prints HRLDREG|<version>|<hash>|<block>; commit it from the authority hotkey:
+btcli ...   # or subtensor.commit(wallet, netuid=69, data="HRLDREG|...")
+```
+
+Set `HERALD_REGISTRY_AUTHORITY_HOTKEY=<ss58>` on validators; they then reject any loaded list
+whose hash/version doesn't match the on-chain anchor.
+
 ## 7. Brief board + a funded brief
 
 ```bash

@@ -59,7 +59,7 @@ class OutletRegistry:
         return None
 
 
-def load_registry() -> OutletRegistry:
+def load_registry(anchor_value: str = None) -> OutletRegistry:
     path = os.getenv("HERALD_REGISTRY_PATH", str(_SEED_PATH))
     with open(path, "r", encoding="utf-8") as f:
         data = json.load(f)
@@ -68,4 +68,8 @@ def load_registry() -> OutletRegistry:
         from .registry_signing import verify
         if not verify(data, pubkey):
             raise ValueError("outlet registry signature verification failed")
+    if anchor_value:
+        from .registry_anchor import verify_anchor
+        if not verify_anchor(data, anchor_value):
+            raise ValueError("outlet registry on-chain anchor mismatch")
     return OutletRegistry.from_dict(data)

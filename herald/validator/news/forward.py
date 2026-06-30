@@ -69,11 +69,14 @@ async def forward(self):
 
         state = _state(self)
         commit_index, vesting, slash = state.commit_index, state.vesting, state.slash
-        registry = load_registry()
         block = self.subtensor.get_current_block()
         epoch = block // EPOCH_LEN
         commitments = self.subtensor.get_all_commitments(self.config.netuid)
         commit_index.observe(block, commitments)
+
+        authority = os.getenv("HERALD_REGISTRY_AUTHORITY_HOTKEY")
+        anchor_value = commitments.get(authority) if authority else None
+        registry = load_registry(anchor_value)
 
         uids = get_all_uids(self)
         hotkey_by_uid = {uid: self.metagraph.hotkeys[uid] for uid in uids}

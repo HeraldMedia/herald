@@ -3,6 +3,7 @@
 import argparse
 import json
 
+from herald.validator.news.registry_anchor import content_hash, encode_anchor
 from herald.validator.news.registry_signing import generate_keypair, sign, verify
 
 
@@ -41,6 +42,15 @@ def cmd_verify(args):
     print("valid" if verify(data, args.pubkey) else "INVALID")
 
 
+def cmd_anchor(args):
+    with open(args.infile, "r", encoding="utf-8") as f:
+        data = json.load(f)
+    anchor = encode_anchor(data["version_id"], content_hash(data), args.effective_block)
+    print(anchor)
+    print("commit this on chain from the authority hotkey:")
+    print(f"  btcli ... or subtensor.commit(wallet, netuid=69, data=\"{anchor}\")")
+
+
 def _write(path, data):
     with open(path, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2)
@@ -69,6 +79,11 @@ def build_parser():
     v.add_argument("infile")
     v.add_argument("--pubkey", required=True)
     v.set_defaults(func=cmd_verify)
+
+    an = sub.add_parser("anchor")
+    an.add_argument("infile")
+    an.add_argument("--effective-block", dest="effective_block", type=int, required=True)
+    an.set_defaults(func=cmd_anchor)
     return p
 
 

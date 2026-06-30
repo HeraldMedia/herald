@@ -3,6 +3,7 @@ import json
 import pytest
 
 from herald.validator.news.registry import OutletRegistry, load_registry
+from herald.validator.news.registry_anchor import content_hash, encode_anchor
 from herald.validator.news.registry_signing import generate_keypair, sign
 
 OUTLETS = {
@@ -64,3 +65,13 @@ def test_load_registry_rejects_bad_signature(tmp_path, monkeypatch):
     monkeypatch.setenv("HERALD_REGISTRY_PUBKEY", pub)
     with pytest.raises(ValueError):
         load_registry()
+
+
+def test_load_registry_checks_onchain_anchor(tmp_path, monkeypatch):
+    path = tmp_path / "outlets.json"
+    path.write_text(json.dumps(OUTLETS))
+    monkeypatch.setenv("HERALD_REGISTRY_PATH", str(path))
+    good = encode_anchor(OUTLETS["version_id"], content_hash(OUTLETS), effective_block=10)
+    assert load_registry(anchor_value=good).version_id == OUTLETS["version_id"]
+    with pytest.raises(ValueError):
+        load_registry(anchor_value="HRLDREG|1|deadbeef|10")
