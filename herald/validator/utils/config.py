@@ -114,6 +114,23 @@ DISCRETE_MODE = True
 SUBNET_TREASURY_PERCENTAGE = 0
 SUBNET_TREASURY_UID = int(os.getenv('SUBNET_TREASURY_UID', '106'))
 
+# ── Herald (verified media placement) ──────────────────────────────────────
+HERALD_EPOCH_SECONDS = int(os.getenv('HERALD_EPOCH_SECONDS', str(24 * 60 * 60)))
+
+SERPAPI_API_KEY = os.getenv('SERPAPI_API_KEY')
+WEB_FETCH_CACHE_EXPIRY = int(os.getenv('WEB_FETCH_CACHE_EXPIRY', str(7 * 24 * 60 * 60)))
+SEARCH_CACHE_EXPIRY = int(os.getenv('SEARCH_CACHE_EXPIRY', str(24 * 60 * 60)))
+HERALD_SEARCH_TOP_N = int(os.getenv('HERALD_SEARCH_TOP_N', '20'))
+HERALD_MIN_BODY_BYTES = int(os.getenv('HERALD_MIN_BODY_BYTES', '500'))
+
+HERALD_BASE_PAYOUT_USD = float(os.getenv('HERALD_BASE_PAYOUT_USD', '500'))
+HERALD_TIER_MULTIPLIER = {1: 1.0, 2: 0.5, 3: 0.25}
+HERALD_NO_SEARCH_FLOOR = float(os.getenv('HERALD_NO_SEARCH_FLOOR', '0.0'))
+HERALD_MAX_ARTICLES_PER_MINER = int(os.getenv('HERALD_MAX_ARTICLES_PER_MINER', '200'))
+
+HERALD_MIN_ALPHA_STAKE_THRESHOLD = float(os.getenv('HERALD_MIN_ALPHA_STAKE_THRESHOLD', '0'))
+HERALD_REGISTRY_URL = os.getenv('HERALD_REGISTRY_URL', f"{HERALD_API_URL}/registry/outlets.json")
+
 # Log out all non-sensitive config variables
 bt.logging.info(f"HERALD_BRIEFS_ENDPOINT: {HERALD_BRIEFS_ENDPOINT}")
 bt.logging.info(f"YOUTUBE_SUBMIT_ENDPOINT: {YOUTUBE_SUBMIT_ENDPOINT}")
