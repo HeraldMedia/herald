@@ -57,7 +57,7 @@ def evaluate_article(
         return _reject(claim, "commitment_invalid", evidence)
     evidence["commitment"] = True
 
-    if registry.version_id and claim.version_id != registry.version_id:
+    if claim.version_id != registry.version_id:
         return _reject(claim, "stale_version", evidence)
 
     outlet = registry.lookup(claim.article_url)

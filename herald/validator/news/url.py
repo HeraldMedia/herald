@@ -1,7 +1,10 @@
 """Canonical URL normalization. Identical across validators so attribution is deterministic."""
 
 import hashlib
+import re
 from urllib.parse import urlsplit, urlunsplit, parse_qsl, urlencode
+
+_PCT = re.compile(r'%[0-9a-fA-F]{2}')
 
 _TRACKING_EXACT = {
     "fbclid", "gclid", "gbraid", "wbraid", "msclkid",
@@ -17,7 +20,7 @@ def _keep_param(key: str) -> bool:
 def canonicalize(url: str) -> str:
     parts = urlsplit(url.strip())
     scheme = parts.scheme.lower()
-    host = parts.hostname or ""
+    host = (parts.hostname or "").rstrip(".")  # drop fully-qualified trailing dot
     try:
         host = host.encode("idna").decode("ascii")  # stable host across Unicode/punycode forms
     except Exception:
@@ -36,7 +39,7 @@ def canonicalize(url: str) -> str:
     )
     query = urlencode(query_pairs)
 
-    path = parts.path
+    path = _PCT.sub(lambda m: m.group(0).upper(), parts.path)  # normalize %xx case
     if len(path) > 1 and path.endswith("/"):
         path = path.rstrip("/")
     if path == "/":

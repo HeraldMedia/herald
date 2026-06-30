@@ -37,6 +37,7 @@ class VestingLedger:
                 existing.uid = uid
                 existing.hotkey = hotkey
                 existing.commit_epoch = commit_epoch
+                existing.brief_id = brief_id
             return
         self._entries[article_id] = VestEntry(
             uid=uid,

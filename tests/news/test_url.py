@@ -43,3 +43,11 @@ def test_idn_host_stable_with_punycode():
 
 def test_ipv6_brackets_preserved():
     assert canonicalize("http://[2606:4700:4700::1111]/a") == "http://[2606:4700:4700::1111]/a"
+
+
+def test_trailing_dot_host_normalized():
+    assert canonicalize("https://example.com./a") == canonicalize("https://example.com/a")
+
+
+def test_percent_encoding_case_normalized():
+    assert canonicalize("https://example.com/a%2fb") == canonicalize("https://example.com/a%2Fb")

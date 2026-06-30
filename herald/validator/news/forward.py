@@ -102,6 +102,10 @@ async def forward(self):
         commit_index, vesting, slash = state.commit_index, state.vesting, state.slash
         block = self.subtensor.get_current_block()
         epoch = max(0, block - HERALD_EPOCH_LAG) // EPOCH_LEN
+        if getattr(self, "_last_scored_epoch", -1) >= epoch:
+            time.sleep(VALIDATOR_WAIT)  # already scored this epoch; don't re-zero weights
+            return
+        self._last_scored_epoch = epoch
         commitments_with_block = get_commitments_with_block(self.subtensor, self.config.netuid)
         commit_index.observe(commitments_with_block)
         commitments = {hk: v for hk, (v, _b) in commitments_with_block.items()}

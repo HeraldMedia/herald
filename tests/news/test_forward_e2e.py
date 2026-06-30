@@ -195,6 +195,19 @@ async def test_persistence_clawback_on_value_regression(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_same_epoch_rerun_is_skipped(monkeypatch):
+    c1 = make_claim("nytimes", "https://www.nytimes.com/a", "hkA")
+    self, captured = make_self({1: c1, 2: c1}, {"hkA": onchain(c1)}, monkeypatch=monkeypatch)
+    monkeypatch.setattr(fetchmod, "_http_get", lambda url: (200, url, b"news " * 200))
+    await fwd.forward(self)                       # cycle 1 scores
+    first = dict(captured)
+    captured.clear()
+    await fwd.forward(self)                       # same block/epoch -> must skip, not re-score
+    assert captured == {}                         # update_scores not called again
+    assert first["rewards"] is not None
+
+
+@pytest.mark.asyncio
 async def test_transient_outage_holds_without_slashing(monkeypatch):
     c1 = make_claim("nytimes", "https://www.nytimes.com/a", "hkA")
     self, captured = make_self({1: c1, 2: c1}, {"hkA": onchain(c1)}, monkeypatch=monkeypatch)
