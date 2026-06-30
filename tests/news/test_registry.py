@@ -1,6 +1,9 @@
+import json
+
 import pytest
 
-from herald.validator.news.registry import OutletRegistry
+from herald.validator.news.registry import OutletRegistry, load_registry
+from herald.validator.news.registry_signing import generate_keypair, sign
 
 OUTLETS = {
     "version_id": 1,
@@ -37,3 +40,27 @@ def test_version_id_exposed(reg):
 
 def test_outlet_id_for_url(reg):
     assert reg.lookup("https://nytimes.com/a").outlet_id == "nyt"
+
+
+def test_load_registry_verifies_signature(tmp_path, monkeypatch):
+    priv, pub = generate_keypair()
+    data = dict(OUTLETS)
+    data["signature"] = sign(data, priv)
+    path = tmp_path / "outlets.json"
+    path.write_text(json.dumps(data))
+    monkeypatch.setenv("HERALD_REGISTRY_PATH", str(path))
+    monkeypatch.setenv("HERALD_REGISTRY_PUBKEY", pub)
+    assert load_registry().lookup("https://www.nytimes.com/a").tier == 1
+
+
+def test_load_registry_rejects_bad_signature(tmp_path, monkeypatch):
+    priv, pub = generate_keypair()
+    data = dict(OUTLETS)
+    data["signature"] = sign(data, priv)
+    data["version_id"] = 999  # tamper after signing
+    path = tmp_path / "outlets.json"
+    path.write_text(json.dumps(data))
+    monkeypatch.setenv("HERALD_REGISTRY_PATH", str(path))
+    monkeypatch.setenv("HERALD_REGISTRY_PUBKEY", pub)
+    with pytest.raises(ValueError):
+        load_registry()

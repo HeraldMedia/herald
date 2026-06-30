@@ -61,4 +61,11 @@ class OutletRegistry:
 
 def load_registry() -> OutletRegistry:
     path = os.getenv("HERALD_REGISTRY_PATH", str(_SEED_PATH))
-    return OutletRegistry.from_json_file(path)
+    with open(path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+    pubkey = os.getenv("HERALD_REGISTRY_PUBKEY")
+    if pubkey:
+        from .registry_signing import verify
+        if not verify(data, pubkey):
+            raise ValueError("outlet registry signature verification failed")
+    return OutletRegistry.from_dict(data)
