@@ -1,6 +1,6 @@
 import pytest
 
-from herald.validator.news.emission import compute_weights
+from herald.validator.news.emission import apply_brief_caps, compute_weights
 
 
 def test_remainder_burns_to_burn_uid():
@@ -34,3 +34,33 @@ def test_zero_daily_usd_no_burn_proportional():
 def test_all_zero_and_zero_daily_returns_zeros():
     w = compute_weights({1: 0.0}, uids=[0, 1], total_daily_usd=0.0, burn_uid=0)
     assert w.sum() == 0.0
+
+
+BRIEFS = [{"id": "b1", "cap": 0.2}, {"id": "b2", "cap": 1.0}]
+
+
+def test_brief_under_cap_unchanged():
+    usd = apply_brief_caps({(1, "b2"): 300.0}, BRIEFS, total_daily_usd=1000.0)
+    assert usd == {1: 300.0}
+
+
+def test_brief_over_cap_scaled_down():
+    # b1 cap 0.2 * 1000 = 200; brief total 400 -> scale 0.5
+    usd = apply_brief_caps({(1, "b1"): 300.0, (2, "b1"): 100.0}, BRIEFS, total_daily_usd=1000.0)
+    assert usd[1] == pytest.approx(150.0) and usd[2] == pytest.approx(50.0)
+
+
+def test_caps_are_per_brief():
+    usd = apply_brief_caps({(1, "b1"): 400.0, (1, "b2"): 300.0}, BRIEFS, total_daily_usd=1000.0)
+    # b1 capped to 200 (uid1 gets 200), b2 under cap (uid1 gets 300) -> 500
+    assert usd[1] == pytest.approx(500.0)
+
+
+def test_missing_cap_defaults_to_one():
+    usd = apply_brief_caps({(1, "bX"): 900.0}, [{"id": "bX"}], total_daily_usd=1000.0)
+    assert usd[1] == pytest.approx(900.0)
+
+
+def test_zero_daily_skips_caps():
+    usd = apply_brief_caps({(1, "b1"): 400.0}, BRIEFS, total_daily_usd=0.0)
+    assert usd[1] == pytest.approx(400.0)

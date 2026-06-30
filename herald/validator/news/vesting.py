@@ -17,6 +17,7 @@ class VestEntry:
     status: str
     url: str = ""
     hotkey: str = ""
+    brief_id: str = ""
 
 
 class VestingLedger:
@@ -26,7 +27,7 @@ class VestingLedger:
             k: VestEntry(**v) for k, v in (entries or {}).items()
         }
 
-    def start(self, article_id: str, uid: int, total_usd: float, url: str = "", hotkey: str = ""):
+    def start(self, article_id, uid, total_usd, url="", hotkey="", brief_id=""):
         if article_id in self._entries:
             return
         self._entries[article_id] = VestEntry(
@@ -37,6 +38,7 @@ class VestingLedger:
             status=VESTING,
             url=url,
             hotkey=hotkey,
+            brief_id=brief_id,
         )
 
     def release(self, article_id: str, alive: bool) -> Tuple[float, bool]:

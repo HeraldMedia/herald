@@ -107,6 +107,40 @@ async def test_forward_burns_remainder_to_uid0(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_forward_applies_brief_cap(monkeypatch):
+    monkeypatch.setattr(fwd, "get_briefs", lambda: [{"id": "b1", "boost": 1.0, "cap": 0.1}])
+    monkeypatch.setattr(fwd, "get_all_uids", lambda self: [0, 1])
+    monkeypatch.setattr(fwd, "HERALD_TOTAL_DAILY_USD", 1000.0)
+    monkeypatch.setattr(fetchmod, "_http_get", lambda url: (200, url, b"news " * 200))
+
+    c1 = make_claim("nytimes", "https://www.nytimes.com/a", "hkA")  # tier1 500/2=250 installment
+
+    async def fake_dendrite(axons, synapse, deserialize, timeout):
+        return [SimpleNamespace(claims=[c1] if axons[0] == 1 else [])]
+
+    captured = {}
+    self = SimpleNamespace(
+        step=0,
+        config=SimpleNamespace(netuid=69),
+        subtensor=SimpleNamespace(
+            get_all_commitments=lambda netuid: {"hkA": onchain(c1)},
+            get_current_block=lambda: 1000,
+        ),
+        metagraph=SimpleNamespace(
+            hotkeys={0: "burn", 1: "hkA"}, axons={0: 0, 1: 1}, alpha_stake={0: 0.0, 1: 1.0},
+        ),
+        dendrite=fake_dendrite,
+        update_scores=lambda rewards, uids: captured.update(rewards=rewards, uids=uids),
+    )
+
+    await fwd.forward(self)
+    w = dict(zip(captured["uids"], captured["rewards"]))
+    # cap 0.1 * 1000 = 100 caps the 250 installment -> weight 0.1, rest burns
+    assert w[1] == pytest.approx(0.1)
+    assert w[0] == pytest.approx(0.9)
+
+
+@pytest.mark.asyncio
 async def test_clawback_and_slash_when_article_disappears(monkeypatch):
     c1 = make_claim("nytimes", "https://www.nytimes.com/a", "hkA")
     commitments = {"hkA": onchain(c1)}

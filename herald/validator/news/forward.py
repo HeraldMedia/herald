@@ -14,7 +14,7 @@ from herald.validator.utils.config import (
     VALIDATOR_STEPS_INTERVAL,
     VALIDATOR_WAIT,
 )
-from .emission import compute_weights
+from .emission import apply_brief_caps, compute_weights
 from .fetch import fetch
 from .registry import load_registry
 from .publish import publish_results
@@ -85,22 +85,21 @@ async def forward(self):
             hotkey_by_uid, alpha_stake_by_uid, briefs, registry,
         )
         for w in winners:
-            vesting.start(w.article_id, w.uid, w.usd, w.url, w.hotkey)
+            vesting.start(w.article_id, w.uid, w.usd, w.url, w.hotkey, w.brief_id)
 
-        usd_by_uid = {uid: 0.0 for uid in uids}
+        usd_by_uid_brief = {}
         for article_id in list(vesting.active_article_ids()):
             entry = vesting.entry(article_id)
             alive = fetch(entry.url).ok
             installment, clawed_back = vesting.release(article_id, alive)
             if clawed_back:
                 slash.slash(entry.hotkey, epoch + SLASH_COOLDOWN_EPOCHS)
-            elif installment and entry.uid in usd_by_uid:
-                usd_by_uid[entry.uid] += installment
+            elif installment and entry.uid in hotkey_by_uid:
+                if not slash.is_slashed(hotkey_by_uid[entry.uid], epoch):
+                    key = (entry.uid, entry.brief_id)
+                    usd_by_uid_brief[key] = usd_by_uid_brief.get(key, 0.0) + installment
 
-        for uid in uids:
-            if slash.is_slashed(hotkey_by_uid[uid], epoch):
-                usd_by_uid[uid] = 0.0
-
+        usd_by_uid = apply_brief_caps(usd_by_uid_brief, briefs, HERALD_TOTAL_DAILY_USD)
         weights = compute_weights(usd_by_uid, uids, HERALD_TOTAL_DAILY_USD, SUBNET_BURN_UID)
         self.update_scores(weights, uids)
 
