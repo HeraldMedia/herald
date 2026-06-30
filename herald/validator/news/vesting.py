@@ -15,6 +15,8 @@ class VestEntry:
     installment_usd: float
     remaining: int
     status: str
+    url: str = ""
+    hotkey: str = ""
 
 
 class VestingLedger:
@@ -24,7 +26,7 @@ class VestingLedger:
             k: VestEntry(**v) for k, v in (entries or {}).items()
         }
 
-    def start(self, article_id: str, uid: int, total_usd: float):
+    def start(self, article_id: str, uid: int, total_usd: float, url: str = "", hotkey: str = ""):
         if article_id in self._entries:
             return
         self._entries[article_id] = VestEntry(
@@ -33,6 +35,8 @@ class VestingLedger:
             installment_usd=total_usd / self.vest_epochs,
             remaining=self.vest_epochs,
             status=VESTING,
+            url=url,
+            hotkey=hotkey,
         )
 
     def release(self, article_id: str, alive: bool) -> Tuple[float, bool]:

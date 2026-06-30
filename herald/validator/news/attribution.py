@@ -13,30 +13,31 @@ class Candidate:
     commit_epoch: Optional[int]
     usd: float
     passed: bool
+    url: str = ""
+    hotkey: str = ""
 
 
 def _earliest(cands: List[Candidate]) -> Candidate:
     return min(cands, key=lambda c: (c.commit_epoch, c.uid))
 
 
-def resolve_attribution(candidates: List[Candidate]) -> Dict[int, float]:
-    usd_by_uid: Dict[int, float] = {c.uid: 0.0 for c in candidates}
-
+def winning_candidates(candidates: List[Candidate]) -> List[Candidate]:
     eligible = [c for c in candidates if c.passed and c.commit_epoch is not None]
 
-    # one winner per article (earliest commit), then one paid placement per (outlet, brief)
     by_article: Dict[str, List[Candidate]] = {}
     for c in eligible:
         by_article.setdefault(c.article_id, []).append(c)
-
-    placement_winners = [_earliest(group) for group in by_article.values()]
+    article_winners = [_earliest(group) for group in by_article.values()]
 
     by_placement: Dict[tuple, List[Candidate]] = {}
-    for c in placement_winners:
+    for c in article_winners:
         by_placement.setdefault((c.outlet_id, c.brief_id), []).append(c)
 
-    for group in by_placement.values():
-        winner = _earliest(group)
-        usd_by_uid[winner.uid] += winner.usd
+    return [_earliest(group) for group in by_placement.values()]
 
+
+def resolve_attribution(candidates: List[Candidate]) -> Dict[int, float]:
+    usd_by_uid: Dict[int, float] = {c.uid: 0.0 for c in candidates}
+    for winner in winning_candidates(candidates):
+        usd_by_uid[winner.uid] += winner.usd
     return usd_by_uid

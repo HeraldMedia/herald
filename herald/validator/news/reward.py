@@ -1,24 +1,17 @@
-"""Score miners' claims into per-UID USD, resolving attribution across competing claims."""
+"""Score miners' claims into winners (for vesting) and per-UID USD."""
 
 from typing import Callable, Dict, List
 
-from .attribution import Candidate, resolve_attribution
+from .attribution import Candidate, resolve_attribution, winning_candidates
 from .bonds import bond_ok
 from .fetch import fetch as default_fetch
 from .oracle import evaluate_article
 
 
-def score_claims(
-    claims_by_uid: Dict[int, list],
-    commitments: Dict[str, str],
-    commit_index,
-    hotkey_by_uid: Dict[int, str],
-    alpha_stake_by_uid: Dict[int, float],
-    briefs: List[dict],
-    registry,
-    fetch_fn: Callable = default_fetch,
-    search_fn: Callable = None,
-) -> Dict[int, float]:
+def _build_candidates(
+    claims_by_uid, commitments, commit_index, hotkey_by_uid,
+    alpha_stake_by_uid, briefs, registry, fetch_fn, search_fn,
+) -> List[Candidate]:
     briefs_by_id = {b["id"]: b for b in briefs}
     candidates: List[Candidate] = []
 
@@ -44,8 +37,44 @@ def score_claims(
                 commit_epoch=commit_epoch,
                 usd=result.usd,
                 passed=passed,
+                url=claim.article_url,
+                hotkey=hotkey,
             ))
+    return candidates
 
+
+def winning_articles(
+    claims_by_uid: Dict[int, list],
+    commitments: Dict[str, str],
+    commit_index,
+    hotkey_by_uid: Dict[int, str],
+    alpha_stake_by_uid: Dict[int, float],
+    briefs: List[dict],
+    registry,
+    fetch_fn: Callable = default_fetch,
+    search_fn: Callable = None,
+) -> List[Candidate]:
+    return winning_candidates(_build_candidates(
+        claims_by_uid, commitments, commit_index, hotkey_by_uid,
+        alpha_stake_by_uid, briefs, registry, fetch_fn, search_fn,
+    ))
+
+
+def score_claims(
+    claims_by_uid: Dict[int, list],
+    commitments: Dict[str, str],
+    commit_index,
+    hotkey_by_uid: Dict[int, str],
+    alpha_stake_by_uid: Dict[int, float],
+    briefs: List[dict],
+    registry,
+    fetch_fn: Callable = default_fetch,
+    search_fn: Callable = None,
+) -> Dict[int, float]:
+    candidates = _build_candidates(
+        claims_by_uid, commitments, commit_index, hotkey_by_uid,
+        alpha_stake_by_uid, briefs, registry, fetch_fn, search_fn,
+    )
     usd_by_uid = {uid: 0.0 for uid in claims_by_uid}
     usd_by_uid.update(resolve_attribution(candidates))
     return usd_by_uid

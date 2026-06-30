@@ -6,10 +6,19 @@ import numpy as np
 from herald.protocol import ClaimSynapse
 from herald.utils.uids import get_all_uids
 from herald.validator.utils.briefs import get_briefs
-from herald.validator.utils.config import EPOCH_LEN, VALIDATOR_STEPS_INTERVAL, VALIDATOR_WAIT
+from herald.validator.utils.config import (
+    EPOCH_LEN,
+    SLASH_COOLDOWN_EPOCHS,
+    VALIDATOR_STEPS_INTERVAL,
+    VALIDATOR_WAIT,
+    VEST_EPOCHS,
+)
 from .commit_index import CommitIndex
+from .fetch import fetch
 from .registry import load_registry
-from .reward import score_claims
+from .reward import winning_articles
+from .slashing import SlashLedger
+from .vesting import VestingLedger
 
 
 async def collect_claims(self, uids):
@@ -30,6 +39,14 @@ async def collect_claims(self, uids):
     return claims_by_uid
 
 
+def _ledgers(self):
+    if not hasattr(self, "_commit_index"):
+        self._commit_index = CommitIndex(epoch_len=EPOCH_LEN)
+        self._vesting = VestingLedger(vest_epochs=VEST_EPOCHS)
+        self._slash = SlashLedger()
+    return self._commit_index, self._vesting, self._slash
+
+
 async def forward(self):
     if self.step % VALIDATOR_STEPS_INTERVAL != 0:
         time.sleep(VALIDATOR_WAIT)
@@ -43,24 +60,43 @@ async def forward(self):
             time.sleep(VALIDATOR_WAIT)
             return
 
+        commit_index, vesting, slash = _ledgers(self)
         registry = load_registry()
+        block = self.subtensor.get_current_block()
+        epoch = block // EPOCH_LEN
         commitments = self.subtensor.get_all_commitments(self.config.netuid)
-        if not hasattr(self, "_commit_index"):
-            self._commit_index = CommitIndex(epoch_len=EPOCH_LEN)
-        self._commit_index.observe(self.subtensor.get_current_block(), commitments)
+        commit_index.observe(block, commitments)
 
         uids = get_all_uids(self)
+        pos = {uid: i for i, uid in enumerate(uids)}
         hotkey_by_uid = {uid: self.metagraph.hotkeys[uid] for uid in uids}
         alpha_stake_by_uid = {uid: float(self.metagraph.alpha_stake[uid]) for uid in uids}
         claims_by_uid = await collect_claims(self, uids)
 
-        usd_by_uid = score_claims(
-            claims_by_uid, commitments, self._commit_index,
-            hotkey_by_uid, alpha_stake_by_uid, briefs, registry
+        winners = winning_articles(
+            claims_by_uid, commitments, commit_index,
+            hotkey_by_uid, alpha_stake_by_uid, briefs, registry,
         )
-        rewards = np.array([usd_by_uid.get(uid, 0.0) for uid in uids], dtype=np.float32)
+        for w in winners:
+            vesting.start(w.article_id, w.uid, w.usd, w.url, w.hotkey)
+
+        rewards = np.zeros(len(uids), dtype=np.float32)
+        for article_id in list(vesting.active_article_ids()):
+            entry = vesting.entry(article_id)
+            alive = fetch(entry.url).ok
+            installment, clawed_back = vesting.release(article_id, alive)
+            if clawed_back:
+                slash.slash(entry.hotkey, epoch + SLASH_COOLDOWN_EPOCHS)
+            elif installment and entry.uid in pos:
+                rewards[pos[entry.uid]] += installment
+
+        for uid in uids:
+            if slash.is_slashed(hotkey_by_uid[uid], epoch):
+                rewards[pos[uid]] = 0.0
+
         for uid, reward in zip(uids, rewards):
-            bt.logging.info(f"UID {uid}: ${reward:.2f}")
+            if reward:
+                bt.logging.info(f"UID {uid}: ${reward:.2f} (vested)")
         self.update_scores(rewards, uids)
     except Exception as e:
         bt.logging.error(f"Error in Herald forward pass: {e}")

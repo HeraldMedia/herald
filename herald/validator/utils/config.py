@@ -133,6 +133,10 @@ HERALD_MAX_ARTICLES_PER_MINER = int(os.getenv('HERALD_MAX_ARTICLES_PER_MINER', '
 HERALD_MIN_ALPHA_STAKE_THRESHOLD = float(os.getenv('HERALD_MIN_ALPHA_STAKE_THRESHOLD', '0'))
 HERALD_REGISTRY_URL = os.getenv('HERALD_REGISTRY_URL', f"{HERALD_API_URL}/registry/outlets.json")
 
+# Vesting over the persistence window, and slash cooldown (in evaluation epochs).
+VEST_EPOCHS = int(os.getenv('HERALD_VEST_EPOCHS', '30'))
+SLASH_COOLDOWN_EPOCHS = int(os.getenv('HERALD_SLASH_COOLDOWN_EPOCHS', '7'))
+
 # Log out all non-sensitive config variables
 bt.logging.info(f"HERALD_BRIEFS_ENDPOINT: {HERALD_BRIEFS_ENDPOINT}")
 bt.logging.info(f"YOUTUBE_SUBMIT_ENDPOINT: {YOUTUBE_SUBMIT_ENDPOINT}")
