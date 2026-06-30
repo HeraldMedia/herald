@@ -16,6 +16,7 @@ from herald.validator.utils.config import (
 )
 from .emission import apply_brief_caps, compute_weights
 from .fetch import fetch
+from .judge import judge, llm_available
 from .registry import load_registry
 from .publish import publish_results
 from .reward import winning_articles
@@ -89,6 +90,7 @@ async def forward(self):
             hotkey_by_uid, alpha_stake_by_uid, briefs, registry,
             fetch_fn=lambda u: fetch(u, epoch),
             search_fn=lambda u: in_index(u, epoch),
+            judge_fn=judge if llm_available() else None,
         )
         for w in winners:
             vesting.start(w.article_id, w.uid, w.usd, w.url, w.hotkey, w.brief_id)

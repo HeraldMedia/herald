@@ -25,3 +25,29 @@ def test_topic_match_requires_keyword():
 
 def test_topic_match_no_keywords_passes():
     assert topic_matched("anything", {"id": "b1"}) is True
+
+
+# ── LLM fallback tier ─────────────────────────────────────────────────────────
+
+def test_llm_flags_paid_when_rules_miss():
+    # rules don't flag, but the LLM says paid
+    judge = lambda q, t: True
+    paid, reason = is_paid("https://nytimes.com/world/x", "Subtle native ad text.", judge_fn=judge)
+    assert paid is True and reason == "llm"
+
+
+def test_llm_not_called_result_ignored_when_rules_already_pass():
+    judge = lambda q, t: False
+    assert is_paid("https://nytimes.com/world/x", "Normal report.", judge_fn=judge) == (False, "")
+
+
+def test_llm_decides_topic_when_keywords_absent():
+    brief = {"id": "b1", "keywords": ["bittensor"], "topic": "Bittensor"}
+    assert topic_matched("A story with no obvious keyword.", brief, judge_fn=lambda q, t: True) is True
+    assert topic_matched("A story with no obvious keyword.", brief, judge_fn=lambda q, t: False) is False
+
+
+def test_llm_unsure_falls_back_to_rules():
+    brief = {"id": "b1", "keywords": ["bittensor"]}
+    # judge returns None (unsure) -> rules say no (keyword absent)
+    assert topic_matched("unrelated", brief, judge_fn=lambda q, t: None) is False

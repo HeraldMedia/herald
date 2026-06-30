@@ -32,6 +32,7 @@ def evaluate_article(
     brief: dict,
     fetch_fn: Callable = default_fetch,
     search_fn: Callable = None,
+    judge_fn: Callable = None,
 ) -> ArticleResult:
     if search_fn is None:
         from .search import in_index
@@ -65,13 +66,13 @@ def evaluate_article(
     if not fr.ok:
         return _reject(claim, "url_not_live", evidence)
 
-    paid, paid_reason = is_paid(claim.article_url, fr.text)
+    paid, paid_reason = is_paid(claim.article_url, fr.text, judge_fn)
     evidence["paid"] = paid
     if paid:
         evidence["paid_reason"] = paid_reason
         return _reject(claim, "paid_not_real_news", evidence)
 
-    if not topic_matched(fr.text, brief):
+    if not topic_matched(fr.text, brief, judge_fn):
         evidence["topic_match"] = False
         return _reject(claim, "topic_mismatch", evidence)
     evidence["topic_match"] = True

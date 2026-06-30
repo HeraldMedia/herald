@@ -1,9 +1,16 @@
-"""Check that an article is on the brief's topic."""
+"""Check that an article is on the brief's topic (rules first, optional LLM fallback)."""
 
 
-def topic_matched(text: str, brief: dict) -> bool:
+def topic_matched(text: str, brief: dict, judge_fn=None) -> bool:
     keywords = brief.get("keywords") or []
-    if not keywords:
-        return True
     low = (text or "").lower()
-    return any(k.lower() in low for k in keywords)
+    if keywords and any(k.lower() in low for k in keywords):
+        return True
+
+    if judge_fn is not None:
+        from .judge import topic_question
+        verdict = judge_fn(topic_question(brief), text)
+        if verdict is not None:
+            return verdict
+
+    return not keywords

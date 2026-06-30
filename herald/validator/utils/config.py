@@ -124,6 +124,8 @@ SCRAPINGBEE_API_KEY = os.getenv('SCRAPINGBEE_API_KEY')
 BRAVE_API_KEY = os.getenv('BRAVE_API_KEY')
 HERALD_SEARCH_TOP_N = int(os.getenv('HERALD_SEARCH_TOP_N', '20'))
 HERALD_MIN_BODY_BYTES = int(os.getenv('HERALD_MIN_BODY_BYTES', '500'))
+# Fallback model id for the LLM judgement tier (the provider's pinned model is preferred).
+HERALD_REF_MODEL_ID = os.getenv('HERALD_REF_MODEL_ID', '')
 # Quorum: number of providers that must agree before a verdict is accepted (clamped
 # to the number configured). Defaults to 1 (single provider).
 HERALD_QUORUM_THRESHOLD = int(os.getenv('HERALD_QUORUM_THRESHOLD', '1'))

@@ -14,9 +14,13 @@ _PAID_TEXT = re.compile(
 )
 
 
-def is_paid(url: str, text: str):
+def is_paid(url: str, text: str, judge_fn=None):
     if _PAID_PATH.search(urlsplit(url).path):
         return True, "url_path"
     if text and _PAID_TEXT.search(text):
         return True, "disclosure_label"
+    if judge_fn is not None:
+        from .judge import PAID_QUESTION
+        if judge_fn(PAID_QUESTION, text) is True:
+            return True, "llm"
     return False, ""

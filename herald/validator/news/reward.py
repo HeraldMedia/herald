@@ -10,7 +10,7 @@ from .oracle import evaluate_article
 
 def _build_candidates(
     claims_by_uid, commitments, commit_index, hotkey_by_uid,
-    alpha_stake_by_uid, briefs, registry, fetch_fn, search_fn,
+    alpha_stake_by_uid, briefs, registry, fetch_fn, search_fn, judge_fn,
 ) -> List[Candidate]:
     briefs_by_id = {b["id"]: b for b in briefs}
     candidates: List[Candidate] = []
@@ -25,7 +25,8 @@ def _build_candidates(
         )
         for claim in relevant:
             result = evaluate_article(
-                claim, onchain, registry, briefs_by_id[claim.brief_id], fetch_fn, search_fn
+                claim, onchain, registry, briefs_by_id[claim.brief_id],
+                fetch_fn, search_fn, judge_fn,
             )
             passed = result.passed and bonded
             commit_epoch = commit_index.commit_epoch(hotkey, onchain) if passed else None
@@ -53,10 +54,11 @@ def winning_articles(
     registry,
     fetch_fn: Callable = default_fetch,
     search_fn: Callable = None,
+    judge_fn: Callable = None,
 ) -> List[Candidate]:
     return winning_candidates(_build_candidates(
         claims_by_uid, commitments, commit_index, hotkey_by_uid,
-        alpha_stake_by_uid, briefs, registry, fetch_fn, search_fn,
+        alpha_stake_by_uid, briefs, registry, fetch_fn, search_fn, judge_fn,
     ))
 
 
@@ -70,10 +72,11 @@ def score_claims(
     registry,
     fetch_fn: Callable = default_fetch,
     search_fn: Callable = None,
+    judge_fn: Callable = None,
 ) -> Dict[int, float]:
     candidates = _build_candidates(
         claims_by_uid, commitments, commit_index, hotkey_by_uid,
-        alpha_stake_by_uid, briefs, registry, fetch_fn, search_fn,
+        alpha_stake_by_uid, briefs, registry, fetch_fn, search_fn, judge_fn,
     )
     usd_by_uid = {uid: 0.0 for uid in claims_by_uid}
     usd_by_uid.update(resolve_attribution(candidates))
