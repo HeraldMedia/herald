@@ -164,7 +164,9 @@ async def forward(self):
                 continue
             status = _persistence_status(entry, briefs_by_id, epoch, judge_fn)
             if status == "dead":
-                entry.dead_streak += 1
+                if epoch > entry.last_dead_epoch:  # idempotent if this epoch re-runs after a restart
+                    entry.dead_streak += 1
+                    entry.last_dead_epoch = epoch
                 if entry.dead_streak >= HERALD_DEAD_CONFIRM_EPOCHS:
                     if vesting.clawback(article_id):
                         slash.slash(entry.hotkey, epoch + SLASH_COOLDOWN_EPOCHS)

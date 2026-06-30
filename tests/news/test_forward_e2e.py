@@ -242,6 +242,29 @@ async def test_dead_must_be_confirmed_over_consecutive_epochs(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_dead_streak_not_double_counted_on_restart(monkeypatch):
+    # A crash-restart loses the in-memory same-epoch guard but keeps the persisted
+    # dead_streak; re-running the same confirmed-dead epoch must not double-count it.
+    monkeypatch.setattr(fwd, "HERALD_DEAD_CONFIRM_EPOCHS", 2)
+    c1 = make_claim("nytimes", "https://www.nytimes.com/a", "hkA")
+    self, captured = make_self({1: c1, 2: c1}, {"hkA": onchain(c1)}, monkeypatch=monkeypatch)
+    monkeypatch.setattr(fetchmod, "_http_get", lambda url: (200, url, b"news " * 200))
+    await fwd.forward(self)  # cycle 1: alive
+
+    # cycle 2: one confirmed-dead epoch -> dead_streak 1, below threshold 2 -> no slash
+    self.block_state["v"] += fwd.EPOCH_LEN + 1
+    monkeypatch.setattr(fetchmod, "_http_get", lambda url: (404, url, b""))
+    await fwd.forward(self)
+    e2 = self.subtensor.get_current_block() // fwd.EPOCH_LEN
+    assert self.herald_state.slash.is_slashed("hkA", e2) is False
+
+    # restart: drop the in-memory guard, keep the persisted ledger, re-run the SAME epoch
+    del self._last_scored_epoch
+    await fwd.forward(self)
+    assert self.herald_state.slash.is_slashed("hkA", e2) is False  # still below threshold
+
+
+@pytest.mark.asyncio
 async def test_transient_outage_holds_without_slashing(monkeypatch):
     c1 = make_claim("nytimes", "https://www.nytimes.com/a", "hkA")
     self, captured = make_self({1: c1, 2: c1}, {"hkA": onchain(c1)}, monkeypatch=monkeypatch)

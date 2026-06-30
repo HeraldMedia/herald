@@ -23,6 +23,7 @@ class VestEntry:
     last_release_epoch: int = -1
     start_epoch: int = 0
     dead_streak: int = 0
+    last_dead_epoch: int = -1
 
 
 class VestingLedger:
