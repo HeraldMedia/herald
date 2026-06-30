@@ -166,10 +166,19 @@ and `/reporting/export` are the evidence surface.
 The mechanism, services, and two adversarial-review rounds are complete, but these are
 genuinely hard or out of v1 scope and should be planned before a large mainnet rollout:
 
-- **Pre-commit front-running.** Earliest-commit-wins means an attacker who blanket-pre-commits
-  to `(outlet, brief)` and later reveals the *same URL* an honest miner placed can win
-  attribution. The bond (capital per commit) + one-paid-placement-per-(outlet,brief) cap
-  throttle this, but it isn't fully closed — it needs an attribution-level proof-of-placement.
+- **Pre-commit front-running (and value-capping).** Earliest-commit-wins means an attacker who
+  blanket-pre-commits to `(outlet, brief)` and later reveals the *same URL* an honest miner
+  placed can win attribution; relatedly, an earlier *genuine* low-value (tier-3) placement caps
+  a later honest tier-1 placement on the same `(outlet, brief)` to $0 (earliest beats highest
+  value). The bond (capital per commit) + one-paid-placement-per-(outlet,brief) cap throttle
+  both, but neither is fully closed — they need an attribution-level proof-of-placement, or a
+  value-aware tiebreaker.
+- **Fetch SSRF is registry-bounded.** The oracle gates fetch on the registry (`outlet_tier`
+  runs before any fetch), so validators only fetch approved-outlet domains; `is_safe_fetch_url`
+  is defense-in-depth. A residual DNS-rebinding TOCTOU exists (the OS re-resolves on connect)
+  but is bounded by that registry gate — keep the registry signed/anchored.
+- **Unversioned registry.** A registry published without a `version_id` (defaults to 0) makes
+  the version gate reject every claim whose `version_id != 0`. Always publish a `version_id`.
 - **Claim-organic on date-less outlets.** The publication-time check only fires when the page
   exposes a parseable `datePublished`/`article:published_time`. Outlets without machine-readable
   dates bypass it. Prefer registry outlets that publish structured dates; consider a per-outlet
