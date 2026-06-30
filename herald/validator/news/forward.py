@@ -40,6 +40,8 @@ def _persistence_status(entry, briefs_by_id, epoch, judge_fn) -> str:
     Clawback+slash only on a CONFIRMED removal or confirmed paid-as-real, so a transient
     fetch/search outage never slashes an honest miner.
     """
+    if entry.brief_id not in briefs_by_id:
+        return "hold"  # brief closed/defunded: withhold pay (its emissions burn), don't slash
     fr = fetch(entry.url, epoch)
     if fr.status in (404, 410):
         return "dead"

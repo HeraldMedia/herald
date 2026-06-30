@@ -241,6 +241,33 @@ async def test_dead_must_be_confirmed_over_consecutive_epochs(monkeypatch):
     assert self.herald_state.slash.is_slashed("hkA", e3) is True
 
 
+def test_persistence_holds_when_brief_left_the_board(monkeypatch):
+    # A live, indexed article whose brief is no longer open must HOLD (not pay), so the closed
+    # brief's emissions can't escape its cap by defaulting to uncapped in apply_brief_caps.
+    monkeypatch.setattr(fetchmod, "_http_get", lambda url: (200, url, b"news " * 200))
+    monkeypatch.setattr(searchmod, "_serpapi_search", lambda q, n: [q])
+    entry = SimpleNamespace(url="https://www.nytimes.com/a", brief_id="gone")
+    assert fwd._persistence_status(entry, {"b1": {"id": "b1"}}, epoch=1, judge_fn=None) == "hold"
+
+
+@pytest.mark.asyncio
+async def test_no_credit_when_brief_deactivated_mid_vest(monkeypatch):
+    c1 = make_claim("nytimes", "https://www.nytimes.com/a", "hkA")
+    self, captured = make_self({1: c1, 2: c1}, {"hkA": onchain(c1)}, monkeypatch=monkeypatch)
+    monkeypatch.setattr(fetchmod, "_http_get", lambda url: (200, url, b"news " * 200))
+    await fwd.forward(self)  # cycle 1: pays under b1
+    assert dict(zip(captured["uids"], captured["rewards"]))[1] == pytest.approx(1.0)
+
+    # cycle 2: b1 leaves the active board (closed/defunded); another brief keeps the list non-empty
+    monkeypatch.setattr(fwd, "get_briefs", lambda: [{"id": "b2", "boost": 1.0}])
+    self.block_state["v"] += fwd.EPOCH_LEN + 1
+    await fwd.forward(self)
+    assert dict(zip(captured["uids"], captured["rewards"])).get(1, 0.0) == 0.0  # held, no credit
+    epoch2 = self.subtensor.get_current_block() // fwd.EPOCH_LEN
+    assert self.herald_state.slash.is_slashed("hkA", epoch2) is False           # and not slashed
+    assert self.herald_state.vesting.status(fwd_article_id(c1.article_url)) == "VESTING"
+
+
 @pytest.mark.asyncio
 async def test_dead_streak_not_double_counted_on_restart(monkeypatch):
     # A crash-restart loses the in-memory same-epoch guard but keeps the persisted
