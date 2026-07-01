@@ -7,6 +7,7 @@ from threading import Lock
 import atexit
 from herald.validator.utils.config import HERALD_BRIEFS_ENDPOINT, YT_REWARD_DELAY, YT_SCORING_WINDOW, CACHE_DIRS
 from herald.validator.utils.error_handling import log_and_raise_api_error
+from herald.validator.news.signed_briefs import verify_briefs
 
 class BriefsCache:
     _instance = None
@@ -67,8 +68,10 @@ def get_briefs(all: bool = False):
         # Always try to fetch from API first
         response = requests.get(HERALD_BRIEFS_ENDPOINT)
         response.raise_for_status()
-        briefs_data = response.json()
-        
+        # Verify the operator signature (when HERALD_BRIEFS_PUBKEY is set) BEFORE trusting any
+        # brief's boost; a bad signature fails closed (raises, not served from cache).
+        briefs_data = verify_briefs(response.json())
+
         # Handle both "items" and "briefs" keys in the response
         briefs_list = briefs_data.get("items") or []
         bt.logging.info(f"Fetched {len(briefs_list)} briefs.")
