@@ -1,6 +1,6 @@
 import os
 
-from herald.services.store import BriefStore, ResultStore
+from herald.services.store import BriefStore, RegistryStore, ResultStore
 
 
 def test_brief_create_is_draft_unfunded(tmp_path):
@@ -66,3 +66,36 @@ def test_store_save_is_atomic(tmp_path):
     leftovers = [f for f in os.listdir(tmp_path) if f.endswith(".tmp")]
     assert leftovers == [] and os.path.exists(path)
     assert len(ResultStore(path).articles()) == 1  # reloads cleanly
+
+
+def _live(version=5):
+    return {"version_id": version, "signature": "deadbeef",
+            "outlets": [{"outlet_id": "nyt", "tier": 1, "domains": ["nytimes.com"]}]}
+
+
+def test_registry_draft_seeds_from_live_unsigned(tmp_path):
+    s = RegistryStore(str(tmp_path / "draft.json"), lambda: _live(5))
+    assert s.draft() is None  # no draft yet -> live is current
+    d = s.add_outlet("decrypt", 3, ["decrypt.co"])
+    assert d["version_id"] == 6 and "signature" not in d  # bumped once over live, unsigned
+    assert d["outlets"][-1] == {"outlet_id": "decrypt", "tier": 3, "domains": ["decrypt.co"], "status": "probation"}
+
+
+def test_registry_approve_and_reject(tmp_path):
+    s = RegistryStore(str(tmp_path / "draft.json"), lambda: _live(5))
+    s.add_outlet("decrypt", 3, ["decrypt.co"])
+    s.add_outlet("spam", 3, ["spam.example"])
+    s.set_status("decrypt", "active")
+    s.set_status("spam", "rejected")
+    ids = {o["outlet_id"]: o for o in s.draft()["outlets"]}
+    assert ids["decrypt"]["status"] == "active"  # probation cleared
+    assert "spam" not in ids  # rejected -> dropped from the edition
+
+
+def test_registry_draft_persists_and_discards(tmp_path):
+    path = str(tmp_path / "draft.json")
+    RegistryStore(path, lambda: _live(5)).add_outlet("decrypt", 3, ["decrypt.co"])
+    assert RegistryStore(path, lambda: _live(5)).draft()["version_id"] == 6  # reloads from disk
+    s = RegistryStore(path, lambda: _live(5))
+    s.discard()
+    assert s.draft() is None and not os.path.exists(path)

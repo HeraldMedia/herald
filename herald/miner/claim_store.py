@@ -45,6 +45,25 @@ class ClaimStore:
         self._save()
         return onchain
 
+    def import_record(self, reveal: dict) -> str:
+        """Import an externally-built reveal (e.g. posted to the brief board from the dashboard),
+        keeping its existing on-chain value + nonce so the served claim matches the commitment.
+        Recomputes the on-chain value from the fields and rejects a tampered reveal."""
+        fields = dict(
+            brief_id=reveal["brief_id"],
+            target_outlet_id=reveal["target_outlet_id"],
+            claimer_hotkey=reveal["claimer_hotkey"],
+            nonce=reveal["nonce"],
+            bond_atto=int(reveal["bond_atto"]),
+            version_id=int(reveal["version_id"]),
+        )
+        onchain = reveal["onchain"]
+        if onchain != encode(commit_hash(**fields)):
+            raise ValueError("reveal onchain value does not match its fields")
+        self._records[onchain] = {**fields, "article_url": reveal.get("article_url")}
+        self._save()
+        return onchain
+
     def set_article_url(self, onchain: str, url: str):
         self._records[onchain]["article_url"] = url
         self._save()

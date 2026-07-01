@@ -35,6 +35,24 @@ def cmd_list(args):
         print(f"{onchain}\t{rec['brief_id']}\t{rec['target_outlet_id']}\t{rec['article_url']}")
 
 
+def cmd_pull_reveals(args):
+    """Pull reveals posted to the brief board (e.g. from the dashboard) into the local store."""
+    import httpx
+
+    headers = {"X-Reveals-Token": args.token} if args.token else {}
+    resp = httpx.get(f"{args.url.rstrip('/')}/reveals", headers=headers, timeout=10.0)
+    resp.raise_for_status()
+    store = ClaimStore(args.store)
+    imported = 0
+    for reveal in resp.json():
+        try:
+            store.import_record(reveal)
+            imported += 1
+        except (KeyError, ValueError) as e:
+            print(f"skip {reveal.get('onchain', '?')}: {e}")
+    print(f"imported {imported} reveal(s) into {args.store}")
+
+
 def build_parser():
     p = argparse.ArgumentParser(prog="herald-miner")
     p.add_argument("--store", default="claims.json")
@@ -59,6 +77,11 @@ def build_parser():
     cl.set_defaults(func=cmd_claim)
 
     sub.add_parser("list").set_defaults(func=cmd_list)
+
+    pr = sub.add_parser("pull-reveals")
+    pr.add_argument("--url", required=True, help="brief board base URL")
+    pr.add_argument("--token", default=None, help="HERALD_REVEALS_TOKEN (if the board requires it)")
+    pr.set_defaults(func=cmd_pull_reveals)
     return p
 
 

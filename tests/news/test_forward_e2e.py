@@ -69,6 +69,14 @@ def _setup(monkeypatch):
     monkeypatch.setattr(statemod, "VEST_EPOCHS", 2)
     monkeypatch.setattr(fwd, "HERALD_TOTAL_DAILY_USD", 0.0)  # no burn; miners split proportionally
     monkeypatch.setattr(fwd, "HERALD_DEAD_CONFIRM_EPOCHS", 1)  # single confirmed-dead slashes (tests)
+    # Freshness gate fails closed on a missing date; a dateless body here stands for a normal
+    # live article, so default it to a date inside the window after the 2026-01-01 commit. The
+    # organic (2020) / future (2030) tests carry explicit dates and are parsed normally.
+    _real_parse = fetchmod._parse_published_ts
+    monkeypatch.setattr(
+        fetchmod, "_parse_published_ts",
+        lambda html: _real_parse(html) or datetime(2026, 1, 15, tzinfo=timezone.utc).timestamp(),
+    )
 
 
 @pytest.mark.asyncio
@@ -103,7 +111,10 @@ async def test_forward_burns_remainder_to_uid0(monkeypatch):
     self = SimpleNamespace(
         step=0,
         config=SimpleNamespace(netuid=69),
-        subtensor=SimpleNamespace(get_current_block=lambda: 1000),
+        subtensor=SimpleNamespace(
+            get_current_block=lambda: 1000,
+            get_timestamp=lambda b: datetime(2026, 1, 1, tzinfo=timezone.utc),
+        ),
         metagraph=SimpleNamespace(
             hotkeys={0: "burn", 1: "hkA"}, axons={0: 0, 1: 1}, alpha_stake={0: 0.0, 1: 5000.0},
         ),
@@ -135,7 +146,10 @@ async def test_forward_applies_brief_cap(monkeypatch):
     self = SimpleNamespace(
         step=0,
         config=SimpleNamespace(netuid=69),
-        subtensor=SimpleNamespace(get_current_block=lambda: 1000),
+        subtensor=SimpleNamespace(
+            get_current_block=lambda: 1000,
+            get_timestamp=lambda b: datetime(2026, 1, 1, tzinfo=timezone.utc),
+        ),
         metagraph=SimpleNamespace(
             hotkeys={0: "burn", 1: "hkA"}, axons={0: 0, 1: 1}, alpha_stake={0: 0.0, 1: 5000.0},
         ),
@@ -170,6 +184,18 @@ async def test_future_dated_article_rejected(monkeypatch):
     # commit is 2026-01-01; a far-future 2030 date is implausible -> rejected
     future = b'<script>{"datePublished":"2030-05-01T00:00:00Z"}</script>' + b"news " * 200
     monkeypatch.setattr(fetchmod, "_http_get", lambda url: (200, url, future))
+    await fwd.forward(self)
+    assert dict(zip(captured["uids"], captured["rewards"])).get(1, 0.0) == 0.0
+
+
+@pytest.mark.asyncio
+async def test_undated_article_rejected_fail_closed(monkeypatch):
+    c1 = make_claim("nytimes", "https://www.nytimes.com/a", "hkA")
+    self, captured = make_self({1: c1, 2: c1}, {"hkA": onchain(c1)}, monkeypatch=monkeypatch)
+    # no parseable publish date -> can't prove the article post-dates the commit -> pays no one
+    # (this case used to slip through a fail-open branch)
+    monkeypatch.setattr(fetchmod, "_http_get", lambda url: (200, url, b"news " * 200))
+    monkeypatch.setattr(fetchmod, "_parse_published_ts", lambda html: None)
     await fwd.forward(self)
     assert dict(zip(captured["uids"], captured["rewards"])).get(1, 0.0) == 0.0
 

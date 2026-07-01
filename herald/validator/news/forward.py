@@ -8,7 +8,10 @@ from herald.utils.uids import get_all_uids
 from herald.validator.utils.briefs import get_briefs
 from herald.validator.utils.config import (
     EPOCH_LEN,
+    HERALD_BOND_ALPHA_PER_USD,
     HERALD_DEAD_CONFIRM_EPOCHS,
+    HERALD_DISPUTE_REWARD_FRACTION,
+    HERALD_DISPUTE_WINDOW_EPOCHS,
     HERALD_EPOCH_LAG,
     HERALD_MAX_ARTICLES_PER_MINER,
     HERALD_MAX_PLACEMENT_DAYS,
@@ -17,11 +20,14 @@ from herald.validator.utils.config import (
     HERALD_USE_LLM_JUDGE,
     HERALD_VEST_GRACE_EPOCHS,
     SLASH_COOLDOWN_EPOCHS,
+    SLASH_MULTIPLIER,
     SUBNET_BURN_UID,
     VALIDATOR_STEPS_INTERVAL,
     VALIDATOR_WAIT,
 )
 from .chain import get_commitments_with_block
+from .dispute_anchor import article_id_hash, parse_dispute
+from .disputes import settle_persistence
 from .emission import apply_brief_caps, compute_weights
 from .fetch import fetch
 from .judge import judge
@@ -148,17 +154,21 @@ async def forward(self):
             search_fn=lambda u: in_index(u, epoch),
             judge_fn=judge_fn,
         )
-        # Reject claim-organic: the article must be published AFTER the commit appeared.
+        # Reject claim-organic: the article must be published AFTER the commit appeared. Fail
+        # closed — without both the commit block and a publication date we can't prove the article
+        # post-dates the commit (vs. pre-existing organic coverage we'd be paying a free-rider for).
         fresh_winners = []
         for w in winners:
             commit_block = commit_index.first_seen_block(w.hotkey, commitments.get(w.hotkey, ""))
             published_ts = fetch(w.url, epoch).published_ts
-            if commit_block is not None and published_ts is not None:
-                commit_ts = self.subtensor.get_timestamp(commit_block).timestamp()
-                max_ts = commit_ts + HERALD_MAX_PLACEMENT_DAYS * 86400
-                if published_ts <= commit_ts or published_ts > max_ts:
-                    bt.logging.info(f"Rejecting {w.url}: publication date implausible vs commit")
-                    continue
+            if commit_block is None or published_ts is None:
+                bt.logging.info(f"Rejecting {w.url}: publication date unverifiable vs commit")
+                continue
+            commit_ts = self.subtensor.get_timestamp(commit_block).timestamp()
+            max_ts = commit_ts + HERALD_MAX_PLACEMENT_DAYS * 86400
+            if published_ts <= commit_ts or published_ts > max_ts:
+                bt.logging.info(f"Rejecting {w.url}: publication date implausible vs commit")
+                continue
             fresh_winners.append(w)
         winners = fresh_winners
 
@@ -166,28 +176,58 @@ async def forward(self):
             vesting.start(w.article_id, w.uid, w.usd, w.url, w.hotkey, w.brief_id,
                           w.commit_epoch, epoch)
 
+        # Disputes: register on-chain HRLDDIS flags against active placements. Resolution runs the
+        # pinned judge, so it stays OFF unless HERALD_REF_MODEL_ID is set identically on every
+        # validator (a mixed fleet would diverge — the same rule as the optional LLM tier).
+        disputes = state.disputes
+        uid_by_hotkey = {hk: uid for uid, hk in hotkey_by_uid.items()}
+        dispute_enabled = bool(HERALD_REF_MODEL_ID)
+        dispute_judge_fn = judge if dispute_enabled else None
+        if dispute_enabled:
+            flags = sorted(  # ascending (block, hotkey): the earliest filer wins one-per-article
+                (blk, hk, h) for hk, (val, blk) in commitments_with_block.items()
+                if (h := parse_dispute(val)) is not None
+            )
+            hash_to_article = {article_id_hash(a): a for a in vesting.active_article_ids()}
+            for blk, hk, h in flags:
+                article_id = hash_to_article.get(h)
+                if article_id is None or disputes.is_disputed(article_id):
+                    continue
+                duid = uid_by_hotkey.get(hk)
+                if duid is None:
+                    continue  # disputer not a registered UID: can't reward/slash it via weights
+                min_bond_alpha = vesting.entry(article_id).total_usd * HERALD_BOND_ALPHA_PER_USD * SLASH_MULTIPLIER
+                if alpha_stake_by_uid.get(duid, 0.0) < min_bond_alpha:
+                    continue  # under-bonded: ignore (spam/grief deterrent)
+                disputes.open(article_id, hk, blk // EPOCH_LEN)
+        elif any(parse_dispute(v) is not None for v in commitments.values()):
+            bt.logging.warning("Dispute commits present but HERALD_REF_MODEL_ID unset; disputes disabled")
+
         # Pass 1: release installments and apply clawbacks/slashes for the whole cycle.
         pending = []
+        disputer_rewards = {}  # uid -> usd, funded from forfeited vesting that would otherwise burn
         max_age = vesting.vest_epochs + HERALD_VEST_GRACE_EPOCHS
         for article_id in list(vesting.active_article_ids()):
             entry = vesting.entry(article_id)
             if epoch - entry.start_epoch > max_age:
+                disputes.resolve(article_id, upheld=False)  # close any open dispute (inconclusive, no slash)
                 vesting.expire(article_id)  # held/incomplete far past its window — terminate
                 continue
-            status = _persistence_status(entry, briefs_by_id, epoch, judge_fn)
-            if status == "dead":
-                if epoch > entry.last_dead_epoch:  # idempotent if this epoch re-runs after a restart
-                    entry.dead_streak += 1
-                    entry.last_dead_epoch = epoch
-                if entry.dead_streak >= HERALD_DEAD_CONFIRM_EPOCHS:
-                    if vesting.clawback(article_id):
-                        slash.slash(entry.hotkey, epoch + SLASH_COOLDOWN_EPOCHS)
-            elif status == "alive":
-                entry.dead_streak = 0
-                installment = vesting.release(article_id, epoch)
-                if installment:
-                    pending.append((entry, installment))
-            # "hold": transient/unconfirmed — withhold pay, no clawback, keep dead_streak
+            disp = disputes.active(article_id)  # None unless an open dispute (and disputes enabled)
+            status = _persistence_status(
+                entry, briefs_by_id, epoch, dispute_judge_fn if disp is not None else judge_fn
+            )
+            installment, rewards = settle_persistence(
+                article_id, entry, status, epoch,
+                vesting=vesting, slash=slash, disputes=disputes,
+                dead_confirm=HERALD_DEAD_CONFIRM_EPOCHS, cooldown=SLASH_COOLDOWN_EPOCHS,
+                window=HERALD_DISPUTE_WINDOW_EPOCHS, reward_fraction=HERALD_DISPUTE_REWARD_FRACTION,
+                uid_by_hotkey=uid_by_hotkey,
+            )
+            if installment:
+                pending.append((entry, installment))
+            for duid, amt in rewards.items():
+                disputer_rewards[duid] = disputer_rewards.get(duid, 0.0) + amt
 
         # Pass 2: credit only the original placer, post-slash, and only if it still holds the UID.
         usd_by_uid_brief = {}
@@ -200,6 +240,9 @@ async def forward(self):
             usd_by_uid_brief[key] = usd_by_uid_brief.get(key, 0.0) + installment
 
         usd_by_uid = apply_brief_caps(usd_by_uid_brief, briefs, HERALD_TOTAL_DAILY_USD)
+        for duid, amt in disputer_rewards.items():  # recycle forfeited USD (else burned) to the whistleblower
+            if not slash.is_slashed(hotkey_by_uid.get(duid, ""), epoch):
+                usd_by_uid[duid] = usd_by_uid.get(duid, 0.0) + amt
         if SUBNET_BURN_UID not in uids:
             bt.logging.warning(f"Burn UID {SUBNET_BURN_UID} not in metagraph; remainder will not burn")
         weights = compute_weights(usd_by_uid, uids, HERALD_TOTAL_DAILY_USD, SUBNET_BURN_UID)
