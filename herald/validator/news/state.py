@@ -7,25 +7,29 @@ import bittensor as bt
 
 from herald.validator.utils.config import EPOCH_LEN, VEST_EPOCHS
 from .commit_index import CommitIndex
+from .disputes import DisputeLedger
 from .slashing import SlashLedger
 from .vesting import VestingLedger
 
 
 class HeraldState:
-    def __init__(self, commit_index: CommitIndex, vesting: VestingLedger, slash: SlashLedger):
+    def __init__(self, commit_index: CommitIndex, vesting: VestingLedger, slash: SlashLedger,
+                 disputes: DisputeLedger = None):
         self.commit_index = commit_index
         self.vesting = vesting
         self.slash = slash
+        self.disputes = disputes if disputes is not None else DisputeLedger()
 
     @classmethod
     def fresh(cls) -> "HeraldState":
-        return cls(CommitIndex(EPOCH_LEN), VestingLedger(VEST_EPOCHS), SlashLedger())
+        return cls(CommitIndex(EPOCH_LEN), VestingLedger(VEST_EPOCHS), SlashLedger(), DisputeLedger())
 
     def to_dict(self) -> dict:
         return {
             "commit_index": self.commit_index.to_dict(),
             "vesting": self.vesting.to_dict(),
             "slash": self.slash.to_dict(),
+            "disputes": self.disputes.to_dict(),
         }
 
     @classmethod
@@ -39,6 +43,7 @@ class HeraldState:
             CommitIndex(EPOCH_LEN, ci.get("first_seen", {})),
             VestingLedger(VEST_EPOCHS, ve.get("entries", {})),
             SlashLedger.from_dict(data["slash"]),
+            DisputeLedger.from_dict(data.get("disputes", {})),
         )
 
     def save(self, path: str):
