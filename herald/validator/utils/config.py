@@ -32,6 +32,9 @@ __version__ = "2.6.1"
 # required
 HERALD_API_URL = os.getenv('HERALD_API_URL', 'https://herald-api.herald.network')
 HERALD_BRIEFS_ENDPOINT = os.getenv('HERALD_BRIEFS_ENDPOINT', f"{HERALD_API_URL}/api/v2/validator/briefs")
+# Ed25519 pubkey the validator uses to verify the brief payload's operator signature (so a brief's
+# boost is attributable, not trust-the-endpoint). Unset = unsigned mode (boost still clamped to 3×).
+HERALD_BRIEFS_PUBKEY = os.getenv('HERALD_BRIEFS_PUBKEY')
 
 # subnet mechanism configuration
 MECHID = int(os.getenv('MECHID', '0'))
@@ -156,6 +159,25 @@ SLASH_COOLDOWN_EPOCHS = int(os.getenv('HERALD_SLASH_COOLDOWN_EPOCHS', '7'))
 HERALD_DEAD_CONFIRM_EPOCHS = int(os.getenv('HERALD_DEAD_CONFIRM_EPOCHS', '2'))
 # Expire an article still vesting long after its window (bounds state; terminates held entries).
 HERALD_VEST_GRACE_EPOCHS = int(os.getenv('HERALD_VEST_GRACE_EPOCHS', '30'))
+
+# ── Disputes (escalated re-scrutiny of a placement; see DISPUTE_DESIGN.md) ──────
+# A dispute (on-chain HRLDDIS commit) forces the pinned judge on a placement; the existing
+# persistence verdict decides it. Resolution runs the judge, so it is DISABLED unless
+# HERALD_REF_MODEL_ID is pinned identically across validators (a mixed fleet would diverge).
+# Share of a slashed miner's forfeited (otherwise-burned) vesting paid to the disputer's UID.
+HERALD_DISPUTE_REWARD_FRACTION = float(os.getenv('HERALD_DISPUTE_REWARD_FRACTION', '0.5'))
+# Epochs a dispute stays open; a still-alive article at the window's close rejects it and slashes
+# the disputer. Kept >= HERALD_DEAD_CONFIRM_EPOCHS so an upheld dispute has time to confirm dead.
+HERALD_DISPUTE_WINDOW_EPOCHS = int(os.getenv('HERALD_DISPUTE_WINDOW_EPOCHS', '4'))
+
+# ── Client-funded briefs (Bitcast-aligned: hold α -> boost; see FUNDING_DESIGN.md) ──
+# CONSENSUS RAIL: a brief's effective boost is clamped to [1, HERALD_FUND_BOOST_MAX] in scoring, so a
+# signed (or compromised) brief registry can never direct more than this multiple of emissions to one
+# campaign. The binding limit — keep it identical across validators.
+HERALD_FUND_BOOST_MAX = float(os.getenv('HERALD_FUND_BOOST_MAX', '3.0'))
+# Operator-side pricing only (advisory): earmarked α at which a brief reaches max boost on the sqrt
+# curve. Tunable tokenomics; not consensus-binding (the clamp above is).
+HERALD_FUND_ALPHA_FOR_MAX = float(os.getenv('HERALD_FUND_ALPHA_FOR_MAX', '10000'))
 # Max plausible gap between commit and publication; a far-future date is rejected as implausible.
 HERALD_MAX_PLACEMENT_DAYS = int(os.getenv('HERALD_MAX_PLACEMENT_DAYS', '90'))
 
