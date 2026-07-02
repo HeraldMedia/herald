@@ -91,6 +91,17 @@ def test_parses_author_from_jsonld(monkeypatch):
     assert fetch("https://x/a").author == "Jane Doe"
 
 
+def test_parses_author_from_jsonld_array(monkeypatch):
+    # The Guardian (and many outlets) publish authors as an ARRAY: "author":[{…"name":"…"}].
+    # The article:author meta alongside it is only a profile URL, which the parser skips.
+    fetchmod._cache.clear()
+    html = (b'<meta property="article:author" content="https://www.theguardian.com/profile/shaun-walker"/>'
+            b'<script>{"author":[{"@type":"Person","name":"Shaun Walker"}],"datePublished":"2026-07-02"}</script>'
+            + b"x" * 600)
+    monkeypatch.setattr(fetchmod, "_http_get", lambda url: (200, url, html))
+    assert fetch("https://x/a").author == "Shaun Walker"
+
+
 def test_parses_author_meta_either_attribute_order(monkeypatch):
     fetchmod._cache.clear()
     html = b'<meta name="author" content="John Smith">' + b"x" * 600

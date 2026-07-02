@@ -124,7 +124,9 @@ def _parse_published_ts(html: str):
 # Byline, for the attribution level-1 check. JSON-LD author first (article-scoped), then the
 # byline metas. Same bounded-quantifier style as _PUBLISHED_PATTERNS (ReDoS-safe).
 _AUTHOR_PATTERNS = [
-    re.compile(r'["\']author["\']\s*:\s*\{[^{}]{0,300}?["\']name["\']\s*:\s*["\']([^"\']{1,120})["\']'),
+    # JSON-LD author, as a single object OR an array of them (`"author":[{…"name":"…"}]`, which
+    # the Guardian and many outlets use). The optional `\[?` tolerates the array wrapper.
+    re.compile(r'["\']author["\']\s*:\s*\[?\s*\{[^{}]{0,300}?["\']name["\']\s*:\s*["\']([^"\']{1,120})["\']'),
     re.compile(r'name=["\']author["\']\s+content=["\']([^"\']{1,120})["\']', re.I),
     re.compile(r'content=["\']([^"\']{1,120})["\']\s+name=["\']author["\']', re.I),
     re.compile(r'(?:article|parsely)[:\-]author["\']?\s+content=["\']([^"\']{1,120})["\']', re.I),
