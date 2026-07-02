@@ -273,6 +273,9 @@ async def forward(self):
                 "status": vesting.entry(w.article_id).status,
                 "attribution": w.level,
                 "consensus": _CONSENSUS_FP,
+                # vesting coordinates, so a joining validator can bootstrap its ledger
+                "commit_epoch": w.commit_epoch,
+                "start_epoch": vesting.entry(w.article_id).start_epoch,
             } for w in winners])
 
         path = _state_path(self)
