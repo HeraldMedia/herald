@@ -9,7 +9,7 @@ REGISTRY = OutletRegistry.from_dict({
     "version_id": 1,
     "outlets": [{"outlet_id": "nyt", "tier": 1, "domains": ["www.nytimes.com"]}],
 })
-BRIEF = {"id": "b1", "boost": 1.0}
+BRIEF = {"id": "b1"}
 
 
 def make_claim(**over):
@@ -97,7 +97,7 @@ def test_paid_content_rejected_before_search():
 
 
 def test_topic_mismatch_rejected():
-    brief = {"id": "b1", "boost": 1.0, "keywords": ["bittensor"]}
+    brief = {"id": "b1", "keywords": ["bittensor"]}
     c = make_claim()
     r = evaluate_article(c, onchain_for(c), REGISTRY, brief, fetch_fn=live, search_fn=indexed)
     assert not r.passed and r.reason == "topic_mismatch"

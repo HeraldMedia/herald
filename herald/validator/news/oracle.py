@@ -68,7 +68,7 @@ def evaluate_article(
     evidence["outlet_id"] = outlet.outlet_id
     evidence["tier"] = outlet.tier
 
-    expected_usd = article_usd(outlet.tier, True, brief.get("boost", 1.0))
+    expected_usd = article_usd(outlet.tier, True)
     if claim.bond_atto < min_bond_atto(expected_usd):
         return _reject(claim, "bond_too_small", evidence)
 
@@ -93,5 +93,5 @@ def evaluate_article(
     evidence["in_index"] = sr.in_index
     evidence["matched_url"] = sr.matched_url
 
-    usd = article_usd(outlet.tier, sr.in_index, brief.get("boost", 1.0))
+    usd = article_usd(outlet.tier, sr.in_index)
     return ArticleResult(article_id(claim.article_url), claim.brief_id, usd, True, "ok", evidence)

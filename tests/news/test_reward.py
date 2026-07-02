@@ -13,7 +13,7 @@ REGISTRY = OutletRegistry.from_dict({
         {"outlet_id": "guardian", "tier": 2, "domains": ["www.theguardian.com"]},
     ],
 })
-BRIEFS = [{"id": "b1", "boost": 1.0}]
+BRIEFS = [{"id": "b1", "kind": "standing"}]
 
 
 def claim(outlet, url, hotkey, **over):

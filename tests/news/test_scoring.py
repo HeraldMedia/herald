@@ -12,9 +12,5 @@ def test_not_in_search_zeroes_by_default():
     assert article_usd(tier=1, in_search=False) == 0.0
 
 
-def test_boost_scales():
-    assert article_usd(tier=1, in_search=True, boost=2.0) == HERALD_BASE_PAYOUT_USD * 2.0
-
-
 def test_unknown_tier_is_zero():
     assert article_usd(tier=9, in_search=True) == 0.0

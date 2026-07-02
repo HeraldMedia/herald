@@ -36,18 +36,18 @@ class BriefStore:
         _save(self.path, self._briefs)
         return brief
 
-    def fund(self, brief_id: str) -> dict:
+    def fund(self, brief_id: str, reward_pool: float = None, payment_ref: dict = None) -> dict:
+        """Mark a brief funded and open. `reward_pool` (USD) is the prepaid budget a client brief
+        pays from; `payment_ref` records the treasury settlement (tx/amount/currency). A standing
+        brief is funded with no reward_pool (it pays from emissions). Both flow into the signed feed.
+        """
         brief = self._briefs[brief_id]
         brief["funded"] = True
         brief["status"] = "open"
-        _save(self.path, self._briefs)
-        return brief
-
-    def set_boost(self, brief_id: str, boost: float) -> Optional[dict]:
-        brief = self._briefs.get(brief_id)
-        if brief is None:
-            return None
-        brief["boost"] = boost  # carried into the signed validator feed; the validator clamps it
+        if reward_pool is not None:
+            brief["reward_pool"] = float(reward_pool)
+        if payment_ref is not None:
+            brief["payment_ref"] = payment_ref
         _save(self.path, self._briefs)
         return brief
 
@@ -149,9 +149,10 @@ class RegistryStore:
 
 
 class FundingStore:
-    """Display mirror of on-chain brief funding (HRLDFUND) — who is funding which brief and the α
-    they hold. NOT authoritative: the validator reads the brief's signed `boost`, which the operator
-    sets from these holdings. Keyed by funder hotkey (one funding commit per hotkey).
+    """Record of the client's treasury payment that funds a brief's reward pool (amount/currency/tx),
+    for the operator to confirm + audit. The trusted "funded" signal is the operator marking the
+    brief funded from this (`BriefStore.fund`), which the validator reads from the signed feed.
+    Keyed by brief_id (one prepaid-pool payment per brief in v1).
     """
 
     def __init__(self, path: str, max_items: int = _MAX_RESULTS):
@@ -160,7 +161,7 @@ class FundingStore:
         self._items = _load(path, {})
 
     def add(self, item: dict):
-        key = item.get("funder")
+        key = item.get("brief_id")
         if not key:
             return
         self._items[key] = item
