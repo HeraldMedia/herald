@@ -154,6 +154,13 @@ class FetchResult:
     providers_live: int = 0
     published_ts: float = None
     author: str = None
+    # "full" = `text` is the whole article body (direct/proxy fetch). "excerpt" = `text` is a short
+    # AUTHORITATIVE excerpt (e.g. a publisher API's lead paragraph); the full body must come from the
+    # miner's claim snapshot, anchored to this excerpt. The oracle flips the anchor direction on this.
+    body_kind: str = "full"
+    # Authoritative topic text for excerpt mode (headline + abstract + tags + section); unfakeable,
+    # so the topic check runs against it rather than the miner-supplied snapshot. None -> use `text`.
+    topic_text: str = None
 
 
 def _http_get(url: str):
@@ -186,25 +193,37 @@ def _scrapingbee_get(url: str):
     return r.status_code, url, r.content[:HERALD_MAX_BODY_BYTES]
 
 
-def _providers():
+def _providers(proxy_only: bool = False):
+    # proxy_only routes a bot-walled outlet through the JS-rendering provider ONLY (its plain-HTTP
+    # fetch would just return the 403 challenge page).
+    if proxy_only:
+        return [_scrapingbee_get] if SCRAPINGBEE_API_KEY else []
     providers = [_http_get]
     if SCRAPINGBEE_API_KEY:
         providers.append(_scrapingbee_get)
     return providers
 
 
-def fetch(url: str, epoch=None) -> FetchResult:
+def fetch(url: str, epoch=None, proxy_only: bool = False) -> FetchResult:
     canon = canonicalize(url)
-    if epoch is not None and (canon, epoch) in _cache:
-        return _cache[(canon, epoch)]
+    cache_key = (canon, epoch, proxy_only)
+    if epoch is not None and cache_key in _cache:
+        return _cache[cache_key]
 
     if not is_safe_fetch_url(canon):
         result = FetchResult(False, 0, canon, "", 0)
         if epoch is not None:
-            _cache_put(_cache, (canon, epoch), result)
+            _cache_put(_cache, cache_key, result)
         return result
 
-    providers = _providers()
+    providers = _providers(proxy_only)
+    if not providers:
+        # proxy_only outlet but no proxy provider configured: can't verify -> not live (fail closed).
+        result = FetchResult(False, 0, canon, "", 0)
+        if epoch is not None:
+            _cache_put(_cache, cache_key, result)
+        return result
+
     results = []
     for provider in providers:
         try:
@@ -240,5 +259,19 @@ def fetch(url: str, epoch=None) -> FetchResult:
         author=_parse_author(html),
     )
     if epoch is not None:
-        _cache_put(_cache, (canon, epoch), result)
+        _cache_put(_cache, cache_key, result)
     return result
+
+
+def fetch_article(url: str, registry, epoch=None) -> FetchResult:
+    """Strategy-aware fetch: dispatch on the outlet's registry-declared `fetch` method. Production
+    wires this as the oracle/forward fetch_fn so a bot-walled outlet is fetched the way its signed
+    registry entry says. Unknown outlet or strategy falls back to a plain direct fetch."""
+    outlet = registry.lookup(url) if registry is not None else None
+    strategy = (outlet.fetch if outlet else "direct") or "direct"
+    if strategy == "proxy":
+        return fetch(url, epoch, proxy_only=True)
+    if strategy.startswith("api:"):
+        from .adapters import api_fetch
+        return api_fetch(strategy[4:], url, epoch)
+    return fetch(url, epoch)

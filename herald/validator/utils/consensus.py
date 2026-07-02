@@ -45,6 +45,11 @@ def consensus_params() -> dict:
         # outside-data providers (the set + quorum are consensus per RUNBOOK)
         "quorum_threshold": cfg.HERALD_QUORUM_THRESHOLD,
         "providers": ["http", "scrapingbee"] if cfg.SCRAPINGBEE_API_KEY else ["http"],
+        # Per-outlet fetch strategies need their key on every validator or that outlet forks the
+        # fleet: a validator lacking the key rejects the outlet while others verify it. Surface the
+        # capability here so a mixed fleet shows as a fingerprint mismatch, not silent divergence.
+        "proxy_enabled": bool(cfg.SCRAPINGBEE_API_KEY),
+        "api_adapters": ["nyt"] if cfg.HERALD_NYT_API_KEY else [],
         # trust anchors
         "briefs_pubkey": cfg.HERALD_BRIEFS_PUBKEY or "",
     }

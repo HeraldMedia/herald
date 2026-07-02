@@ -130,6 +130,11 @@ HERALD_EPOCH_LAG = int(os.getenv('HERALD_EPOCH_LAG', '10'))
 SERPAPI_API_KEY = os.getenv('SERPAPI_API_KEY')
 SCRAPINGBEE_API_KEY = os.getenv('SCRAPINGBEE_API_KEY')
 BRAVE_API_KEY = os.getenv('BRAVE_API_KEY')
+# Per-outlet fetch strategy (registry `fetch` field): "proxy" outlets need SCRAPINGBEE_API_KEY;
+# "api:nyt" outlets need HERALD_NYT_API_KEY. A validator missing the key for an outlet's strategy
+# can't verify that outlet (fail-closed) and will fork from validators that have it — so these keys
+# are consensus-affecting (surfaced in the fingerprint) and must be provisioned fleet-wide.
+HERALD_NYT_API_KEY = os.getenv('HERALD_NYT_API_KEY')
 HERALD_SEARCH_TOP_N = int(os.getenv('HERALD_SEARCH_TOP_N', '20'))
 HERALD_MIN_BODY_BYTES = int(os.getenv('HERALD_MIN_BODY_BYTES', '500'))
 HERALD_MAX_BODY_BYTES = int(os.getenv('HERALD_MAX_BODY_BYTES', str(5_000_000)))

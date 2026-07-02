@@ -1,9 +1,9 @@
 {
   "version_id": 1,
   "outlets": [
-    {"outlet_id": "nytimes", "tier": 1, "domains": ["nytimes.com", "www.nytimes.com"]},
+    {"outlet_id": "nytimes", "tier": 1, "domains": ["nytimes.com", "www.nytimes.com"], "fetch": "api:nyt"},
     {"outlet_id": "guardian", "tier": 1, "domains": ["theguardian.com", "www.theguardian.com"]},
-    {"outlet_id": "reuters", "tier": 1, "domains": ["reuters.com", "www.reuters.com"]},
+    {"outlet_id": "reuters", "tier": 1, "domains": ["reuters.com", "www.reuters.com"], "fetch": "proxy"},
     {"outlet_id": "techcrunch", "tier": 2, "domains": ["techcrunch.com"]},
     {"outlet_id": "coindesk", "tier": 2, "domains": ["coindesk.com", "www.coindesk.com"]},
     {"outlet_id": "decrypt", "tier": 3, "domains": ["decrypt.co"]}

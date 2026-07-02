@@ -96,31 +96,47 @@ def evaluate_article(
     if not fr.ok:
         return _reject(claim, "url_not_live", evidence)
 
-    # Snapshot anchoring: when the claim carries the page's extracted text, verify it against
-    # OUR fetch once (fuzzy), then run every content check on the identical snapshot bytes —
-    # so all validators grade the same input and per-validator page variants can't fork
-    # accept/reject or the attribution multiplier. A failed anchor rejects only this pass
-    # (fetches are re-tried each epoch); a persistent mismatch is cloaking-grade and stays out.
+    # Snapshot anchoring: the claim carries the page's extracted text; verify it against OUR source
+    # once (fuzzy), then run the content checks on the identical snapshot bytes so all validators
+    # grade the same input. The anchor DIRECTION depends on the outlet's fetch strategy:
+    #   • full body (direct/proxy): the snapshot must be contained in our full fetch (snapshot ⊆ body)
+    #   • excerpt (api:*): we hold only an authoritative excerpt, so it must appear IN the snapshot
+    #     (excerpt ⊆ snapshot) — that proves the miner's snapshot really is this article, while
+    #     byline/date/topic come from the unfakeable API. A failed anchor rejects only this pass.
     snapshot = (getattr(claim, "snapshot_text", None) or "").strip()
-    if snapshot:
+    body_kind = getattr(fr, "body_kind", "full")
+    if body_kind == "excerpt":
+        if not snapshot:
+            return _reject(claim, "snapshot_required", evidence)
+        anchor = containment(fr.text or "", snapshot)
+        evidence["snapshot_anchor"] = round(anchor, 3)
+        if anchor < HERALD_SNAPSHOT_ANCHOR:
+            return _reject(claim, "snapshot_mismatch", evidence)
+        content_text = snapshot
+        topic_input = getattr(fr, "topic_text", None) or fr.text  # authoritative, unfakeable
+    elif snapshot:
         anchor = containment(snapshot, fr.text or "")
         evidence["snapshot_anchor"] = round(anchor, 3)
         if anchor < HERALD_SNAPSHOT_ANCHOR:
             return _reject(claim, "snapshot_mismatch", evidence)
         content_text = snapshot
+        topic_input = content_text
     else:
         content_text = fr.text
+        topic_input = content_text
 
     paid, paid_reason = is_paid(claim.article_url, content_text, judge_fn)
-    if not paid and snapshot:
-        # The miner won't include paid markers in its own snapshot — our fetch stays the detector.
+    if not paid and body_kind == "full" and snapshot:
+        # The miner won't include paid markers in its own snapshot — our full fetch stays the
+        # detector. (In excerpt mode we have no full body; the /paidpost/-style URL path check in
+        # is_paid still applies, and premium outlets disclose sponsored content on the path.)
         paid, paid_reason = is_paid(claim.article_url, fr.text, judge_fn)
     evidence["paid"] = paid
     if paid:
         evidence["paid_reason"] = paid_reason
         return _reject(claim, "paid_not_real_news", evidence)
 
-    if not topic_matched(content_text, brief, judge_fn):
+    if not topic_matched(topic_input, brief, judge_fn):
         evidence["topic_match"] = False
         return _reject(claim, "topic_mismatch", evidence)
     evidence["topic_match"] = True

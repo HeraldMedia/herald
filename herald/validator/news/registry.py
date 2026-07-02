@@ -19,6 +19,10 @@ class Outlet:
     tier: int
     domains: List[str]
     section_patterns: List[str] = field(default_factory=list)
+    # How validators fetch/verify this outlet (travels in the SIGNED registry, so the whole fleet
+    # agrees): "direct" = plain HTTP (default), "proxy" = JS-rendering fetch provider (bot-walled
+    # sites), "api:<name>" = authoritative publisher metadata + the miner snapshot anchored to it.
+    fetch: str = "direct"
 
     def matches(self, url: str) -> bool:
         host = host_of(url)
@@ -46,6 +50,7 @@ class OutletRegistry:
                 tier=int(o["tier"]),
                 domains=list(o["domains"]),
                 section_patterns=list(o.get("section_patterns", [])),
+                fetch=str(o.get("fetch", "direct")),
             )
             for o in data.get("outlets", [])
         ]

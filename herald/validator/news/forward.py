@@ -30,7 +30,7 @@ from .chain import get_commitments_with_block
 from .dispute_anchor import article_id_hash, parse_dispute
 from .disputes import settle_persistence
 from .emission import apply_reward_pools, compute_weights
-from .fetch import fetch
+from .fetch import fetch, fetch_article
 from .judge import judge
 from .real_news import is_paid
 from .reconcile import fetch_board_results, merge_board_claims
@@ -45,7 +45,7 @@ from .state import HeraldState
 _CONSENSUS_FP = consensus_fingerprint()
 
 
-def _persistence_status(entry, briefs_by_id, epoch, judge_fn) -> str:
+def _persistence_status(entry, briefs_by_id, epoch, judge_fn, registry=None) -> str:
     """alive (pay), dead (clawback + slash), or hold (transient/unconfirmed — do nothing).
 
     Gates the per-epoch installment on LIVENESS ONLY: a reachable, non-thin page that hasn't
@@ -58,7 +58,7 @@ def _persistence_status(entry, briefs_by_id, epoch, judge_fn) -> str:
     """
     if entry.brief_id not in briefs_by_id:
         return "hold"  # brief closed/defunded: withhold pay (its emissions burn), don't slash
-    fr = fetch(entry.url, epoch)
+    fr = fetch_article(entry.url, registry, epoch)
     if fr.status in (404, 410):
         return "dead"
     if not fr.ok:
@@ -168,7 +168,7 @@ async def forward(self):
         winners = winning_articles(
             claims_by_uid, commitments, commit_index,
             hotkey_by_uid, alpha_stake_by_uid, briefs, registry,
-            fetch_fn=lambda u: fetch(u, epoch),
+            fetch_fn=lambda u: fetch_article(u, registry, epoch),
             search_fn=lambda u: in_index(u, epoch),
             judge_fn=judge_fn,
         )
@@ -178,7 +178,7 @@ async def forward(self):
         fresh_winners = []
         for w in winners:
             commit_block = commit_index.first_seen_block(w.hotkey, commitments.get(w.hotkey, ""))
-            published_ts = fetch(w.url, epoch).published_ts
+            published_ts = fetch_article(w.url, registry, epoch).published_ts
             if commit_block is None or published_ts is None:
                 bt.logging.info(f"Rejecting {w.url}: publication date unverifiable vs commit")
                 continue
@@ -233,7 +233,8 @@ async def forward(self):
                 continue
             disp = disputes.active(article_id)  # None unless an open dispute (and disputes enabled)
             status = _persistence_status(
-                entry, briefs_by_id, epoch, dispute_judge_fn if disp is not None else judge_fn
+                entry, briefs_by_id, epoch, dispute_judge_fn if disp is not None else judge_fn,
+                registry=registry,
             )
             installment, rewards = settle_persistence(
                 article_id, entry, status, epoch,

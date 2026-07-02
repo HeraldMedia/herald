@@ -251,3 +251,53 @@ def test_attribution_graded_against_anchored_snapshot():
                          fetch_fn=live_with(text=variant), search_fn=indexed)
     assert r.passed and r.evidence["snapshot_anchor"] >= 0.5
     assert r.evidence["attribution_level"] == 2
+
+
+LEAD = "The lead paragraph carries a distinctive verbatim sentence about the world summit today."
+
+
+def excerpt_with(topic_word="summit", author=None, published=None):
+    """A fetch_fn returning an AUTHORITATIVE excerpt (body_kind='excerpt'), as the api:* adapters do:
+    `text` is the lead paragraph (the anchor target), `topic_text` the unfakeable topic blob."""
+    ts = datetime.fromisoformat(published + "T12:00:00+00:00").timestamp() if published else None
+    topic_text = f"Headline mentioning the {topic_word}. {LEAD}"
+    return lambda u: SimpleNamespace(ok=True, status=200, text_hash="", body_len=len(LEAD),
+                                     final_url=u, text=LEAD, body_kind="excerpt",
+                                     topic_text=topic_text, author=author, published_ts=ts)
+
+
+def test_excerpt_mode_anchors_lead_in_snapshot():
+    # api outlet: the validator holds only the lead paragraph; the miner snapshot carries the body
+    # and must CONTAIN the lead (reverse anchor). Topic is judged on the authoritative topic_text.
+    snapshot = "Opening sentence. " + LEAD + " Then more body about the summit and its aftermath here."
+    c = make_claim(snapshot_text=snapshot)
+    r = evaluate_article(c, onchain_for(c), REGISTRY, {"id": "b1", "keywords": ["summit"]},
+                         fetch_fn=excerpt_with(topic_word="summit"), search_fn=indexed)
+    assert r.passed and r.reason == "ok"
+    assert r.evidence["snapshot_anchor"] >= 0.5 and r.evidence["topic_match"] is True
+
+
+def test_excerpt_mode_requires_a_snapshot():
+    c = make_claim()  # no snapshot: the validator has no body to check
+    r = evaluate_article(c, onchain_for(c), REGISTRY, BRIEF,
+                         fetch_fn=excerpt_with(), search_fn=indexed)
+    assert not r.passed and r.reason == "snapshot_required"
+
+
+def test_excerpt_mode_snapshot_without_the_lead_rejected():
+    c = make_claim(snapshot_text="An unrelated body that never contains the authoritative lead sentence.")
+    r = evaluate_article(c, onchain_for(c), REGISTRY, BRIEF,
+                         fetch_fn=excerpt_with(), search_fn=indexed)
+    assert not r.passed and r.reason == "snapshot_mismatch"
+
+
+def test_excerpt_mode_grades_byline_from_authoritative_api():
+    # Byline + date come from the API (unfakeable), so level-1 attribution works on a bot-walled
+    # outlet the validator could never scrape a byline from.
+    snapshot = "Intro. " + LEAD + " Outro paragraph."
+    c = make_evidence_claim({"author": "Jane Doe", "window": ["2026-07-10", "2026-07-15"]},
+                            snapshot_text=snapshot)
+    r = evaluate_article(c, onchain_for(c), REGISTRY, BRIEF,
+                         fetch_fn=excerpt_with(author="Jane Doe", published="2026-07-12"),
+                         search_fn=indexed)
+    assert r.passed and r.evidence["attribution_level"] == 1

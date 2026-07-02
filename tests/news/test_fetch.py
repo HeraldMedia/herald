@@ -1,9 +1,44 @@
 from herald.validator.news import fetch as fetchmod
-from herald.validator.news.fetch import fetch
+from herald.validator.news.fetch import FetchResult, fetch, fetch_article
+from herald.validator.news.registry import OutletRegistry
 
 
 def _stub(monkeypatch, status, body):
     monkeypatch.setattr(fetchmod, "_http_get", lambda url: (status, url, body))
+
+
+_REG = OutletRegistry.from_dict({"version_id": 1, "outlets": [
+    {"outlet_id": "guardian", "tier": 1, "domains": ["theguardian.com"]},                    # direct
+    {"outlet_id": "reuters", "tier": 1, "domains": ["reuters.com"], "fetch": "proxy"},
+    {"outlet_id": "nytimes", "tier": 1, "domains": ["nytimes.com"], "fetch": "api:nyt"},
+]})
+
+
+def test_fetch_article_direct_uses_http(monkeypatch):
+    fetchmod._cache.clear()
+    monkeypatch.setattr(fetchmod, "is_safe_fetch_url", lambda u: True)
+    monkeypatch.setattr(fetchmod, "_http_get", lambda url: (200, url, b"news " * 200))
+    fr = fetch_article("https://theguardian.com/a", _REG)
+    assert fr.ok and fr.body_kind == "full"
+
+
+def test_fetch_article_proxy_without_provider_fails_closed(monkeypatch):
+    fetchmod._cache.clear()
+    monkeypatch.setattr(fetchmod, "is_safe_fetch_url", lambda u: True)
+    monkeypatch.setattr(fetchmod, "SCRAPINGBEE_API_KEY", None)
+    # proxy outlet with no proxy provider configured -> can't verify -> not live (fail closed),
+    # and the plain-HTTP provider must NOT be used to "rescue" a bot-walled outlet.
+    monkeypatch.setattr(fetchmod, "_http_get", lambda url: (200, url, b"news " * 200))
+    assert fetch_article("https://reuters.com/a", _REG).ok is False
+
+
+def test_fetch_article_api_delegates_to_adapter(monkeypatch):
+    from herald.validator.news import adapters
+    monkeypatch.setattr(adapters, "api_fetch",
+                        lambda name, url, epoch=None: FetchResult(True, 200, url, "", 5,
+                                                                  text="lead", body_kind="excerpt"))
+    fr = fetch_article("https://nytimes.com/a", _REG)
+    assert fr.ok and fr.body_kind == "excerpt" and fr.text == "lead"
 
 
 def test_live_200_with_body(monkeypatch):
@@ -132,6 +167,6 @@ def test_provider_body_selection_prefers_dated_page(monkeypatch):
     walled = b"Accept cookies to continue " * 40
     real = b'<script>{"datePublished":"2026-01-05T00:00:00+00:00"}</script>' + b"Real article body " * 40
     monkeypatch.setattr(fetchmod, "_providers",
-                        lambda: [lambda u: (200, u, walled), lambda u: (200, u, real)])
+                        lambda proxy_only=False: [lambda u: (200, u, walled), lambda u: (200, u, real)])
     r = fetch("https://x/a")
     assert r.published_ts is not None and "Real article body" in r.text

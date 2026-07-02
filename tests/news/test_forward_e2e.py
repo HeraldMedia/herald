@@ -87,7 +87,7 @@ def _setup(monkeypatch):
 @pytest.mark.asyncio
 async def test_forward_vests_first_installment(monkeypatch):
     monkeypatch.setattr(fetchmod, "_http_get", lambda url: (200, url, b"news " * 200))
-    c1 = make_claim("nytimes", "https://www.nytimes.com/a", "hkA")   # tier 1 -> 500
+    c1 = make_claim("guardian", "https://www.theguardian.com/a", "hkA")   # tier 1 -> 500
     c2 = make_claim("techcrunch", "https://techcrunch.com/b", "hkB")  # tier 2 -> 250
     self, captured = make_self({1: c1, 2: c2}, {"hkA": onchain(c1), "hkB": onchain(c2)}, monkeypatch=monkeypatch)
 
@@ -105,7 +105,7 @@ async def test_forward_burns_remainder_to_uid0(monkeypatch):
     monkeypatch.setattr(fwd, "HERALD_TOTAL_DAILY_USD", 1000.0)
     monkeypatch.setattr(fetchmod, "_http_get", lambda url: (200, url, b"news " * 200))
 
-    c1 = make_claim("nytimes", "https://www.nytimes.com/a", "hkA")  # tier 1, 500 / 2 = 250
+    c1 = make_claim("guardian", "https://www.theguardian.com/a", "hkA")  # tier 1, 500 / 2 = 250
     monkeypatch.setattr(fwd, "get_commitments_with_block",
                         lambda subtensor, netuid: {"hkA": (onchain(c1), 1000)})
 
@@ -140,7 +140,7 @@ async def test_forward_caps_client_brief_at_reward_pool(monkeypatch):
     monkeypatch.setattr(fwd, "HERALD_TOTAL_DAILY_USD", 1000.0)
     monkeypatch.setattr(fetchmod, "_http_get", lambda url: (200, url, b"news " * 200))
 
-    c1 = make_claim("nytimes", "https://www.nytimes.com/a", "hkA")  # tier1 500/2=250 installment
+    c1 = make_claim("guardian", "https://www.theguardian.com/a", "hkA")  # tier1 500/2=250 installment
     monkeypatch.setattr(fwd, "get_commitments_with_block",
                         lambda subtensor, netuid: {"hkA": (onchain(c1), 1000)})
 
@@ -171,7 +171,7 @@ async def test_forward_caps_client_brief_at_reward_pool(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_claim_organic_article_predating_commit_rejected(monkeypatch):
-    c1 = make_claim("nytimes", "https://www.nytimes.com/a", "hkA")
+    c1 = make_claim("guardian", "https://www.theguardian.com/a", "hkA")
     self, captured = make_self({1: c1, 2: c1}, {"hkA": onchain(c1)}, monkeypatch=monkeypatch)
     # article carries a 2020 publish date — long before the (2026) commit
     organic = b'<script>{"datePublished":"2020-05-01T00:00:00Z"}</script>' + b"news " * 200
@@ -184,7 +184,7 @@ async def test_claim_organic_article_predating_commit_rejected(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_future_dated_article_rejected(monkeypatch):
-    c1 = make_claim("nytimes", "https://www.nytimes.com/a", "hkA")
+    c1 = make_claim("guardian", "https://www.theguardian.com/a", "hkA")
     self, captured = make_self({1: c1, 2: c1}, {"hkA": onchain(c1)}, monkeypatch=monkeypatch)
     # commit is 2026-01-01; a far-future 2030 date is implausible -> rejected
     future = b'<script>{"datePublished":"2030-05-01T00:00:00Z"}</script>' + b"news " * 200
@@ -195,7 +195,7 @@ async def test_future_dated_article_rejected(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_undated_article_rejected_fail_closed(monkeypatch):
-    c1 = make_claim("nytimes", "https://www.nytimes.com/a", "hkA")
+    c1 = make_claim("guardian", "https://www.theguardian.com/a", "hkA")
     self, captured = make_self({1: c1, 2: c1}, {"hkA": onchain(c1)}, monkeypatch=monkeypatch)
     # no parseable publish date -> can't prove the article post-dates the commit -> pays no one
     # (this case used to slip through a fail-open branch)
@@ -207,7 +207,7 @@ async def test_undated_article_rejected_fail_closed(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_uid_reassignment_does_not_pay_new_holder(monkeypatch):
-    c1 = make_claim("nytimes", "https://www.nytimes.com/a", "hkA")
+    c1 = make_claim("guardian", "https://www.theguardian.com/a", "hkA")
     self, captured = make_self({1: c1, 2: c1}, {"hkA": onchain(c1)}, monkeypatch=monkeypatch)
     monkeypatch.setattr(fetchmod, "_http_get", lambda url: (200, url, b"news " * 200))
 
@@ -222,7 +222,7 @@ async def test_uid_reassignment_does_not_pay_new_holder(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_persistence_clawback_on_value_regression(monkeypatch):
-    c1 = make_claim("nytimes", "https://www.nytimes.com/a", "hkA")
+    c1 = make_claim("guardian", "https://www.theguardian.com/a", "hkA")
     self, captured = make_self({1: c1, 2: c1}, {"hkA": onchain(c1)}, monkeypatch=monkeypatch)
     monkeypatch.setattr(fetchmod, "_http_get", lambda url: (200, url, b"news " * 200))
     await fwd.forward(self)  # cycle 1: valuable
@@ -239,7 +239,7 @@ async def test_persistence_clawback_on_value_regression(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_same_epoch_rerun_is_skipped(monkeypatch):
-    c1 = make_claim("nytimes", "https://www.nytimes.com/a", "hkA")
+    c1 = make_claim("guardian", "https://www.theguardian.com/a", "hkA")
     self, captured = make_self({1: c1, 2: c1}, {"hkA": onchain(c1)}, monkeypatch=monkeypatch)
     monkeypatch.setattr(fetchmod, "_http_get", lambda url: (200, url, b"news " * 200))
     await fwd.forward(self)                       # cycle 1 scores
@@ -253,7 +253,7 @@ async def test_same_epoch_rerun_is_skipped(monkeypatch):
 @pytest.mark.asyncio
 async def test_dead_must_be_confirmed_over_consecutive_epochs(monkeypatch):
     monkeypatch.setattr(fwd, "HERALD_DEAD_CONFIRM_EPOCHS", 2)
-    c1 = make_claim("nytimes", "https://www.nytimes.com/a", "hkA")
+    c1 = make_claim("guardian", "https://www.theguardian.com/a", "hkA")
     self, captured = make_self({1: c1, 2: c1}, {"hkA": onchain(c1)}, monkeypatch=monkeypatch)
     monkeypatch.setattr(fetchmod, "_http_get", lambda url: (200, url, b"news " * 200))
     await fwd.forward(self)  # cycle 1: alive
@@ -277,7 +277,7 @@ def test_persistence_holds_when_brief_left_the_board(monkeypatch):
     # isn't in the signed feed, so it has no reward_pool/kind for apply_reward_pools to draw from.
     monkeypatch.setattr(fetchmod, "_http_get", lambda url: (200, url, b"news " * 200))
     monkeypatch.setattr(searchmod, "_serpapi_search", lambda q, n: [q])
-    entry = SimpleNamespace(url="https://www.nytimes.com/a", brief_id="gone")
+    entry = SimpleNamespace(url="https://www.theguardian.com/a", brief_id="gone")
     assert fwd._persistence_status(entry, {"b1": {"id": "b1"}}, epoch=1, judge_fn=None) == "hold"
 
 
@@ -286,9 +286,9 @@ def test_persistence_pays_live_article_despite_offtopic_or_deindexed_fetch(monke
     # (snapshot-anchored) at claim time; re-checking them on THIS validator's own live fetch would
     # only fork per-epoch pay across the fleet. A live, non-ad page must stay "alive" even when this
     # validator's fetch looks off-topic and its search index doesn't list the URL.
-    entry = SimpleNamespace(url="https://www.nytimes.com/a", brief_id="b1")
+    entry = SimpleNamespace(url="https://www.theguardian.com/a", brief_id="b1")
     briefs_by_id = {"b1": {"id": "b1", "keywords": ["bittensor"]}}  # the page below lacks the keyword
-    monkeypatch.setattr(fwd, "fetch", lambda url, epoch=None: SimpleNamespace(
+    monkeypatch.setattr(fwd, "fetch_article", lambda url, registry=None, epoch=None: SimpleNamespace(
         status=200, ok=True, text="an unrelated but genuine news story about world events"))
     # the pay gate must not consult the search index any more; make it fail loudly if it does
     def _boom(*a, **k):
@@ -299,7 +299,7 @@ def test_persistence_pays_live_article_despite_offtopic_or_deindexed_fetch(monke
 
 @pytest.mark.asyncio
 async def test_no_credit_when_brief_deactivated_mid_vest(monkeypatch):
-    c1 = make_claim("nytimes", "https://www.nytimes.com/a", "hkA")
+    c1 = make_claim("guardian", "https://www.theguardian.com/a", "hkA")
     self, captured = make_self({1: c1, 2: c1}, {"hkA": onchain(c1)}, monkeypatch=monkeypatch)
     monkeypatch.setattr(fetchmod, "_http_get", lambda url: (200, url, b"news " * 200))
     await fwd.forward(self)  # cycle 1: pays under b1
@@ -320,7 +320,7 @@ async def test_dead_streak_not_double_counted_on_restart(monkeypatch):
     # A crash-restart loses the in-memory same-epoch guard but keeps the persisted
     # dead_streak; re-running the same confirmed-dead epoch must not double-count it.
     monkeypatch.setattr(fwd, "HERALD_DEAD_CONFIRM_EPOCHS", 2)
-    c1 = make_claim("nytimes", "https://www.nytimes.com/a", "hkA")
+    c1 = make_claim("guardian", "https://www.theguardian.com/a", "hkA")
     self, captured = make_self({1: c1, 2: c1}, {"hkA": onchain(c1)}, monkeypatch=monkeypatch)
     monkeypatch.setattr(fetchmod, "_http_get", lambda url: (200, url, b"news " * 200))
     await fwd.forward(self)  # cycle 1: alive
@@ -340,7 +340,7 @@ async def test_dead_streak_not_double_counted_on_restart(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_transient_outage_holds_without_slashing(monkeypatch):
-    c1 = make_claim("nytimes", "https://www.nytimes.com/a", "hkA")
+    c1 = make_claim("guardian", "https://www.theguardian.com/a", "hkA")
     self, captured = make_self({1: c1, 2: c1}, {"hkA": onchain(c1)}, monkeypatch=monkeypatch)
     monkeypatch.setattr(fetchmod, "_http_get", lambda url: (200, url, b"news " * 200))
     await fwd.forward(self)  # cycle 1: pays
@@ -365,7 +365,7 @@ async def test_transient_outage_holds_without_slashing(monkeypatch):
 async def test_geo_block_451_holds_without_slashing(monkeypatch):
     # 451 (Unavailable For Legal Reasons) is per-validator/jurisdictional and transient; it
     # must hold (no pay), never confirm a removal — even at a confirm threshold of 1.
-    c1 = make_claim("nytimes", "https://www.nytimes.com/a", "hkA")
+    c1 = make_claim("guardian", "https://www.theguardian.com/a", "hkA")
     self, captured = make_self({1: c1, 2: c1}, {"hkA": onchain(c1)}, monkeypatch=monkeypatch)
     monkeypatch.setattr(fetchmod, "_http_get", lambda url: (200, url, b"news " * 200))
     await fwd.forward(self)  # cycle 1: alive, pays
@@ -380,7 +380,7 @@ async def test_geo_block_451_holds_without_slashing(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_clawback_and_slash_when_article_disappears(monkeypatch):
-    c1 = make_claim("nytimes", "https://www.nytimes.com/a", "hkA")
+    c1 = make_claim("guardian", "https://www.theguardian.com/a", "hkA")
     commitments = {"hkA": onchain(c1)}
     self, captured = make_self({1: c1, 2: c1}, commitments, monkeypatch=monkeypatch)
 
@@ -399,7 +399,7 @@ async def test_clawback_and_slash_when_article_disappears(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_failed_cycle_retries_same_epoch(monkeypatch):
-    c1 = make_claim("nytimes", "https://www.nytimes.com/a", "hkA")
+    c1 = make_claim("guardian", "https://www.theguardian.com/a", "hkA")
     self, captured = make_self({1: c1, 2: c1}, {"hkA": onchain(c1)}, monkeypatch=monkeypatch)
     monkeypatch.setattr(fetchmod, "_http_get", lambda url: (200, url, b"news " * 200))
     calls = {"n": 0}
