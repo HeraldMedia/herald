@@ -143,7 +143,11 @@ HERALD_QUORUM_THRESHOLD = int(os.getenv('HERALD_QUORUM_THRESHOLD', '1'))
 
 HERALD_BASE_PAYOUT_USD = float(os.getenv('HERALD_BASE_PAYOUT_USD', '500'))
 HERALD_TIER_MULTIPLIER = {1: 1.0, 2: 0.5, 3: 0.25}
-HERALD_NO_SEARCH_FLOOR = float(os.getenv('HERALD_NO_SEARCH_FLOOR', '0.0'))
+# Payout multiplier for a live-but-not-indexed article. Search results vary per validator
+# (IP/region/rate limits); a floor of 0 turns that variance into a pay/no-pay fork that splits
+# vesting ledgers for 30 days. 0.5 softens the cliff to a 2x spread — with SEVERAL validators
+# this is a consensus-stability parameter, not just pricing.
+HERALD_NO_SEARCH_FLOOR = float(os.getenv('HERALD_NO_SEARCH_FLOOR', '0.5'))
 
 # ── Attribution evidence (see evidence.py/textmatch.py) — CONSENSUS-CRITICAL: set identically on
 # every validator or the same claim pays differently and weights diverge. Payout multiplier per

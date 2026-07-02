@@ -6,6 +6,7 @@ import bittensor as bt
 from herald.protocol import ClaimSynapse
 from herald.utils.uids import get_all_uids
 from herald.validator.utils.briefs import get_briefs
+from herald.validator.utils.consensus import consensus_fingerprint
 from herald.validator.utils.config import (
     HERALD_BOND_ALPHA_PER_USD,
     HERALD_DEAD_CONFIRM_EPOCHS,
@@ -38,6 +39,10 @@ from .reward import winning_articles
 from .search import in_index
 from .state import HeraldState
 from .topic_match import topic_matched
+
+# Short hash of every consensus-critical tunable. Validators MUST show the same value; compare
+# it across fleet logs (or the `consensus` field on published results) to catch config drift.
+_CONSENSUS_FP = consensus_fingerprint()
 
 
 def _persistence_status(entry, briefs_by_id, epoch, judge_fn) -> str:
@@ -112,7 +117,7 @@ async def forward(self):
         time.sleep(VALIDATOR_WAIT)
         return
 
-    bt.logging.info(f"Herald forward pass at step {self.step}")
+    bt.logging.info(f"Herald forward pass at step {self.step} (consensus {_CONSENSUS_FP})")
     try:
         state = _state(self)
         commit_index, vesting, slash = state.commit_index, state.vesting, state.slash
@@ -267,6 +272,7 @@ async def forward(self):
                 "outlet_id": w.outlet_id, "url": w.url, "usd": w.usd,
                 "status": vesting.entry(w.article_id).status,
                 "attribution": w.level,
+                "consensus": _CONSENSUS_FP,
             } for w in winners])
 
         path = _state_path(self)

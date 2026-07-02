@@ -158,10 +158,13 @@ def test_dead_url_rejected_without_search_call():
     assert called == []  # early-exit: search never runs
 
 
-def test_not_indexed_passes_but_zero_usd():
+def test_not_indexed_pays_the_search_floor():
+    from herald.validator.utils.config import HERALD_NO_SEARCH_FLOOR
+
     c = make_claim()
     r = evaluate_article(c, onchain_for(c), REGISTRY, BRIEF, fetch_fn=live, search_fn=not_indexed)
-    assert r.passed and r.usd == 0.0 and r.evidence["in_index"] is False
+    assert r.passed and r.evidence["in_index"] is False
+    assert r.usd == HERALD_BASE_PAYOUT_USD * HERALD_NO_SEARCH_FLOOR * HERALD_ATTR_MULT[0]
 
 
 def test_paid_content_rejected_before_search():
