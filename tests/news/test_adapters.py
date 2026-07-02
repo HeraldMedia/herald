@@ -30,6 +30,16 @@ def test_nyt_adapter_builds_authoritative_excerpt(monkeypatch):
     assert "Big News Today" in fr.topic_text and "Ukraine" in fr.topic_text and "World" in fr.topic_text
 
 
+def test_nyt_adapter_requires_exact_web_url_match(monkeypatch):
+    # The slug query can return several docs; only an exact web_url match is accepted, so a miner
+    # can't point at URL-A and have a different article verify.
+    monkeypatch.setenv("HERALD_NYT_API_KEY", "k")
+    other = {**DOC, "web_url": "https://www.nytimes.com/2026/07/02/world/some-other-story.html"}
+    monkeypatch.setattr(adapters.httpx, "get", lambda *a, **k: _resp([other]))
+    fr = adapters.api_fetch("nyt", DOC["web_url"])
+    assert fr.ok is False and fr.status == 404
+
+
 def test_nyt_adapter_no_key_fails_closed(monkeypatch):
     monkeypatch.delenv("HERALD_NYT_API_KEY", raising=False)
     assert adapters.api_fetch("nyt", DOC["web_url"]).ok is False

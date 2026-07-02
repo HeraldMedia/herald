@@ -13,6 +13,7 @@ A FetchResult with body_kind="excerpt" signals the oracle to flip the snapshot a
 
 import os
 from datetime import datetime
+from urllib.parse import urlsplit
 
 import httpx
 
@@ -22,14 +23,26 @@ from .url import canonicalize
 _NYT_SEARCH = "https://api.nytimes.com/svc/search/v2/articlesearch.json"
 
 
+def _url_slug(url: str) -> str:
+    # NYT article URLs end in a hyphenated slug, e.g. .../kratom-trump-administration.html — turn it
+    # into search words. Used as the `q` query (not embedded in an fq filter), so a hostile URL can't
+    # inject Lucene syntax; the exact match happens client-side on web_url.
+    tail = urlsplit(url).path.rstrip("/").rsplit("/", 1)[-1]
+    return tail[:-5].replace("-", " ").strip() if tail.endswith(".html") else tail.replace("-", " ").strip()
+
+
 def _nyt_fetch(url: str) -> FetchResult:
     key = os.getenv("HERALD_NYT_API_KEY")
     if not key:
         return FetchResult(False, 0, url, "", 0)  # adapter disabled without a key (fail closed)
+    # NYT's `fq=web_url:(...)` exact filter is unreliable (returns 0 hits for valid URLs), so query by
+    # the article's slug and match web_url in the results client-side.
     try:
-        r = httpx.get(_NYT_SEARCH, params={"fq": f'web_url:("{url}")', "api-key": key}, timeout=20.0)
+        r = httpx.get(_NYT_SEARCH, params={"q": _url_slug(url), "api-key": key}, timeout=20.0)
         r.raise_for_status()
-        docs = r.json().get("response", {}).get("docs", [])
+        # `docs` can be null (not just absent) when the API throttles or returns nothing — coerce
+        # to [] so the exact-match below can't crash the whole scoring pass on a NoneType.
+        docs = (r.json().get("response") or {}).get("docs") or []
     except Exception:
         return FetchResult(False, 0, url, "", 0)
     doc = next((d for d in docs if canonicalize(d.get("web_url", "") or "") == canonicalize(url)), None)
