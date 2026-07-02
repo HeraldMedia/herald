@@ -121,6 +121,26 @@ def _parse_published_ts(html: str):
     return None
 
 
+# Byline, for the attribution level-1 check. JSON-LD author first (article-scoped), then the
+# byline metas. Same bounded-quantifier style as _PUBLISHED_PATTERNS (ReDoS-safe).
+_AUTHOR_PATTERNS = [
+    re.compile(r'["\']author["\']\s*:\s*\{[^{}]{0,300}?["\']name["\']\s*:\s*["\']([^"\']{1,120})["\']'),
+    re.compile(r'name=["\']author["\']\s+content=["\']([^"\']{1,120})["\']', re.I),
+    re.compile(r'content=["\']([^"\']{1,120})["\']\s+name=["\']author["\']', re.I),
+    re.compile(r'(?:article|parsely)[:\-]author["\']?\s+content=["\']([^"\']{1,120})["\']', re.I),
+]
+
+
+def _parse_author(html: str):
+    for pattern in _AUTHOR_PATTERNS:
+        m = pattern.search(html)
+        if m:
+            author = m.group(1).strip()
+            if author and not author.startswith("http"):  # some sites put a profile URL here
+                return author
+    return None
+
+
 @dataclass
 class FetchResult:
     ok: bool
@@ -131,6 +151,7 @@ class FetchResult:
     text: str = ""
     providers_live: int = 0
     published_ts: float = None
+    author: str = None
 
 
 def _http_get(url: str):
@@ -203,6 +224,7 @@ def fetch(url: str, epoch=None) -> FetchResult:
         text=_extract_text(html),
         providers_live=len(live),
         published_ts=_parse_published_ts(html),
+        author=_parse_author(html),
     )
     if epoch is not None:
         _cache_put(_cache, (canon, epoch), result)

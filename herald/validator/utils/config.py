@@ -144,6 +144,21 @@ HERALD_QUORUM_THRESHOLD = int(os.getenv('HERALD_QUORUM_THRESHOLD', '1'))
 HERALD_BASE_PAYOUT_USD = float(os.getenv('HERALD_BASE_PAYOUT_USD', '500'))
 HERALD_TIER_MULTIPLIER = {1: 1.0, 2: 0.5, 3: 0.25}
 HERALD_NO_SEARCH_FLOOR = float(os.getenv('HERALD_NO_SEARCH_FLOOR', '0.0'))
+
+# ── Attribution evidence (see evidence.py/textmatch.py) — CONSENSUS-CRITICAL: set identically on
+# every validator or the same claim pays differently and weights diverge. Payout multiplier per
+# evidence level: 2 = committed text found in the article, 1 = committed byline + tight publish
+# window both match, 0 = bare commit (ratchet L0 to 0 once miners adopt evidence).
+HERALD_ATTR_MULT = {
+    2: float(os.getenv('HERALD_ATTR_MULT_L2', '1.0')),
+    1: float(os.getenv('HERALD_ATTR_MULT_L1', '0.7')),
+    0: float(os.getenv('HERALD_ATTR_MULT_L0', '0.3')),
+}
+# Level 2 gates: min evidence-text length and shingle-containment threshold vs the article.
+HERALD_ATTR_MIN_TEXT_WORDS = int(os.getenv('HERALD_ATTR_MIN_TEXT_WORDS', '8'))
+HERALD_ATTR_TEXT_THRESHOLD = float(os.getenv('HERALD_ATTR_TEXT_THRESHOLD', '0.6'))
+# Level 1 gate: the committed publish window may span at most this many days.
+HERALD_ATTR_MAX_WINDOW_DAYS = int(os.getenv('HERALD_ATTR_MAX_WINDOW_DAYS', '7'))
 HERALD_MAX_ARTICLES_PER_MINER = int(os.getenv('HERALD_MAX_ARTICLES_PER_MINER', '200'))
 
 HERALD_MIN_ALPHA_STAKE_THRESHOLD = float(os.getenv('HERALD_MIN_ALPHA_STAKE_THRESHOLD', '0'))

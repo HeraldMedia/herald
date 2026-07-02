@@ -82,3 +82,33 @@ def test_published_ts_no_redos_on_pathological_body():
     ts = fetchmod._parse_published_ts(body)
     assert ts is None
     assert time.perf_counter() - start < 2.0
+
+
+def test_parses_author_from_jsonld(monkeypatch):
+    fetchmod._cache.clear()
+    html = b'<script>{"author":{"@type":"Person","name":"Jane Doe"},"datePublished":"2026-01-05"}</script>' + b"x" * 600
+    monkeypatch.setattr(fetchmod, "_http_get", lambda url: (200, url, html))
+    assert fetch("https://x/a").author == "Jane Doe"
+
+
+def test_parses_author_meta_either_attribute_order(monkeypatch):
+    fetchmod._cache.clear()
+    html = b'<meta name="author" content="John Smith">' + b"x" * 600
+    monkeypatch.setattr(fetchmod, "_http_get", lambda url: (200, url, html))
+    assert fetch("https://x/a").author == "John Smith"
+
+    fetchmod._cache.clear()
+    html = b'<meta content="John Smith" name="author">' + b"x" * 600
+    monkeypatch.setattr(fetchmod, "_http_get", lambda url: (200, url, html))
+    assert fetch("https://x/b").author == "John Smith"
+
+
+def test_no_author_is_none_and_url_authors_skipped(monkeypatch):
+    fetchmod._cache.clear()
+    monkeypatch.setattr(fetchmod, "_http_get", lambda url: (200, url, b"x" * 1000))
+    assert fetch("https://x/a").author is None
+
+    fetchmod._cache.clear()
+    html = b'<meta property="article:author" content="https://x.com/profile/jane">' + b"x" * 600
+    monkeypatch.setattr(fetchmod, "_http_get", lambda url: (200, url, html))
+    assert fetch("https://x/b").author is None
