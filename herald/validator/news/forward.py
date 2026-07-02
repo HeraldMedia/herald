@@ -39,7 +39,6 @@ from .publish import publish_results
 from .reward import winning_articles
 from .search import in_index
 from .state import HeraldState
-from .topic_match import topic_matched
 
 # Short hash of every consensus-critical tunable. Validators MUST show the same value; compare
 # it across fleet logs (or the `consensus` field on published results) to catch config drift.
@@ -49,8 +48,13 @@ _CONSENSUS_FP = consensus_fingerprint()
 def _persistence_status(entry, briefs_by_id, epoch, judge_fn) -> str:
     """alive (pay), dead (clawback + slash), or hold (transient/unconfirmed — do nothing).
 
-    Clawback+slash only on a CONFIRMED removal or confirmed paid-as-real, so a transient
-    fetch/search outage never slashes an honest miner.
+    Gates the per-epoch installment on LIVENESS ONLY: a reachable, non-thin page that hasn't
+    turned into an ad. Topic match and search-index presence were already verified at claim time
+    (snapshot-anchored, so the whole fleet agreed on them); re-checking them here on each
+    validator's own live fetch only forks per-epoch pay across the fleet — search results and page
+    variants legitimately differ per validator — for no slashing benefit, so they are intentionally
+    NOT re-run. Clawback+slash still fire only on a CONFIRMED removal (404/410) or a confirmed swap
+    to paid content, so a transient outage never slashes an honest miner.
     """
     if entry.brief_id not in briefs_by_id:
         return "hold"  # brief closed/defunded: withhold pay (its emissions burn), don't slash
@@ -58,15 +62,9 @@ def _persistence_status(entry, briefs_by_id, epoch, judge_fn) -> str:
     if fr.status in (404, 410):
         return "dead"
     if not fr.ok:
-        return "hold"  # status 0/451/5xx or thin body — geo-block/no-connect: can't confirm
+        return "hold"  # status 0/451/5xx or thin body — geo-block/no-connect: can't confirm live
     if is_paid(entry.url, fr.text, judge_fn)[0]:
         return "dead"  # swapped to paid/sponsored content — slashable
-    brief = briefs_by_id.get(entry.brief_id)
-    if brief is not None and not topic_matched(fr.text, brief, judge_fn):
-        return "hold"  # off-topic now: withhold pay but don't slash
-    sr = in_index(entry.url, epoch)
-    if sr.num_results == 0 or not sr.in_index:
-        return "hold"  # search outage or de-indexed: withhold pay, no slash
     return "alive"
 
 

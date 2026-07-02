@@ -281,6 +281,22 @@ def test_persistence_holds_when_brief_left_the_board(monkeypatch):
     assert fwd._persistence_status(entry, {"b1": {"id": "b1"}}, epoch=1, judge_fn=None) == "hold"
 
 
+def test_persistence_pays_live_article_despite_offtopic_or_deindexed_fetch(monkeypatch):
+    # Regression: the per-epoch pay gate is LIVENESS-only. Topic + search-index were verified
+    # (snapshot-anchored) at claim time; re-checking them on THIS validator's own live fetch would
+    # only fork per-epoch pay across the fleet. A live, non-ad page must stay "alive" even when this
+    # validator's fetch looks off-topic and its search index doesn't list the URL.
+    entry = SimpleNamespace(url="https://www.nytimes.com/a", brief_id="b1")
+    briefs_by_id = {"b1": {"id": "b1", "keywords": ["bittensor"]}}  # the page below lacks the keyword
+    monkeypatch.setattr(fwd, "fetch", lambda url, epoch=None: SimpleNamespace(
+        status=200, ok=True, text="an unrelated but genuine news story about world events"))
+    # the pay gate must not consult the search index any more; make it fail loudly if it does
+    def _boom(*a, **k):
+        raise AssertionError("persistence must not re-check the search index")
+    monkeypatch.setattr(fwd, "in_index", _boom)
+    assert fwd._persistence_status(entry, briefs_by_id, epoch=5, judge_fn=None) == "alive"
+
+
 @pytest.mark.asyncio
 async def test_no_credit_when_brief_deactivated_mid_vest(monkeypatch):
     c1 = make_claim("nytimes", "https://www.nytimes.com/a", "hkA")
