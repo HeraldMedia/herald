@@ -57,6 +57,7 @@ def merge_board_claims(claims_by_uid: Dict[int, list], rows: List[dict],
                 evidence_text=reveal.get("evidence_text") or None,
                 evidence_author=reveal.get("evidence_author") or None,
                 evidence_window=reveal.get("evidence_window") or None,
+                snapshot_text=reveal.get("snapshot_text") or None,
             )
         except (ValueError, TypeError):
             continue

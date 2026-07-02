@@ -80,3 +80,15 @@ def test_import_record_rejects_tampered_evidence(tmp_path):
         dst.import_record({**reveal, "evidence": {**reveal["evidence"], "author": "Someone Else"}})
     with pytest.raises(ValueError):
         dst.import_record({**reveal, "pre_hash": "ab" * 24})
+
+
+def test_claim_snapshot_stored_and_reimported(tmp_path):
+    store = ClaimStore(str(tmp_path / "claims.json"))
+    onchain = store.add(**REC)
+    store.set_article_url(onchain, "https://www.nytimes.com/a", snapshot_text="Extracted article text.")
+    rec = store.get(onchain)
+    assert rec["snapshot_text"] == "Extracted article text."
+
+    dst = ClaimStore(str(tmp_path / "dst.json"))
+    dst.import_record({**rec, "onchain": onchain})
+    assert dst.get(onchain)["snapshot_text"] == "Extracted article text."

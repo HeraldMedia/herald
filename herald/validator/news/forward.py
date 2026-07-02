@@ -297,6 +297,7 @@ async def forward(self):
                     "evidence_text": getattr(w.claim, "evidence_text", None),
                     "evidence_author": getattr(w.claim, "evidence_author", None),
                     "evidence_window": getattr(w.claim, "evidence_window", None),
+                    "snapshot_text": getattr(w.claim, "snapshot_text", None),
                 },
             } for w in winners])
 

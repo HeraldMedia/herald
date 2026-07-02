@@ -63,11 +63,12 @@ def _window_matches(window, published_ts) -> bool:
     return start <= published <= end
 
 
-def grade_evidence(evidence: dict, fetch_result, brief: dict) -> tuple:
+def grade_evidence(evidence: dict, fetch_result, brief: dict, article_text: str = None) -> tuple:
     """Grade revealed evidence against the fetched article. Returns (level, detail dict).
 
     The caller has already verified evidence_hash(evidence) == the committed pre_hash, so
-    everything here was fixed before publication.
+    everything here was fixed before publication. `article_text` overrides the fetched text
+    (the oracle passes the anchored claim snapshot so every validator grades identical bytes).
     """
     if not evidence:
         return 0, {}
@@ -75,7 +76,7 @@ def grade_evidence(evidence: dict, fetch_result, brief: dict) -> tuple:
     text = evidence.get("text") or ""
     words = normalize_text(text).split()
     if len(words) >= HERALD_ATTR_MIN_TEXT_WORDS:
-        score = containment(text, fetch_result.text or "")
+        score = containment(text, article_text if article_text is not None else (fetch_result.text or ""))
         brief_copy = " ".join(
             [str(brief.get("title") or "")] + [str(m) for m in (brief.get("messages") or brief.get("keywords") or [])]
         )

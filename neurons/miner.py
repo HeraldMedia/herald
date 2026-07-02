@@ -43,6 +43,7 @@ class Miner(BaseMinerNeuron):
                 evidence_text=(r.get("evidence") or {}).get("text"),
                 evidence_author=(r.get("evidence") or {}).get("author"),
                 evidence_window=(r.get("evidence") or {}).get("window"),
+                snapshot_text=r.get("snapshot_text") or None,
             )
             for r in records
         ]

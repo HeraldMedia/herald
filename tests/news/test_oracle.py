@@ -200,3 +200,54 @@ def test_hotkey_mismatch_rejected():
     r = evaluate_article(c, onchain_for(c), REGISTRY, BRIEF, fetch_fn=live,
                          search_fn=indexed, serving_hotkey="hkSERVING")
     assert not r.passed and r.reason == "hotkey_mismatch"
+
+
+BRIEF_KW = {"id": "b1", "keywords": ["bittensor"]}
+SNAPSHOT = ("The Bittensor media subnet Herald opened its public pilot this week. " * 4).strip()
+
+
+def test_snapshot_makes_content_checks_deterministic():
+    # Our own fetch got a page variant MISSING the brief keyword; the anchored snapshot has it.
+    # Content checks run on the snapshot bytes, so every validator passes this claim identically.
+    variant = SNAPSHOT.replace("Bittensor", "the network")  # same page, keyword dropped
+    c = make_claim(snapshot_text=SNAPSHOT)
+    r = evaluate_article(c, onchain_for(c), REGISTRY, BRIEF_KW,
+                         fetch_fn=live_with(text=variant), search_fn=indexed)
+    assert r.passed and r.evidence["snapshot_anchor"] >= 0.5
+    assert r.evidence["topic_match"] is True
+
+
+def test_snapshot_mismatch_rejected_this_pass():
+    c = make_claim(snapshot_text=SNAPSHOT)
+    r = evaluate_article(c, onchain_for(c), REGISTRY, BRIEF,
+                         fetch_fn=live_with(text="A completely different page about football."),
+                         search_fn=indexed)
+    assert not r.passed and r.reason == "snapshot_mismatch"
+
+
+def test_paid_marker_in_own_fetch_still_rejects_snapshot_claims():
+    # A miner can't launder a sponsored page by snapshotting it without the disclosure label.
+    c = make_claim(snapshot_text=SNAPSHOT)
+    paid_page = SNAPSHOT + " Sponsored content by the client."
+    r = evaluate_article(c, onchain_for(c), REGISTRY, BRIEF,
+                         fetch_fn=live_with(text=paid_page), search_fn=indexed)
+    assert not r.passed and r.reason == "paid_not_real_news"
+
+
+def test_attribution_graded_against_anchored_snapshot():
+    # Evidence text appears in the snapshot; our own fetch is an anchored variant with just that
+    # quote paraphrased away — grading on the snapshot keeps the level identical across validators.
+    sents = [
+        "The Bittensor media subnet Herald opened its public pilot this week after months of rehearsal.",
+        "Miners are paid only for articles that pass an automated verification oracle run by validators.",
+        "Earned coverage should be provable, not promised, the team said in its launch note on Tuesday.",
+        "The registry of approved outlets is signed offline and anchored on chain for auditability.",
+    ]
+    snapshot = " ".join(sents)
+    quote = sents[2]
+    variant = snapshot.replace(quote, "The team framed verification as central in its launch note.")
+    c = make_evidence_claim({"text": quote}, snapshot_text=snapshot)
+    r = evaluate_article(c, onchain_for(c), REGISTRY, BRIEF,
+                         fetch_fn=live_with(text=variant), search_fn=indexed)
+    assert r.passed and r.evidence["snapshot_anchor"] >= 0.5
+    assert r.evidence["attribution_level"] == 2

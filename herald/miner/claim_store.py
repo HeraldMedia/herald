@@ -71,12 +71,15 @@ class ClaimStore:
         if onchain != encode(commit_hash(**fields, pre_hash=pre_hash)):
             raise ValueError("reveal onchain value does not match its fields")
         self._records[onchain] = {**fields, "pre_hash": pre_hash, "evidence": evidence,
-                                  "article_url": reveal.get("article_url")}
+                                  "article_url": reveal.get("article_url"),
+                                  "snapshot_text": (reveal.get("snapshot_text") or None)}
         self._save()
         return onchain
 
-    def set_article_url(self, onchain: str, url: str):
+    def set_article_url(self, onchain: str, url: str, snapshot_text: str = None):
         self._records[onchain]["article_url"] = url
+        if snapshot_text:
+            self._records[onchain]["snapshot_text"] = snapshot_text[:30_000]
         self._save()
 
     def get(self, onchain: str) -> Optional[dict]:

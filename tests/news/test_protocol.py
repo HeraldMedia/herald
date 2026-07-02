@@ -36,3 +36,9 @@ def test_evidence_fields_bounded():
         ClaimRecord(**BASE, evidence_text="x" * 20_001)
     with pytest.raises(ValidationError):
         ClaimRecord(**BASE, evidence_window=["a", "b", "c"])
+
+
+def test_snapshot_text_bounded():
+    assert ClaimRecord(**BASE, snapshot_text="x" * 30_000).snapshot_text
+    with pytest.raises(ValidationError):
+        ClaimRecord(**BASE, snapshot_text="x" * 30_001)

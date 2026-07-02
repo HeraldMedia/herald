@@ -5,12 +5,12 @@ from typing import Any, Callable, Dict
 
 from herald.commit import matches as commitment_matches
 from herald.evidence import clean_evidence, evidence_hash
-from herald.validator.utils.config import HERALD_ATTR_MULT
+from herald.validator.utils.config import HERALD_ATTR_MULT, HERALD_SNAPSHOT_ANCHOR
 from .bonds import min_bond_atto
 from .fetch import fetch as default_fetch
 from .real_news import is_paid
 from .scoring import article_usd
-from .textmatch import grade_evidence
+from .textmatch import containment, grade_evidence
 from .topic_match import topic_matched
 from .url import article_id
 
@@ -96,13 +96,31 @@ def evaluate_article(
     if not fr.ok:
         return _reject(claim, "url_not_live", evidence)
 
-    paid, paid_reason = is_paid(claim.article_url, fr.text, judge_fn)
+    # Snapshot anchoring: when the claim carries the page's extracted text, verify it against
+    # OUR fetch once (fuzzy), then run every content check on the identical snapshot bytes —
+    # so all validators grade the same input and per-validator page variants can't fork
+    # accept/reject or the attribution multiplier. A failed anchor rejects only this pass
+    # (fetches are re-tried each epoch); a persistent mismatch is cloaking-grade and stays out.
+    snapshot = (getattr(claim, "snapshot_text", None) or "").strip()
+    if snapshot:
+        anchor = containment(snapshot, fr.text or "")
+        evidence["snapshot_anchor"] = round(anchor, 3)
+        if anchor < HERALD_SNAPSHOT_ANCHOR:
+            return _reject(claim, "snapshot_mismatch", evidence)
+        content_text = snapshot
+    else:
+        content_text = fr.text
+
+    paid, paid_reason = is_paid(claim.article_url, content_text, judge_fn)
+    if not paid and snapshot:
+        # The miner won't include paid markers in its own snapshot — our fetch stays the detector.
+        paid, paid_reason = is_paid(claim.article_url, fr.text, judge_fn)
     evidence["paid"] = paid
     if paid:
         evidence["paid_reason"] = paid_reason
         return _reject(claim, "paid_not_real_news", evidence)
 
-    if not topic_matched(fr.text, brief, judge_fn):
+    if not topic_matched(content_text, brief, judge_fn):
         evidence["topic_match"] = False
         return _reject(claim, "topic_mismatch", evidence)
     evidence["topic_match"] = True
@@ -113,7 +131,7 @@ def evaluate_article(
 
     # Grade the pre-committed evidence against the published article: the level's multiplier
     # prices how strongly this claim proves the miner CAUSED the coverage (vs predicted it).
-    level, attr_detail = grade_evidence(attr_evidence, fr, brief)
+    level, attr_detail = grade_evidence(attr_evidence, fr, brief, article_text=content_text)
     evidence["attribution_level"] = level
     evidence.update({f"attribution_{k}": v for k, v in attr_detail.items()})
 

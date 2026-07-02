@@ -32,6 +32,7 @@ def consensus_params() -> dict:
         "attr_min_text_words": cfg.HERALD_ATTR_MIN_TEXT_WORDS,
         "attr_text_threshold": cfg.HERALD_ATTR_TEXT_THRESHOLD,
         "attr_max_window_days": cfg.HERALD_ATTR_MAX_WINDOW_DAYS,
+        "snapshot_anchor": cfg.HERALD_SNAPSHOT_ANCHOR,
         # bonds / slashing
         "slash_mult": cfg.SLASH_MULTIPLIER,
         "bond_alpha_per_usd": cfg.HERALD_BOND_ALPHA_PER_USD,

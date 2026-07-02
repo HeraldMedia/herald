@@ -56,8 +56,28 @@ def cmd_commit(args):
 
 
 def cmd_claim(args):
-    ClaimStore(args.store).set_article_url(args.commit, args.url)
-    print("article url attached; the miner will serve this claim")
+    # Snapshot the article's extracted text with the claim: validators anchor it against their
+    # own fetch, then run the content checks on these identical bytes so the whole fleet grades
+    # the claim the same way (no per-validator page-variant forks).
+    snapshot = None
+    if args.snapshot_file:
+        with open(args.snapshot_file, "r", encoding="utf-8") as f:
+            snapshot = f.read()
+    elif not args.no_snapshot:
+        try:
+            import httpx
+
+            from herald.validator.news.fetch import _extract_text
+
+            resp = httpx.get(args.url, timeout=20.0, follow_redirects=True,
+                             headers={"User-Agent": "Mozilla/5.0 (herald-miner)"})
+            resp.raise_for_status()
+            snapshot = _extract_text(resp.text)
+        except Exception as e:
+            print(f"snapshot fetch failed ({e}); claiming without one")
+    ClaimStore(args.store).set_article_url(args.commit, args.url, snapshot_text=snapshot)
+    print("article url attached; the miner will serve this claim"
+          + (" (with page snapshot)" if snapshot else ""))
 
 
 def cmd_list(args):
@@ -112,6 +132,10 @@ def build_parser():
     cl = sub.add_parser("claim")
     cl.add_argument("--commit", required=True)
     cl.add_argument("--url", required=True)
+    cl.add_argument("--snapshot-file", dest="snapshot_file", default=None,
+                    help="attach this text file as the page snapshot instead of fetching")
+    cl.add_argument("--no-snapshot", dest="no_snapshot", action="store_true",
+                    help="claim without a page snapshot (validators fall back to their own fetch)")
     cl.set_defaults(func=cmd_claim)
 
     sub.add_parser("list").set_defaults(func=cmd_list)

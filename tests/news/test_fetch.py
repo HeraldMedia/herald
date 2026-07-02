@@ -112,3 +112,15 @@ def test_no_author_is_none_and_url_authors_skipped(monkeypatch):
     html = b'<meta property="article:author" content="https://x.com/profile/jane">' + b"x" * 600
     monkeypatch.setattr(fetchmod, "_http_get", lambda url: (200, url, html))
     assert fetch("https://x/b").author is None
+
+
+def test_provider_body_selection_prefers_dated_page(monkeypatch):
+    # The direct fetch hits a cookie wall (no metas); the second provider sees the real page.
+    # Selection must deterministically prefer the date-bearing body.
+    fetchmod._cache.clear()
+    walled = b"Accept cookies to continue " * 40
+    real = b'<script>{"datePublished":"2026-01-05T00:00:00+00:00"}</script>' + b"Real article body " * 40
+    monkeypatch.setattr(fetchmod, "_providers",
+                        lambda: [lambda u: (200, u, walled), lambda u: (200, u, real)])
+    r = fetch("https://x/a")
+    assert r.published_ts is not None and "Real article body" in r.text

@@ -6,11 +6,14 @@ from pydantic import BaseModel, Field, StringConstraints
 # A miner controls its entire ClaimSynapse response, so bound every collection/number: the
 # validator parses the whole body before its per-miner slice, and an unbounded list (or a
 # huge merkle_path / big-int) would let one miner exhaust its memory.
-MAX_CLAIMS_PER_RESPONSE = 10000  # well above the per-miner scoring slice; a DoS backstop
+# Above the per-miner scoring slice (200) but tight enough that a full list of max-size text
+# fields can't balloon one response into hundreds of MB before the per-miner slice applies.
+MAX_CLAIMS_PER_RESPONSE = 1000
 MAX_MERKLE_DEPTH = 64
 MAX_BOND_ATTO = 10 ** 30  # far above any real alpha bond (atto); bounds big-int digit count
 MAX_VERSION_ID = 10 ** 9
 MAX_EVIDENCE_TEXT = 20_000  # mirrors herald.evidence.MAX_TEXT_CHARS
+MAX_SNAPSHOT_TEXT = 30_000  # extracted article text the miner snapshots at claim time
 
 _ShortStr = typing.Annotated[str, StringConstraints(max_length=128)]
 
@@ -33,6 +36,9 @@ class ClaimRecord(BaseModel):
     evidence_text: typing.Optional[str] = Field(default=None, max_length=MAX_EVIDENCE_TEXT)
     evidence_author: typing.Optional[str] = Field(default=None, max_length=120)
     evidence_window: typing.Optional[typing.List[_ShortStr]] = Field(default=None, max_length=2)
+    # Claim-time snapshot of the article's extracted text. Validators anchor it against their
+    # own fetch, then run the content checks on these identical bytes so the fleet agrees.
+    snapshot_text: typing.Optional[str] = Field(default=None, max_length=MAX_SNAPSHOT_TEXT)
 
 
 class ClaimSynapse(bt.Synapse):

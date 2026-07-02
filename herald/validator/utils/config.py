@@ -163,6 +163,10 @@ HERALD_ATTR_MIN_TEXT_WORDS = int(os.getenv('HERALD_ATTR_MIN_TEXT_WORDS', '8'))
 HERALD_ATTR_TEXT_THRESHOLD = float(os.getenv('HERALD_ATTR_TEXT_THRESHOLD', '0.6'))
 # Level 1 gate: the committed publish window may span at most this many days.
 HERALD_ATTR_MAX_WINDOW_DAYS = int(os.getenv('HERALD_ATTR_MAX_WINDOW_DAYS', '7'))
+# Snapshot anchoring: a claim's miner-supplied page snapshot must reach this shingle containment
+# vs the validator's own fetch; content checks then run on the identical snapshot bytes so all
+# validators agree. Below the anchor -> reject this pass (re-fetched next epoch).
+HERALD_SNAPSHOT_ANCHOR = float(os.getenv('HERALD_SNAPSHOT_ANCHOR', '0.5'))
 HERALD_MAX_ARTICLES_PER_MINER = int(os.getenv('HERALD_MAX_ARTICLES_PER_MINER', '200'))
 
 HERALD_MIN_ALPHA_STAKE_THRESHOLD = float(os.getenv('HERALD_MIN_ALPHA_STAKE_THRESHOLD', '0'))

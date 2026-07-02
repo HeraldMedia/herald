@@ -212,7 +212,18 @@ def fetch(url: str, epoch=None) -> FetchResult:
 
     live = [r for r in results if r[0] == 200 and len(r[2]) >= HERALD_MIN_BODY_BYTES]
     ok = len(live) >= min(HERALD_QUORUM_THRESHOLD, len(providers))
-    status, final_url, body = live[0] if live else (results[0] if results else (0, canon, b""))
+    if live:
+        # Deterministic body choice among live providers: prefer one with a parseable publish
+        # date (a cookie-walled direct fetch often lacks the metas a proxy provider sees), then
+        # the largest extracted text. max() keeps the FIRST maximum, so ties resolve by the
+        # fixed provider order — reduces per-validator no-date/thin-page variance.
+        def _rank(item):
+            h = item[2].decode("utf-8", "ignore")
+            return (1 if _parse_published_ts(h) is not None else 0, len(_extract_text(h)))
+
+        status, final_url, body = max(live, key=_rank)
+    else:
+        status, final_url, body = results[0] if results else (0, canon, b"")
 
     html = body.decode("utf-8", "ignore")
     result = FetchResult(
