@@ -57,7 +57,12 @@ def _brave_search(query: str, num: int) -> List[str]:
 
 
 def _providers():
-    providers = [_serpapi_search]
+    # Either provider can stand alone (use Brave INSTEAD of SerpAPI by setting only BRAVE_API_KEY);
+    # both configured enables a cross-validator quorum. The set is CONSENSUS-critical (SerpAPI and
+    # Brave return different indexes) and is stamped into the fingerprint.
+    providers = []
+    if SERPAPI_API_KEY:
+        providers.append(_serpapi_search)
     if BRAVE_API_KEY:
         providers.append(_brave_search)
     return providers
@@ -69,6 +74,14 @@ def in_index(article_url: str, epoch=None) -> SearchResult:
         return _cache[(target, epoch)]
 
     providers = _providers()
+    if not providers:
+        # No search provider configured: we can't confirm indexing, so fail to "not indexed"
+        # (the article still earns the HERALD_NO_SEARCH_FLOOR, never full index credit).
+        result = SearchResult(in_index=False, query=target, matched_url=None, num_results=0)
+        if epoch is not None:
+            _cache_put(_cache, (target, epoch), result)
+        return result
+
     matched_in = 0
     total_results = 0
     for provider in providers:

@@ -45,6 +45,10 @@ def consensus_params() -> dict:
         # outside-data providers (the set + quorum are consensus per RUNBOOK)
         "quorum_threshold": cfg.HERALD_QUORUM_THRESHOLD,
         "providers": ["http", "scrapingbee"] if cfg.SCRAPINGBEE_API_KEY else ["http"],
+        # Search providers (SerpAPI vs Brave return different indexes -> different in_index -> a
+        # different search multiplier), so the enabled set must match fleet-wide.
+        "search_providers": [n for n, on in (("serpapi", bool(cfg.SERPAPI_API_KEY)),
+                                             ("brave", bool(cfg.BRAVE_API_KEY))) if on],
         # Per-outlet fetch strategies need their key on every validator or that outlet forks the
         # fleet: a validator lacking the key rejects the outlet while others verify it. Surface the
         # capability here so a mixed fleet shows as a fingerprint mismatch, not silent divergence.

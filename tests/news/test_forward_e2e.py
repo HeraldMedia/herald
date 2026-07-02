@@ -67,6 +67,7 @@ def _setup(monkeypatch):
     # has its own tests in test_oracle/test_reward/test_attribution).
     from herald.validator.utils.config import HERALD_ATTR_MULT
     monkeypatch.setitem(HERALD_ATTR_MULT, 0, 1.0)
+    monkeypatch.setattr(searchmod, "SERPAPI_API_KEY", "k")  # search provider is now key-gated
     monkeypatch.setattr(searchmod, "_serpapi_search", lambda q, n: [q])
     monkeypatch.setattr(fwd, "get_briefs", lambda now=None: BRIEFS)
     monkeypatch.setattr(fwd, "get_all_uids", lambda self: [1, 2])
@@ -276,6 +277,7 @@ def test_persistence_holds_when_brief_left_the_board(monkeypatch):
     # A live, indexed article whose brief is no longer open must HOLD (not pay): the closed brief
     # isn't in the signed feed, so it has no reward_pool/kind for apply_reward_pools to draw from.
     monkeypatch.setattr(fetchmod, "_http_get", lambda url: (200, url, b"news " * 200))
+    monkeypatch.setattr(searchmod, "SERPAPI_API_KEY", "k")  # search provider is now key-gated
     monkeypatch.setattr(searchmod, "_serpapi_search", lambda q, n: [q])
     entry = SimpleNamespace(url="https://www.theguardian.com/a", brief_id="gone")
     assert fwd._persistence_status(entry, {"b1": {"id": "b1"}}, epoch=1, judge_fn=None) == "hold"
