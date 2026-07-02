@@ -17,6 +17,7 @@ class Candidate:
     url: str = ""
     hotkey: str = ""
     level: int = 0  # attribution-evidence level (2 text proof / 1 insider detail / 0 bare)
+    claim: object = None  # the originating claim (reveal fields ride into the publish payload)
 
 
 def _best(cands: List[Candidate]) -> Candidate:

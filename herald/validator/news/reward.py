@@ -73,6 +73,7 @@ def _build_candidates(
                 url=claim.article_url,
                 hotkey=hotkey,
                 level=result.evidence.get("attribution_level", 0),
+                claim=claim,
             )
             candidates.append(candidate)
             if candidate.level == 2:

@@ -33,6 +33,7 @@ from .emission import apply_reward_pools, compute_weights
 from .fetch import fetch
 from .judge import judge
 from .real_news import is_paid
+from .reconcile import fetch_board_results, merge_board_claims
 from .registry import load_registry
 from .publish import publish_results
 from .reward import winning_articles
@@ -148,6 +149,16 @@ async def forward(self):
         hotkey_by_uid = {uid: self.metagraph.hotkeys[uid] for uid in uids}
         alpha_stake_by_uid = {uid: float(self.metagraph.alpha_stake[uid]) for uid in uids}
         claims_by_uid = await collect_claims(self, uids)
+
+        # Reconciliation: merge claims other validators verified + published that this one wasn't
+        # served (a miner can serve validators selectively to fork their scores). Hint-only —
+        # every merged claim is fully re-verified below.
+        results_endpoint = os.getenv("HERALD_RESULTS_ENDPOINT")
+        if results_endpoint:
+            merged = merge_board_claims(claims_by_uid, fetch_board_results(results_endpoint),
+                                        hotkey_by_uid)
+            if merged:
+                bt.logging.info(f"Reconciled {merged} claim(s) from the board")
 
         # Require a pinned model when the LLM tier is on, or all validators must agree on the
         # per-provider default (they don't). Without a pin, stay rules-only (deterministic).
@@ -265,9 +276,8 @@ async def forward(self):
         self.update_scores(weights, uids)
         state.last_scored_epoch = epoch  # only mark scored after success, so a failure retries
 
-        endpoint = os.getenv("HERALD_RESULTS_ENDPOINT")
-        if endpoint:
-            publish_results(endpoint, [{
+        if results_endpoint:
+            publish_results(results_endpoint, [{
                 "article_id": w.article_id, "hotkey": w.hotkey, "brief_id": w.brief_id,
                 "outlet_id": w.outlet_id, "url": w.url, "usd": w.usd,
                 "status": vesting.entry(w.article_id).status,
@@ -276,6 +286,18 @@ async def forward(self):
                 # vesting coordinates, so a joining validator can bootstrap its ledger
                 "commit_epoch": w.commit_epoch,
                 "start_epoch": vesting.entry(w.article_id).start_epoch,
+                # the full reveal, so other validators can re-verify a claim they weren't served
+                # (safe post-claim: the article is public and the commitment already matched)
+                "reveal": {
+                    "target_outlet_id": getattr(w.claim, "target_outlet_id", w.outlet_id),
+                    "nonce": getattr(w.claim, "nonce", ""),
+                    "bond_atto": getattr(w.claim, "bond_atto", 0),
+                    "version_id": getattr(w.claim, "version_id", 0),
+                    "pre_hash": getattr(w.claim, "pre_hash", None),
+                    "evidence_text": getattr(w.claim, "evidence_text", None),
+                    "evidence_author": getattr(w.claim, "evidence_author", None),
+                    "evidence_window": getattr(w.claim, "evidence_window", None),
+                },
             } for w in winners])
 
         path = _state_path(self)
