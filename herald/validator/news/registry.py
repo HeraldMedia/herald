@@ -21,7 +21,11 @@ class Outlet:
     section_patterns: List[str] = field(default_factory=list)
 
     def matches(self, url: str) -> bool:
-        if host_of(url) not in self.domains:
+        host = host_of(url)
+        # Accept the www. variant of a listed domain — still an exact-host match (no suffix
+        # matching), so evil-nytimes.com / nytimes.com.evil.com stay rejected.
+        bare = host[4:] if host.startswith("www.") else host
+        if host not in self.domains and bare not in self.domains:
             return False
         if not self.section_patterns:
             return True

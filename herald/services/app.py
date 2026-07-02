@@ -3,6 +3,7 @@
 import json
 import os
 import secrets
+import time
 from pathlib import Path
 
 from fastapi import Body, FastAPI, Header, HTTPException
@@ -66,28 +67,27 @@ def create_app(brief_store: BriefStore, result_store: ResultStore,
         return brief_store.create(brief)
 
     @app.post("/admin/briefs/{brief_id}/fund")
-    def fund_brief(brief_id: str, x_admin_token: str = Header(None)):
+    def fund_brief(brief_id: str, body: dict = Body(default={}), x_admin_token: str = Header(None)):
+        # The operator confirms the client's treasury payment, then funds the brief with its prepaid
+        # `reward_pool` (USD) — a client brief pays from it; a standing brief funds with no pool (it
+        # pays from emissions). `payment_ref` records the settlement (tx/amount/currency).
         _check_admin(x_admin_token)
         if brief_store.get(brief_id) is None:
             raise HTTPException(status_code=404, detail="no such brief")
-        return brief_store.fund(brief_id)
-
-    @app.post("/admin/briefs/{brief_id}/boost")
-    def set_brief_boost(brief_id: str, brief: dict = Body(...), x_admin_token: str = Header(None)):
-        # The operator sets a brief's boost from the funder's confirmed α holding; the validator
-        # independently clamps it to [1, HERALD_FUND_BOOST_MAX].
-        _check_admin(x_admin_token)
-        try:
-            boost = float(brief.get("boost"))
-        except (TypeError, ValueError):
-            raise HTTPException(status_code=400, detail="boost must be a number")
-        updated = brief_store.set_boost(brief_id, boost)
-        if updated is None:
-            raise HTTPException(status_code=404, detail="no such brief")
-        return updated
+        reward_pool = body.get("reward_pool")
+        if reward_pool is not None:
+            try:
+                reward_pool = float(reward_pool)
+            except (TypeError, ValueError):
+                raise HTTPException(status_code=400, detail="reward_pool must be a number")
+            if reward_pool < 0:
+                raise HTTPException(status_code=400, detail="reward_pool must be >= 0")
+        return brief_store.fund(brief_id, reward_pool, body.get("payment_ref"))
 
     @app.post("/funding")
     def ingest_funding(item: dict = Body(...), x_funding_token: str = Header(None)):
+        # Record a client's treasury payment funding a brief's pool (brief_id/amount/currency/tx) for
+        # the operator to confirm; the operator then calls /admin/briefs/{id}/fund. Not authoritative.
         _check(funding_token, x_funding_token)
         if funding_store is not None:
             funding_store.add(item)
@@ -103,9 +103,10 @@ def create_app(brief_store: BriefStore, result_store: ResultStore,
 
     @app.get("/api/v2/validator/briefs")
     def validator_briefs():
-        # Sign the validator feed (when a key is configured) so a brief's boost is operator-
-        # attributable. The key is online here (briefs are dynamic) — see signed_briefs.py caveat.
-        payload = {"items": brief_store.open_briefs()}
+        # Sign the validator feed (when a key is configured) so a brief's reward_pool + kind + funded
+        # state are operator-attributable. The key is online here — see signed_briefs.py caveat.
+        # signed_at is inside the signature: replay protection (validators reject stale payloads).
+        payload = {"items": brief_store.open_briefs(), "signed_at": int(time.time())}
         if briefs_privkey:
             from herald.validator.news.signed_briefs import sign_briefs
             payload = sign_briefs(payload, briefs_privkey)

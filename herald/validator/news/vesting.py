@@ -61,17 +61,27 @@ class VestingLedger:
         )
 
     def release(self, article_id: str, epoch: int) -> float:
-        """Release one installment if the article is VESTING and not already released this epoch."""
+        """Release every installment accrued since the last release (one per elapsed epoch).
+
+        Catching up keeps the vest tied to chain time, not scoring-pass count: epochs missed while
+        the validator was down — or while the article sat in "hold" — release in a lump once the
+        article is confirmed alive again. Idempotent per epoch via last_release_epoch; a dead
+        article still forfeits everything unreleased (clawback), and max-age expiry bounds the tail.
+        """
         entry = self._entries.get(article_id)
         if entry is None or entry.status != VESTING:
             return 0.0
         if epoch <= entry.last_release_epoch:
             return 0.0
+        base = entry.last_release_epoch if entry.last_release_epoch >= 0 else entry.start_epoch - 1
+        n = min(epoch - base, entry.remaining)
+        if n <= 0:
+            return 0.0
         entry.last_release_epoch = epoch
-        entry.remaining -= 1
+        entry.remaining -= n
         if entry.remaining <= 0:
             entry.status = COMPLETED
-        return entry.installment_usd
+        return entry.installment_usd * n
 
     def clawback(self, article_id: str) -> bool:
         """Mark a VESTING article as clawed back (article confirmed removed or gone paid)."""

@@ -7,7 +7,6 @@ from herald.protocol import ClaimSynapse
 from herald.utils.uids import get_all_uids
 from herald.validator.utils.briefs import get_briefs
 from herald.validator.utils.config import (
-    EPOCH_LEN,
     HERALD_BOND_ALPHA_PER_USD,
     HERALD_DEAD_CONFIRM_EPOCHS,
     HERALD_DISPUTE_REWARD_FRACTION,
@@ -24,11 +23,12 @@ from herald.validator.utils.config import (
     SUBNET_BURN_UID,
     VALIDATOR_STEPS_INTERVAL,
     VALIDATOR_WAIT,
+    VEST_EPOCH_LEN,
 )
 from .chain import get_commitments_with_block
 from .dispute_anchor import article_id_hash, parse_dispute
 from .disputes import settle_persistence
-from .emission import apply_brief_caps, compute_weights
+from .emission import apply_reward_pools, compute_weights
 from .fetch import fetch
 from .judge import judge
 from .real_news import is_paid
@@ -114,18 +114,22 @@ async def forward(self):
 
     bt.logging.info(f"Herald forward pass at step {self.step}")
     try:
-        briefs = get_briefs()
-        if not briefs:
-            bt.logging.info("No active briefs; skipping scoring")
-            time.sleep(VALIDATOR_WAIT)
-            return
-
         state = _state(self)
         commit_index, vesting, slash = state.commit_index, state.vesting, state.slash
         block = self.subtensor.get_current_block()
-        epoch = max(0, block - HERALD_EPOCH_LAG) // EPOCH_LEN
-        if getattr(self, "_last_scored_epoch", -1) >= epoch:
+        epoch = max(0, block - HERALD_EPOCH_LAG) // VEST_EPOCH_LEN
+        if state.last_scored_epoch >= epoch:
             time.sleep(VALIDATOR_WAIT)  # already scored this epoch; don't re-zero weights
+            return
+
+        try:
+            now = self.subtensor.get_timestamp(block)  # chain time: validators agree at day boundaries
+        except Exception:
+            now = None
+        briefs = get_briefs(now=now)
+        if not briefs:
+            bt.logging.info("No active briefs; skipping scoring")
+            time.sleep(VALIDATOR_WAIT)
             return
         commitments_with_block = get_commitments_with_block(self.subtensor, self.config.netuid)
         commit_index.observe(commitments_with_block)
@@ -199,7 +203,7 @@ async def forward(self):
                 min_bond_alpha = vesting.entry(article_id).total_usd * HERALD_BOND_ALPHA_PER_USD * SLASH_MULTIPLIER
                 if alpha_stake_by_uid.get(duid, 0.0) < min_bond_alpha:
                     continue  # under-bonded: ignore (spam/grief deterrent)
-                disputes.open(article_id, hk, blk // EPOCH_LEN)
+                disputes.open(article_id, hk, blk // VEST_EPOCH_LEN)
         elif any(parse_dispute(v) is not None for v in commitments.values()):
             bt.logging.warning("Dispute commits present but HERALD_REF_MODEL_ID unset; disputes disabled")
 
@@ -239,15 +243,22 @@ async def forward(self):
             key = (entry.uid, entry.brief_id)
             usd_by_uid_brief[key] = usd_by_uid_brief.get(key, 0.0) + installment
 
-        usd_by_uid = apply_brief_caps(usd_by_uid_brief, briefs, HERALD_TOTAL_DAILY_USD)
-        for duid, amt in disputer_rewards.items():  # recycle forfeited USD (else burned) to the whistleblower
-            if not slash.is_slashed(hotkey_by_uid.get(duid, ""), epoch):
-                usd_by_uid[duid] = usd_by_uid.get(duid, 0.0) + amt
+        usd_by_uid = apply_reward_pools(usd_by_uid_brief, briefs, HERALD_TOTAL_DAILY_USD, state.pool_spent)
+        # Recycle forfeited USD (else burned) to whistleblowers, capped to the budget headroom so a
+        # dispute reward only ever consumes what would have burned, never dilutes placement pay.
+        payable = {duid: amt for duid, amt in disputer_rewards.items()
+                   if not slash.is_slashed(hotkey_by_uid.get(duid, ""), epoch)}
+        reward_total = sum(payable.values())
+        if reward_total > 0:
+            headroom = max(0.0, HERALD_TOTAL_DAILY_USD - sum(usd_by_uid.values()))
+            dscale = min(1.0, headroom / reward_total) if HERALD_TOTAL_DAILY_USD > 0 else 1.0
+            for duid, amt in payable.items():
+                usd_by_uid[duid] = usd_by_uid.get(duid, 0.0) + amt * dscale
         if SUBNET_BURN_UID not in uids:
             bt.logging.warning(f"Burn UID {SUBNET_BURN_UID} not in metagraph; remainder will not burn")
         weights = compute_weights(usd_by_uid, uids, HERALD_TOTAL_DAILY_USD, SUBNET_BURN_UID)
         self.update_scores(weights, uids)
-        self._last_scored_epoch = epoch  # only mark scored after success, so a failure retries
+        state.last_scored_epoch = epoch  # only mark scored after success, so a failure retries
 
         endpoint = os.getenv("HERALD_RESULTS_ENDPOINT")
         if endpoint:

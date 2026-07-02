@@ -5,7 +5,7 @@ from diskcache import Cache
 import os
 from threading import Lock
 import atexit
-from herald.validator.utils.config import HERALD_BRIEFS_ENDPOINT, YT_REWARD_DELAY, YT_SCORING_WINDOW, CACHE_DIRS
+from herald.validator.utils.config import HERALD_BRIEFS_ENDPOINT, VEST_EPOCHS, CACHE_DIRS
 from herald.validator.utils.error_handling import log_and_raise_api_error
 from herald.validator.news.signed_briefs import verify_briefs
 
@@ -52,49 +52,54 @@ class BriefsCache:
 # Initialize cache
 BriefsCache.initialize_cache()
 
-def get_briefs(all: bool = False):
+def get_briefs(all: bool = False, now: datetime = None):
     """
     Fetches the briefs from the server.
 
-    :param all: If True, returns all briefs without filtering;
-                if False, only returns briefs where the current UTC date is between start and end dates (inclusive),
-                or where the end date is within YT_REWARD_DELAY days of the current date.
+    :param all: If True, returns all briefs without filtering; if False, only briefs in their
+                active window. Standing briefs (kind == "standing", or no end_date) are always
+                active. A client brief is active from start_date through end_date plus a
+                persistence tail of VEST_EPOCHS days, so vesting re-checks keep running after
+                the brief closes (assumes the default ~1-day HERALD_VEST_EPOCH_LEN).
+    :param now: Time to evaluate the window against. Pass chain-derived time so validators agree
+                at day boundaries; defaults to wall-clock UTC.
     :return: List of brief objects
     """
     cache = BriefsCache.get_cache()
     cache_key = f"briefs_{all}"
-    
+
     try:
-        # Always try to fetch from API first
-        response = requests.get(HERALD_BRIEFS_ENDPOINT)
+        # Always try to fetch from API first. The timeout matters: without it a hanging board
+        # blocks the whole forward pass (the cache fallback only fires on a raised exception).
+        response = requests.get(HERALD_BRIEFS_ENDPOINT, timeout=(5, 30))
         response.raise_for_status()
         # Verify the operator signature (when HERALD_BRIEFS_PUBKEY is set) BEFORE trusting any
-        # brief's boost; a bad signature fails closed (raises, not served from cache).
+        # brief's reward_pool/kind; a bad signature fails closed (raises, not served from cache).
         briefs_data = verify_briefs(response.json())
 
-        # Handle both "items" and "briefs" keys in the response
         briefs_list = briefs_data.get("items") or []
         bt.logging.info(f"Fetched {len(briefs_list)} briefs.")
 
         filtered_briefs = []
         if not all:
-            current_date = datetime.now(timezone.utc).date()
-            
+            current_date = (now or datetime.now(timezone.utc)).date()
+
             for brief in briefs_list:
                 try:
-                    start_date = datetime.strptime(brief["start_date"], "%Y-%m-%d").date()
+                    if brief.get("kind") == "standing" or not brief.get("end_date"):
+                        filtered_briefs.append(brief)  # always-open
+                        continue
                     end_date = datetime.strptime(brief["end_date"], "%Y-%m-%d").date()
-                    # Apply new window: start_date + YT_REWARD_DELAY, end_date + YT_SCORING_WINDOW + YT_REWARD_DELAY
-                    start_window = start_date + timedelta(days=YT_REWARD_DELAY)
-                    end_window = end_date + timedelta(days=YT_SCORING_WINDOW + YT_REWARD_DELAY)
-                    
-                    if start_window <= current_date <= end_window:
+                    start = brief.get("start_date")
+                    start_date = datetime.strptime(start, "%Y-%m-%d").date() if start else None
+                    end_window = end_date + timedelta(days=VEST_EPOCHS)
+                    if (start_date is None or start_date <= current_date) and current_date <= end_window:
                         filtered_briefs.append(brief)
                 except Exception as e:
                     bt.logging.error(f"Error parsing dates for brief {brief.get('id', 'unknown')}: {e}")
-            
+
             if not filtered_briefs:
-                bt.logging.info("No briefs have an active date range or are within the reward delay period.")
+                bt.logging.info("No briefs are in their active window.")
         else:
             filtered_briefs = briefs_list
 

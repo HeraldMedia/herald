@@ -33,7 +33,7 @@ __version__ = "2.6.1"
 HERALD_API_URL = os.getenv('HERALD_API_URL', 'https://herald-api.herald.network')
 HERALD_BRIEFS_ENDPOINT = os.getenv('HERALD_BRIEFS_ENDPOINT', f"{HERALD_API_URL}/api/v2/validator/briefs")
 # Ed25519 pubkey the validator uses to verify the brief payload's operator signature (so a brief's
-# boost is attributable, not trust-the-endpoint). Unset = unsigned mode (boost still clamped to 3×).
+# reward_pool + kind are attributable, not trust-the-endpoint). Unset = unsigned mode.
 HERALD_BRIEFS_PUBKEY = os.getenv('HERALD_BRIEFS_PUBKEY')
 
 # subnet mechanism configuration
@@ -118,9 +118,11 @@ SUBNET_TREASURY_PERCENTAGE = 0
 SUBNET_TREASURY_UID = int(os.getenv('SUBNET_TREASURY_UID', '106'))
 
 # ── Herald (verified media placement) ──────────────────────────────────────
-HERALD_EPOCH_SECONDS = int(os.getenv('HERALD_EPOCH_SECONDS', str(24 * 60 * 60)))
-# Commit-ordering granularity in blocks (~12s/block -> ~72 min).
+# Commit-ordering granularity in blocks (~12s/block -> ~72 min). Attribution ordering ONLY.
 EPOCH_LEN = int(os.getenv('HERALD_EPOCH_LEN', '360'))
+# Evaluation epoch in blocks (~12s/block -> ~1 day): drives vesting installments, persistence
+# re-checks, slash cooldowns and dispute windows. VEST_EPOCHS installments ≈ VEST_EPOCHS days.
+VEST_EPOCH_LEN = int(os.getenv('HERALD_VEST_EPOCH_LEN', '7200'))
 # Lag the evaluation epoch behind the chain tip so a validator briefly ahead of finality
 # doesn't advance early (reduces, not eliminates, epoch-boundary weight skew).
 HERALD_EPOCH_LAG = int(os.getenv('HERALD_EPOCH_LAG', '10'))
@@ -149,7 +151,6 @@ HERALD_MIN_ALPHA_STAKE_THRESHOLD = float(os.getenv('HERALD_MIN_ALPHA_STAKE_THRES
 # alpha via HERALD_BOND_ALPHA_PER_USD (set near 1/alpha_price after the pilot).
 SLASH_MULTIPLIER = float(os.getenv('HERALD_SLASH_MULTIPLIER', '1.5'))
 HERALD_BOND_ALPHA_PER_USD = float(os.getenv('HERALD_BOND_ALPHA_PER_USD', '1.0'))
-HERALD_REGISTRY_URL = os.getenv('HERALD_REGISTRY_URL', f"{HERALD_API_URL}/registry/outlets.json")
 
 # Vesting over the persistence window, and slash cooldown (in evaluation epochs).
 VEST_EPOCHS = int(os.getenv('HERALD_VEST_EPOCHS', '30'))
@@ -170,14 +171,11 @@ HERALD_DISPUTE_REWARD_FRACTION = float(os.getenv('HERALD_DISPUTE_REWARD_FRACTION
 # the disputer. Kept >= HERALD_DEAD_CONFIRM_EPOCHS so an upheld dispute has time to confirm dead.
 HERALD_DISPUTE_WINDOW_EPOCHS = int(os.getenv('HERALD_DISPUTE_WINDOW_EPOCHS', '4'))
 
-# ── Client-funded briefs (Bitcast-aligned: hold α -> boost; see FUNDING_DESIGN.md) ──
-# CONSENSUS RAIL: a brief's effective boost is clamped to [1, HERALD_FUND_BOOST_MAX] in scoring, so a
-# signed (or compromised) brief registry can never direct more than this multiple of emissions to one
-# campaign. The binding limit — keep it identical across validators.
-HERALD_FUND_BOOST_MAX = float(os.getenv('HERALD_FUND_BOOST_MAX', '3.0'))
-# Operator-side pricing only (advisory): earmarked α at which a brief reaches max boost on the sqrt
-# curve. Tunable tokenomics; not consensus-binding (the clamp above is).
-HERALD_FUND_ALPHA_FOR_MAX = float(os.getenv('HERALD_FUND_ALPHA_FOR_MAX', '10000'))
+# ── Client-funded briefs (prepaid reward pool + DSV treasury; see FUNDING_DESIGN.md) ──
+# A client brief is paid from its prepaid `reward_pool` (USD), funded when the client pays alpha/TAO
+# into the DSV treasury; the standing brief pays from emissions. The operator confirms the payment and
+# signs the brief funded (the trusted funded signal). Treasury address for that settlement:
+HERALD_TREASURY_COLDKEY = os.getenv('HERALD_TREASURY_COLDKEY', '')
 # Max plausible gap between commit and publication; a far-future date is rejected as implausible.
 HERALD_MAX_PLACEMENT_DAYS = int(os.getenv('HERALD_MAX_PLACEMENT_DAYS', '90'))
 

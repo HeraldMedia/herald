@@ -3,14 +3,14 @@ from herald.validator.news.vesting import VestingLedger
 
 def test_start_and_release_installments():
     v = VestingLedger(vest_epochs=4)
-    v.start("art1", uid=1, total_usd=400.0)
+    v.start("art1", uid=1, total_usd=400.0, start_epoch=1)
     assert v.release("art1", epoch=1) == 100.0
     assert v.status("art1") == "VESTING"
 
 
 def test_completes_after_all_installments():
     v = VestingLedger(vest_epochs=2)
-    v.start("art1", uid=1, total_usd=400.0)
+    v.start("art1", uid=1, total_usd=400.0, start_epoch=1)
     assert v.release("art1", epoch=1) == 200.0
     assert v.release("art1", epoch=2) == 200.0
     assert v.status("art1") == "COMPLETED"
@@ -19,10 +19,22 @@ def test_completes_after_all_installments():
 
 def test_release_is_epoch_gated():
     v = VestingLedger(vest_epochs=4)
-    v.start("art1", uid=1, total_usd=400.0)
+    v.start("art1", uid=1, total_usd=400.0, start_epoch=5)
     assert v.release("art1", epoch=5) == 100.0
     assert v.release("art1", epoch=5) == 0.0  # same epoch, no double release
     assert v.entry("art1").remaining == 3
+
+
+def test_release_catches_up_missed_epochs():
+    # Epochs missed while the validator was down (or the article held) release in a lump, so the
+    # vest stays tied to chain time rather than scoring-pass count.
+    v = VestingLedger(vest_epochs=30)
+    v.start("art1", uid=1, total_usd=300.0, start_epoch=10)
+    assert v.release("art1", epoch=10) == 10.0    # first epoch: one installment
+    assert v.release("art1", epoch=14) == 40.0    # 4 missed epochs catch up
+    assert v.entry("art1").remaining == 25
+    assert v.release("art1", epoch=100) == 250.0  # capped at remaining
+    assert v.status("art1") == "COMPLETED"
 
 
 def test_clawback_stops_future_release():
@@ -38,12 +50,12 @@ def test_clawback_stops_future_release():
 def test_hold_does_not_advance_or_clawback():
     # "hold" = caller simply doesn't call release/clawback; the entry must be untouched
     v = VestingLedger(vest_epochs=4)
-    v.start("art1", uid=1, total_usd=400.0)
+    v.start("art1", uid=1, total_usd=400.0, start_epoch=1)
     v.release("art1", epoch=1)
     remaining = v.entry("art1").remaining
     # epoch 2 is a transient outage: caller holds (no calls)
     assert v.status("art1") == "VESTING" and v.entry("art1").remaining == remaining
-    assert v.release("art1", epoch=3) == 100.0  # resumes when healthy
+    assert v.release("art1", epoch=3) == 200.0  # recovers: the held epoch catches up too
 
 
 def test_reassign_to_earlier_committer():
@@ -75,9 +87,9 @@ def test_reassign_after_vest_epochs_change_cannot_overpay():
 
 def test_start_is_idempotent_same_committer():
     v = VestingLedger(vest_epochs=4)
-    v.start("art1", uid=1, total_usd=400.0, commit_epoch=5)
+    v.start("art1", uid=1, total_usd=400.0, commit_epoch=5, start_epoch=1)
     v.release("art1", epoch=1)
-    v.start("art1", uid=1, total_usd=400.0, commit_epoch=5)  # already vesting; no reset
+    v.start("art1", uid=1, total_usd=400.0, commit_epoch=5, start_epoch=1)  # already vesting; no reset
     assert v.entry("art1").remaining == 3
 
 
@@ -91,7 +103,7 @@ def test_active_article_ids():
 
 def test_roundtrip():
     v = VestingLedger(vest_epochs=4)
-    v.start("art1", uid=1, total_usd=400.0)
+    v.start("art1", uid=1, total_usd=400.0, start_epoch=1)
     v.release("art1", epoch=1)
     restored = VestingLedger.from_dict(v.to_dict())
     assert restored.entry("art1").remaining == 3 and restored.vest_epochs == 4

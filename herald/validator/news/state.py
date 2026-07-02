@@ -14,11 +14,18 @@ from .vesting import VestingLedger
 
 class HeraldState:
     def __init__(self, commit_index: CommitIndex, vesting: VestingLedger, slash: SlashLedger,
-                 disputes: DisputeLedger = None):
+                 disputes: DisputeLedger = None, pool_spent: dict = None,
+                 last_scored_epoch: int = -1):
         self.commit_index = commit_index
         self.vesting = vesting
         self.slash = slash
         self.disputes = disputes if disputes is not None else DisputeLedger()
+        # {brief_id: cumulative USD drawn from that client brief's reward pool}, so a pool is never
+        # over-paid across epochs. Standing briefs pay from emissions and never appear here.
+        self.pool_spent = dict(pool_spent or {})
+        # Persisted so a restart inside an already-scored epoch doesn't re-score it: the vesting
+        # ledger already released that epoch's installments, so a re-run would emit all-burn weights.
+        self.last_scored_epoch = last_scored_epoch
 
     @classmethod
     def fresh(cls) -> "HeraldState":
@@ -30,6 +37,8 @@ class HeraldState:
             "vesting": self.vesting.to_dict(),
             "slash": self.slash.to_dict(),
             "disputes": self.disputes.to_dict(),
+            "pool_spent": self.pool_spent,
+            "last_scored_epoch": self.last_scored_epoch,
         }
 
     @classmethod
@@ -44,6 +53,8 @@ class HeraldState:
             VestingLedger(VEST_EPOCHS, ve.get("entries", {})),
             SlashLedger.from_dict(data["slash"]),
             DisputeLedger.from_dict(data.get("disputes", {})),
+            data.get("pool_spent", {}),
+            data.get("last_scored_epoch", -1),
         )
 
     def save(self, path: str):

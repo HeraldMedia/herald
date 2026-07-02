@@ -10,7 +10,7 @@ from herald.validator.news import search as searchmod
 from herald.validator.news import state as statemod
 from herald.validator.news.url import article_id as fwd_article_id
 
-BRIEFS = [{"id": "b1", "boost": 1.0}]
+BRIEFS = [{"id": "b1", "kind": "standing"}]
 
 
 def make_claim(outlet, url, hotkey):
@@ -63,7 +63,7 @@ def make_self(claim_by_uid, commitments, block=1000, monkeypatch=None):
 @pytest.fixture(autouse=True)
 def _setup(monkeypatch):
     monkeypatch.setattr(searchmod, "_serpapi_search", lambda q, n: [q])
-    monkeypatch.setattr(fwd, "get_briefs", lambda: BRIEFS)
+    monkeypatch.setattr(fwd, "get_briefs", lambda now=None: BRIEFS)
     monkeypatch.setattr(fwd, "get_all_uids", lambda self: [1, 2])
     monkeypatch.setattr(fwd.time, "sleep", lambda *_: None)
     monkeypatch.setattr(statemod, "VEST_EPOCHS", 2)
@@ -129,8 +129,8 @@ async def test_forward_burns_remainder_to_uid0(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_forward_applies_brief_cap(monkeypatch):
-    monkeypatch.setattr(fwd, "get_briefs", lambda: [{"id": "b1", "boost": 1.0, "cap": 0.1}])
+async def test_forward_caps_client_brief_at_reward_pool(monkeypatch):
+    monkeypatch.setattr(fwd, "get_briefs", lambda now=None: [{"id": "b1", "kind": "client", "reward_pool": 100.0}])
     monkeypatch.setattr(fwd, "get_all_uids", lambda self: [0, 1])
     monkeypatch.setattr(fwd, "HERALD_TOTAL_DAILY_USD", 1000.0)
     monkeypatch.setattr(fetchmod, "_http_get", lambda url: (200, url, b"news " * 200))
@@ -159,7 +159,7 @@ async def test_forward_applies_brief_cap(monkeypatch):
 
     await fwd.forward(self)
     w = dict(zip(captured["uids"], captured["rewards"]))
-    # cap 0.1 * 1000 = 100 caps the 250 installment -> weight 0.1, rest burns
+    # reward_pool 100 caps the 250 installment -> weight 0.1, rest burns
     assert w[1] == pytest.approx(0.1)
     assert w[0] == pytest.approx(0.9)
 
@@ -210,7 +210,7 @@ async def test_uid_reassignment_does_not_pay_new_holder(monkeypatch):
     assert dict(zip(captured["uids"], captured["rewards"]))[1] == pytest.approx(1.0)
 
     self.metagraph.hotkeys[1] = "hkEVIL"          # uid 1 reassigned to a new hotkey
-    self.block_state["v"] += fwd.EPOCH_LEN + 1
+    self.block_state["v"] += fwd.VEST_EPOCH_LEN + 1
     await fwd.forward(self)  # cycle 2: installment must NOT go to the new holder
     assert dict(zip(captured["uids"], captured["rewards"]))[1] == 0.0
 
@@ -224,11 +224,11 @@ async def test_persistence_clawback_on_value_regression(monkeypatch):
     assert dict(zip(captured["uids"], captured["rewards"]))[1] == pytest.approx(1.0)
 
     # cycle 2: still HTTP 200 but converted to sponsored content -> not valuable -> clawback
-    self.block_state["v"] += fwd.EPOCH_LEN + 1
+    self.block_state["v"] += fwd.VEST_EPOCH_LEN + 1
     monkeypatch.setattr(fetchmod, "_http_get", lambda url: (200, url, b"This is Sponsored Content " * 50))
     await fwd.forward(self)
     assert dict(zip(captured["uids"], captured["rewards"]))[1] == 0.0
-    epoch = self.subtensor.get_current_block() // fwd.EPOCH_LEN
+    epoch = self.subtensor.get_current_block() // fwd.VEST_EPOCH_LEN
     assert self.herald_state.slash.is_slashed("hkA", epoch)
 
 
@@ -254,22 +254,22 @@ async def test_dead_must_be_confirmed_over_consecutive_epochs(monkeypatch):
     await fwd.forward(self)  # cycle 1: alive
 
     # cycle 2: a single 404 must NOT slash (confirm threshold is 2)
-    self.block_state["v"] += fwd.EPOCH_LEN + 1
+    self.block_state["v"] += fwd.VEST_EPOCH_LEN + 1
     monkeypatch.setattr(fetchmod, "_http_get", lambda url: (404, url, b""))
     await fwd.forward(self)
-    e2 = self.subtensor.get_current_block() // fwd.EPOCH_LEN
+    e2 = self.subtensor.get_current_block() // fwd.VEST_EPOCH_LEN
     assert self.herald_state.slash.is_slashed("hkA", e2) is False
 
     # cycle 3: a second consecutive 404 -> confirmed dead -> slash
-    self.block_state["v"] += fwd.EPOCH_LEN + 1
+    self.block_state["v"] += fwd.VEST_EPOCH_LEN + 1
     await fwd.forward(self)
-    e3 = self.subtensor.get_current_block() // fwd.EPOCH_LEN
+    e3 = self.subtensor.get_current_block() // fwd.VEST_EPOCH_LEN
     assert self.herald_state.slash.is_slashed("hkA", e3) is True
 
 
 def test_persistence_holds_when_brief_left_the_board(monkeypatch):
-    # A live, indexed article whose brief is no longer open must HOLD (not pay), so the closed
-    # brief's emissions can't escape its cap by defaulting to uncapped in apply_brief_caps.
+    # A live, indexed article whose brief is no longer open must HOLD (not pay): the closed brief
+    # isn't in the signed feed, so it has no reward_pool/kind for apply_reward_pools to draw from.
     monkeypatch.setattr(fetchmod, "_http_get", lambda url: (200, url, b"news " * 200))
     monkeypatch.setattr(searchmod, "_serpapi_search", lambda q, n: [q])
     entry = SimpleNamespace(url="https://www.nytimes.com/a", brief_id="gone")
@@ -285,11 +285,11 @@ async def test_no_credit_when_brief_deactivated_mid_vest(monkeypatch):
     assert dict(zip(captured["uids"], captured["rewards"]))[1] == pytest.approx(1.0)
 
     # cycle 2: b1 leaves the active board (closed/defunded); another brief keeps the list non-empty
-    monkeypatch.setattr(fwd, "get_briefs", lambda: [{"id": "b2", "boost": 1.0}])
-    self.block_state["v"] += fwd.EPOCH_LEN + 1
+    monkeypatch.setattr(fwd, "get_briefs", lambda now=None: [{"id": "b2", "kind": "standing"}])
+    self.block_state["v"] += fwd.VEST_EPOCH_LEN + 1
     await fwd.forward(self)
     assert dict(zip(captured["uids"], captured["rewards"])).get(1, 0.0) == 0.0  # held, no credit
-    epoch2 = self.subtensor.get_current_block() // fwd.EPOCH_LEN
+    epoch2 = self.subtensor.get_current_block() // fwd.VEST_EPOCH_LEN
     assert self.herald_state.slash.is_slashed("hkA", epoch2) is False           # and not slashed
     assert self.herald_state.vesting.status(fwd_article_id(c1.article_url)) == "VESTING"
 
@@ -305,14 +305,14 @@ async def test_dead_streak_not_double_counted_on_restart(monkeypatch):
     await fwd.forward(self)  # cycle 1: alive
 
     # cycle 2: one confirmed-dead epoch -> dead_streak 1, below threshold 2 -> no slash
-    self.block_state["v"] += fwd.EPOCH_LEN + 1
+    self.block_state["v"] += fwd.VEST_EPOCH_LEN + 1
     monkeypatch.setattr(fetchmod, "_http_get", lambda url: (404, url, b""))
     await fwd.forward(self)
-    e2 = self.subtensor.get_current_block() // fwd.EPOCH_LEN
+    e2 = self.subtensor.get_current_block() // fwd.VEST_EPOCH_LEN
     assert self.herald_state.slash.is_slashed("hkA", e2) is False
 
-    # restart: drop the in-memory guard, keep the persisted ledger, re-run the SAME epoch
-    del self._last_scored_epoch
+    # restart with a stale/pre-upgrade state file: guard lost, ledger kept; re-run the SAME epoch
+    self.herald_state.last_scored_epoch = -1
     await fwd.forward(self)
     assert self.herald_state.slash.is_slashed("hkA", e2) is False  # still below threshold
 
@@ -326,15 +326,15 @@ async def test_transient_outage_holds_without_slashing(monkeypatch):
     assert dict(zip(captured["uids"], captured["rewards"]))[1] == pytest.approx(1.0)
 
     # cycle 2: provider outage (5xx) -> hold, NOT clawback/slash
-    self.block_state["v"] += fwd.EPOCH_LEN + 1
+    self.block_state["v"] += fwd.VEST_EPOCH_LEN + 1
     monkeypatch.setattr(fetchmod, "_http_get", lambda url: (503, url, b""))
     await fwd.forward(self)
-    epoch2 = self.subtensor.get_current_block() // fwd.EPOCH_LEN
+    epoch2 = self.subtensor.get_current_block() // fwd.VEST_EPOCH_LEN
     assert self.herald_state.slash.is_slashed("hkA", epoch2) is False
     assert self.herald_state.vesting.status(fwd_article_id(c1.article_url)) == "VESTING"
 
     # cycle 3: recovers -> resumes paying
-    self.block_state["v"] += fwd.EPOCH_LEN + 1
+    self.block_state["v"] += fwd.VEST_EPOCH_LEN + 1
     monkeypatch.setattr(fetchmod, "_http_get", lambda url: (200, url, b"news " * 200))
     await fwd.forward(self)
     assert dict(zip(captured["uids"], captured["rewards"]))[1] == pytest.approx(1.0)
@@ -349,10 +349,10 @@ async def test_geo_block_451_holds_without_slashing(monkeypatch):
     monkeypatch.setattr(fetchmod, "_http_get", lambda url: (200, url, b"news " * 200))
     await fwd.forward(self)  # cycle 1: alive, pays
 
-    self.block_state["v"] += fwd.EPOCH_LEN + 1
+    self.block_state["v"] += fwd.VEST_EPOCH_LEN + 1
     monkeypatch.setattr(fetchmod, "_http_get", lambda url: (451, url, b""))
     await fwd.forward(self)
-    epoch2 = self.subtensor.get_current_block() // fwd.EPOCH_LEN
+    epoch2 = self.subtensor.get_current_block() // fwd.VEST_EPOCH_LEN
     assert self.herald_state.slash.is_slashed("hkA", epoch2) is False
     assert self.herald_state.vesting.status(fwd_article_id(c1.article_url)) == "VESTING"
 
@@ -369,11 +369,11 @@ async def test_clawback_and_slash_when_article_disappears(monkeypatch):
     assert dict(zip(captured["uids"], captured["rewards"]))[1] == pytest.approx(1.0)
 
     # cycle 2: advance past the epoch boundary so the persistence re-check isn't cached
-    self.block_state["v"] += fwd.EPOCH_LEN + 1
+    self.block_state["v"] += fwd.VEST_EPOCH_LEN + 1
     monkeypatch.setattr(fetchmod, "_http_get", lambda url: (404, url, b""))
     await fwd.forward(self)
     assert dict(zip(captured["uids"], captured["rewards"]))[1] == 0.0
-    assert self.herald_state.slash.is_slashed("hkA", self.subtensor.get_current_block() // fwd.EPOCH_LEN)
+    assert self.herald_state.slash.is_slashed("hkA", self.subtensor.get_current_block() // fwd.VEST_EPOCH_LEN)
 
 
 @pytest.mark.asyncio

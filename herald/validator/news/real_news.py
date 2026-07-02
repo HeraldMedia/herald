@@ -4,7 +4,7 @@ import re
 from urllib.parse import urlsplit
 
 _PAID_PATH = re.compile(
-    r"/(press-?releases?|sponsored?|partner|paid-?post|advertorial|pr-?newswire|prnewswire)(/|$)",
+    r"/(press-?releases?|sponsor(ed|s)?|partner|paid-?post|advertorial|pr-?newswire|prnewswire)(/|$)",
     re.I,
 )
 _PAID_TEXT = re.compile(

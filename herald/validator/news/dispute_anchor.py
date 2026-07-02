@@ -2,7 +2,7 @@
 
 A disputer commits ``HRLDDIS|<article_id_hash>`` from their hotkey. Validators read it on chain
 (the same path as miner commitments), so every validator sees the same disputes at the same epoch
-(commit block // EPOCH_LEN) and resolves them identically. The article hash keeps the committed
+(commit block // VEST_EPOCH_LEN) and resolves them identically. The article hash keeps the committed
 value bounded and is taken over the canonical article_id the oracle already uses (the canonical URL).
 
 A dispute only *triggers* the validator's own escalated re-check (mandatory pinned judge); the
