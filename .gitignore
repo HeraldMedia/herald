@@ -19,3 +19,8 @@ terraform/
 
 .venv/
 cache/
+
+# internal ops/design docs — keep local, never on GitHub
+RUNBOOK.md
+DISPUTE_DESIGN.md
+FUNDING_DESIGN.md
