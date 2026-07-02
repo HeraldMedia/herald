@@ -266,6 +266,7 @@ async def forward(self):
                 "article_id": w.article_id, "hotkey": w.hotkey, "brief_id": w.brief_id,
                 "outlet_id": w.outlet_id, "url": w.url, "usd": w.usd,
                 "status": vesting.entry(w.article_id).status,
+                "attribution": w.level,
             } for w in winners])
 
         path = _state_path(self)

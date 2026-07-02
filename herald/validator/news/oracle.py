@@ -4,10 +4,13 @@ from dataclasses import dataclass
 from typing import Any, Callable, Dict
 
 from herald.commit import matches as commitment_matches
+from herald.evidence import clean_evidence, evidence_hash
+from herald.validator.utils.config import HERALD_ATTR_MULT
 from .bonds import min_bond_atto
 from .fetch import fetch as default_fetch
 from .real_news import is_paid
 from .scoring import article_usd
+from .textmatch import grade_evidence
 from .topic_match import topic_matched
 from .url import article_id
 
@@ -45,6 +48,20 @@ def evaluate_article(
     if serving_hotkey is not None and claim.claimer_hotkey != serving_hotkey:
         return _reject(claim, "hotkey_mismatch", evidence)
 
+    # Attribution evidence (optional): the reveal must hash to the pre_hash bound into the
+    # commitment, so everything in it was fixed before the article existed.
+    pre_hash = getattr(claim, "pre_hash", None) or ""
+    try:
+        attr_evidence = clean_evidence({
+            "text": getattr(claim, "evidence_text", None),
+            "author": getattr(claim, "evidence_author", None),
+            "window": getattr(claim, "evidence_window", None),
+        })
+    except ValueError:
+        return _reject(claim, "evidence_invalid", evidence)
+    if attr_evidence and evidence_hash(attr_evidence) != pre_hash:
+        return _reject(claim, "evidence_hash_mismatch", evidence)
+
     if not commitment_matches(
         onchain_value,
         brief_id=claim.brief_id,
@@ -53,6 +70,7 @@ def evaluate_article(
         nonce=claim.nonce,
         bond_atto=claim.bond_atto,
         version_id=claim.version_id,
+        pre_hash=pre_hash,
     ):
         return _reject(claim, "commitment_invalid", evidence)
     evidence["commitment"] = True
@@ -93,5 +111,11 @@ def evaluate_article(
     evidence["in_index"] = sr.in_index
     evidence["matched_url"] = sr.matched_url
 
-    usd = article_usd(outlet.tier, sr.in_index)
+    # Grade the pre-committed evidence against the published article: the level's multiplier
+    # prices how strongly this claim proves the miner CAUSED the coverage (vs predicted it).
+    level, attr_detail = grade_evidence(attr_evidence, fr, brief)
+    evidence["attribution_level"] = level
+    evidence.update({f"attribution_{k}": v for k, v in attr_detail.items()})
+
+    usd = article_usd(outlet.tier, sr.in_index) * HERALD_ATTR_MULT.get(level, 0.0)
     return ArticleResult(article_id(claim.article_url), claim.brief_id, usd, True, "ok", evidence)

@@ -62,6 +62,11 @@ def make_self(claim_by_uid, commitments, block=1000, monkeypatch=None):
 
 @pytest.fixture(autouse=True)
 def _setup(monkeypatch):
+    # These tests exercise emission/vesting mechanics with bare commits; pin the level-0
+    # attribution multiplier to 1.0 so the USD arithmetic stays legible (attribution grading
+    # has its own tests in test_oracle/test_reward/test_attribution).
+    from herald.validator.utils.config import HERALD_ATTR_MULT
+    monkeypatch.setitem(HERALD_ATTR_MULT, 0, 1.0)
     monkeypatch.setattr(searchmod, "_serpapi_search", lambda q, n: [q])
     monkeypatch.setattr(fwd, "get_briefs", lambda now=None: BRIEFS)
     monkeypatch.setattr(fwd, "get_all_uids", lambda self: [1, 2])

@@ -1,9 +1,11 @@
+from datetime import datetime
 from types import SimpleNamespace
 
 from herald.commit import commit_hash, encode
+from herald.evidence import clean_evidence, evidence_hash
 from herald.validator.news.oracle import evaluate_article
 from herald.validator.news.registry import OutletRegistry
-from herald.validator.utils.config import HERALD_BASE_PAYOUT_USD
+from herald.validator.utils.config import HERALD_ATTR_MULT, HERALD_BASE_PAYOUT_USD
 
 REGISTRY = OutletRegistry.from_dict({
     "version_id": 1,
@@ -27,7 +29,16 @@ def onchain_for(claim):
         brief_id=claim.brief_id, target_outlet_id=claim.target_outlet_id,
         claimer_hotkey=claim.claimer_hotkey, nonce=claim.nonce,
         bond_atto=claim.bond_atto, version_id=claim.version_id,
+        pre_hash=getattr(claim, "pre_hash", "") or "",
     ))
+
+
+def make_evidence_claim(evidence, **over):
+    ev = clean_evidence(evidence)
+    return make_claim(
+        pre_hash=evidence_hash(ev), evidence_text=ev.get("text"),
+        evidence_author=ev.get("author"), evidence_window=ev.get("window"), **over,
+    )
 
 
 def live(_url):
@@ -48,10 +59,76 @@ def not_indexed(_url):
 
 
 def test_happy_path_pays_tier1():
+    # A bare commit (no attribution evidence) passes but pays the level-0 multiplier.
     c = make_claim()
     r = evaluate_article(c, onchain_for(c), REGISTRY, BRIEF, fetch_fn=live, search_fn=indexed)
-    assert r.passed and r.reason == "ok" and r.usd == HERALD_BASE_PAYOUT_USD
+    assert r.passed and r.reason == "ok" and r.usd == HERALD_BASE_PAYOUT_USD * HERALD_ATTR_MULT[0]
     assert r.evidence["tier"] == 1 and r.evidence["in_index"] is True
+    assert r.evidence["attribution_level"] == 0
+
+
+DRAFT = ("Herald announced its public pilot today, saying earned coverage should be provable "
+         "not promised, and that miners are paid only for oracle-verified articles.")
+
+
+def live_with(text=None, author=None, published=None):
+    ts = datetime.fromisoformat(published + "T12:00:00+00:00").timestamp() if published else None
+    body = text or "A normal news report about world events."
+    return lambda u: SimpleNamespace(ok=True, status=200, text_hash="h", body_len=2000,
+                                     final_url=u, text=body, author=author, published_ts=ts)
+
+
+def test_text_proof_pays_full():
+    c = make_evidence_claim({"text": DRAFT})
+    r = evaluate_article(c, onchain_for(c), REGISTRY, BRIEF,
+                         fetch_fn=live_with(text="Intro. " + DRAFT + " Outro."), search_fn=indexed)
+    assert r.passed and r.usd == HERALD_BASE_PAYOUT_USD * HERALD_ATTR_MULT[2]
+    assert r.evidence["attribution_level"] == 2
+
+
+def test_text_proof_misses_grades_level0():
+    c = make_evidence_claim({"text": DRAFT})
+    r = evaluate_article(c, onchain_for(c), REGISTRY, BRIEF,
+                         fetch_fn=live_with(text="An unrelated story about football results."),
+                         search_fn=indexed)
+    assert r.passed and r.usd == HERALD_BASE_PAYOUT_USD * HERALD_ATTR_MULT[0]
+    assert r.evidence["attribution_level"] == 0
+
+
+def test_insider_detail_pays_level1():
+    c = make_evidence_claim({"author": "Jane Doe", "window": ["2026-07-10", "2026-07-15"]})
+    r = evaluate_article(c, onchain_for(c), REGISTRY, BRIEF,
+                         fetch_fn=live_with(author="Jane Doe", published="2026-07-12"),
+                         search_fn=indexed)
+    assert r.passed and r.usd == HERALD_BASE_PAYOUT_USD * HERALD_ATTR_MULT[1]
+    assert r.evidence["attribution_level"] == 1
+
+
+def test_wrong_byline_grades_level0():
+    c = make_evidence_claim({"author": "Jane Doe", "window": ["2026-07-10", "2026-07-15"]})
+    r = evaluate_article(c, onchain_for(c), REGISTRY, BRIEF,
+                         fetch_fn=live_with(author="John Smith", published="2026-07-12"),
+                         search_fn=indexed)
+    assert r.passed and r.evidence["attribution_level"] == 0
+
+
+def test_evidence_hash_mismatch_rejected():
+    # Swapping the revealed text post-publication must fail: the pre_hash was fixed at commit.
+    c = make_evidence_claim({"text": DRAFT})
+    c.evidence_text = "different text scraped from the published article after the fact"
+    r = evaluate_article(c, onchain_for(c), REGISTRY, BRIEF,
+                         fetch_fn=live_with(text=c.evidence_text), search_fn=indexed)
+    assert not r.passed and r.reason == "evidence_hash_mismatch"
+
+
+def test_dropping_evidence_breaks_commitment():
+    # A commit sealed WITH a pre_hash can't be claimed as a bare commit.
+    c = make_evidence_claim({"text": DRAFT})
+    onchain = onchain_for(c)
+    c.pre_hash = None
+    c.evidence_text = None
+    r = evaluate_article(c, onchain, REGISTRY, BRIEF, fetch_fn=live, search_fn=indexed)
+    assert not r.passed and r.reason == "commitment_invalid"
 
 
 def test_bad_commitment_rejected():
