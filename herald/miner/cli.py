@@ -14,15 +14,45 @@ def cmd_briefs(args):
         print(f"{b['id']}\t{b.get('title', '')}\t{b.get('start_date')}..{b.get('end_date')}")
 
 
+def _build_evidence(args) -> dict:
+    """Attribution evidence: pre-publication knowledge hashed into the commitment (see
+    herald/evidence.py). Text proof (draft or quote) pays full; byline+window pays 0.7x;
+    a bare commit pays the level-0 multiplier."""
+    evidence = {}
+    if args.text_file:
+        with open(args.text_file, "r", encoding="utf-8") as f:
+            evidence["text"] = f.read()
+    elif args.quote:
+        evidence["text"] = args.quote
+    if args.author:
+        evidence["author"] = args.author
+    if args.window:
+        try:
+            start, end = args.window.split(":")
+        except ValueError:
+            raise SystemExit("--window must be START:END, e.g. 2026-07-10:2026-07-20")
+        evidence["window"] = [start, end]
+    return evidence
+
+
 def cmd_commit(args):
+    evidence = _build_evidence(args)
     wallet = bt.wallet(name=args.wallet_name, hotkey=args.hotkey)
     subtensor = bt.subtensor(network=args.network)
     onchain = submit_commitment(
         subtensor, wallet, args.netuid, ClaimStore(args.store),
         brief_id=args.brief, target_outlet_id=args.outlet,
         bond_atto=args.bond, version_id=args.version,
+        evidence=evidence,
     )
+    if evidence.get("text"):
+        level = "2 (text proof)"
+    elif evidence.get("author") and evidence.get("window"):
+        level = "1 (byline + window)"
+    else:
+        level = "0 (bare — pays the reduced level-0 multiplier)"
     print(f"committed: {onchain}")
+    print(f"evidence level if it verifies at claim: {level}")
 
 
 def cmd_claim(args):
@@ -69,6 +99,14 @@ def build_parser():
     c.add_argument("--network", default="finney")
     c.add_argument("--wallet-name", dest="wallet_name", default="default")
     c.add_argument("--hotkey", default="default")
+    # Attribution evidence — hashed into the commitment, revealed + graded at claim.
+    c.add_argument("--text-file", dest="text_file", default=None,
+                   help="draft article text you expect to appear (level-2 text proof)")
+    c.add_argument("--quote", default=None,
+                   help="inline quote you supplied, instead of --text-file")
+    c.add_argument("--author", default=None, help="expected byline (level 1, with --window)")
+    c.add_argument("--window", default=None,
+                   help="expected publish window START:END (YYYY-MM-DD), span <= 7 days")
     c.set_defaults(func=cmd_commit)
 
     cl = sub.add_parser("claim")

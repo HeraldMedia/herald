@@ -10,6 +10,7 @@ MAX_CLAIMS_PER_RESPONSE = 10000  # well above the per-miner scoring slice; a DoS
 MAX_MERKLE_DEPTH = 64
 MAX_BOND_ATTO = 10 ** 30  # far above any real alpha bond (atto); bounds big-int digit count
 MAX_VERSION_ID = 10 ** 9
+MAX_EVIDENCE_TEXT = 20_000  # mirrors herald.evidence.MAX_TEXT_CHARS
 
 _ShortStr = typing.Annotated[str, StringConstraints(max_length=128)]
 
@@ -26,6 +27,12 @@ class ClaimRecord(BaseModel):
     version_id: int = Field(ge=0, le=MAX_VERSION_ID)
     merkle_path: typing.Optional[typing.List[_ShortStr]] = Field(default=None, max_length=MAX_MERKLE_DEPTH)
     claim_sig: typing.Optional[str] = Field(default=None, max_length=256)
+    # Attribution evidence (see herald/evidence.py): hashed into the commitment as pre_hash,
+    # revealed here and graded by the oracle.
+    pre_hash: typing.Optional[str] = Field(default=None, max_length=64)
+    evidence_text: typing.Optional[str] = Field(default=None, max_length=MAX_EVIDENCE_TEXT)
+    evidence_author: typing.Optional[str] = Field(default=None, max_length=120)
+    evidence_window: typing.Optional[typing.List[_ShortStr]] = Field(default=None, max_length=2)
 
 
 class ClaimSynapse(bt.Synapse):

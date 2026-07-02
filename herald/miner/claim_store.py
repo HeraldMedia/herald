@@ -6,6 +6,7 @@ import secrets
 from typing import List, Optional
 
 from herald.commit import commit_hash, encode
+from herald.evidence import clean_evidence, evidence_hash
 
 
 class ClaimStore:
@@ -26,12 +27,15 @@ class ClaimStore:
             json.dump(self._records, f, indent=2)
         os.replace(tmp, self.path)
 
-    def add(self, *, brief_id, target_outlet_id, claimer_hotkey, bond_atto, version_id) -> str:
+    def add(self, *, brief_id, target_outlet_id, claimer_hotkey, bond_atto, version_id,
+            evidence: dict = None) -> str:
         nonce = secrets.token_hex(16)
+        evidence = clean_evidence(evidence)
+        pre_hash = evidence_hash(evidence) if evidence else ""
         onchain = encode(commit_hash(
             brief_id=brief_id, target_outlet_id=target_outlet_id,
             claimer_hotkey=claimer_hotkey, nonce=nonce,
-            bond_atto=bond_atto, version_id=version_id,
+            bond_atto=bond_atto, version_id=version_id, pre_hash=pre_hash,
         ))
         self._records[onchain] = {
             "brief_id": brief_id,
@@ -40,6 +44,8 @@ class ClaimStore:
             "nonce": nonce,
             "bond_atto": bond_atto,
             "version_id": version_id,
+            "pre_hash": pre_hash,
+            "evidence": evidence,
             "article_url": None,
         }
         self._save()
@@ -57,10 +63,15 @@ class ClaimStore:
             bond_atto=int(reveal["bond_atto"]),
             version_id=int(reveal["version_id"]),
         )
+        evidence = clean_evidence(reveal.get("evidence"))
+        pre_hash = str(reveal.get("pre_hash") or "")
+        if evidence and evidence_hash(evidence) != pre_hash:
+            raise ValueError("reveal evidence does not match its pre_hash")
         onchain = reveal["onchain"]
-        if onchain != encode(commit_hash(**fields)):
+        if onchain != encode(commit_hash(**fields, pre_hash=pre_hash)):
             raise ValueError("reveal onchain value does not match its fields")
-        self._records[onchain] = {**fields, "article_url": reveal.get("article_url")}
+        self._records[onchain] = {**fields, "pre_hash": pre_hash, "evidence": evidence,
+                                  "article_url": reveal.get("article_url")}
         self._save()
         return onchain
 

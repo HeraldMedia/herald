@@ -25,3 +25,14 @@ def test_oversized_record_fields_rejected():
         ClaimRecord(**{**BASE, "merkle_path": ["x" * 10000]})  # giant item
     with pytest.raises(ValidationError):
         ClaimRecord(**{**BASE, "merkle_path": ["x"] * 10000})  # too many items
+
+
+def test_evidence_fields_bounded():
+    ok = ClaimRecord(**BASE, pre_hash="ab" * 24,
+                     evidence_text="draft " * 100, evidence_author="Jane Doe",
+                     evidence_window=["2026-07-10", "2026-07-15"])
+    assert ok.pre_hash and ok.evidence_author == "Jane Doe"
+    with pytest.raises(ValidationError):
+        ClaimRecord(**BASE, evidence_text="x" * 20_001)
+    with pytest.raises(ValidationError):
+        ClaimRecord(**BASE, evidence_window=["a", "b", "c"])

@@ -46,3 +46,37 @@ def test_claim_store_atomic_and_private(tmp_path):
     # the nonce is the commit salt: the file must not be world/group-readable
     assert stat.S_IMODE(os.stat(path).st_mode) == 0o600
     assert len(ClaimStore(path)._records) == 1  # reloads cleanly
+
+
+def test_add_with_evidence_binds_pre_hash(tmp_path):
+    from herald.commit import commit_hash, encode
+    from herald.evidence import evidence_hash
+
+    store = ClaimStore(str(tmp_path / "claims.json"))
+    evidence = {"text": "Exclusive draft copy the miner supplied to the outlet.", "author": "Jane Doe"}
+    onchain = store.add(**REC, evidence=evidence)
+    rec = store.get(onchain)
+    assert rec["pre_hash"] == evidence_hash(rec["evidence"])
+    assert onchain == encode(commit_hash(
+        brief_id=rec["brief_id"], target_outlet_id=rec["target_outlet_id"],
+        claimer_hotkey=rec["claimer_hotkey"], nonce=rec["nonce"],
+        bond_atto=rec["bond_atto"], version_id=rec["version_id"], pre_hash=rec["pre_hash"],
+    ))
+
+
+def test_import_record_rejects_tampered_evidence(tmp_path):
+    import pytest
+
+    src = ClaimStore(str(tmp_path / "src.json"))
+    onchain = src.add(**REC, evidence={"author": "Jane Doe", "window": ["2026-07-10", "2026-07-15"]})
+    rec = src.get(onchain)
+    reveal = {**rec, "onchain": onchain, "article_url": "https://x/a"}
+
+    dst = ClaimStore(str(tmp_path / "dst.json"))
+    assert dst.import_record(dict(reveal)) == onchain  # intact round-trip
+    assert dst.get(onchain)["evidence"]["author"] == "Jane Doe"
+
+    with pytest.raises(ValueError):
+        dst.import_record({**reveal, "evidence": {**reveal["evidence"], "author": "Someone Else"}})
+    with pytest.raises(ValueError):
+        dst.import_record({**reveal, "pre_hash": "ab" * 24})

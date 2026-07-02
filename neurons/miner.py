@@ -39,6 +39,10 @@ class Miner(BaseMinerNeuron):
                 nonce=r["nonce"],
                 bond_atto=r["bond_atto"],
                 version_id=r["version_id"],
+                pre_hash=r.get("pre_hash") or None,
+                evidence_text=(r.get("evidence") or {}).get("text"),
+                evidence_author=(r.get("evidence") or {}).get("author"),
+                evidence_window=(r.get("evidence") or {}).get("window"),
             )
             for r in records
         ]
