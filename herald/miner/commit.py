@@ -16,5 +16,7 @@ def submit_commitment(
         version_id=version_id,
         evidence=evidence,
     )
-    subtensor.commit(wallet, netuid, onchain)
+    # bittensor 10.x renamed subtensor.commit(...) -> set_commitment(...) (both call
+    # publish_metadata_extrinsic, hotkey-signed, writing Commitments.CommitmentOf).
+    subtensor.set_commitment(wallet, netuid, onchain)
     return onchain

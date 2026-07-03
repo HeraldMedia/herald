@@ -6,7 +6,7 @@ from herald.miner.commit import submit_commitment
 
 def test_submit_writes_chain_and_store(tmp_path):
     calls = []
-    subtensor = SimpleNamespace(commit=lambda wallet, netuid, data: calls.append((netuid, data)) or True)
+    subtensor = SimpleNamespace(set_commitment=lambda wallet, netuid, data: calls.append((netuid, data)) or True)
     wallet = SimpleNamespace(hotkey=SimpleNamespace(ss58_address="hkA"))
     store = ClaimStore(str(tmp_path / "c.json"))
 

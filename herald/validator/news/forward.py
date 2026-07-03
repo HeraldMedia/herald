@@ -143,7 +143,9 @@ async def forward(self):
         anchor_value = commitments.get(authority) if authority else None
         registry = load_registry(anchor_value)
 
-        uids = get_all_uids(self)
+        # int(): bittensor 10.x get_all_uids returns an int64 ndarray; keep native ints so they
+        # stay JSON-serializable through vesting -> persisted state (and read cleanly in logs).
+        uids = [int(u) for u in get_all_uids(self)]
         hotkey_by_uid = {uid: self.metagraph.hotkeys[uid] for uid in uids}
         alpha_stake_by_uid = {uid: float(self.metagraph.alpha_stake[uid]) for uid in uids}
         claims_by_uid = await collect_claims(self, uids)

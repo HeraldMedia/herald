@@ -12,6 +12,13 @@ from .slashing import SlashLedger
 from .vesting import VestingLedger
 
 
+def _json_np_safe(o):
+    """json.dump default: unbox numpy scalars (they carry a .item()) to native Python."""
+    if hasattr(o, "item"):
+        return o.item()
+    raise TypeError(f"Object of type {type(o).__name__} is not JSON serializable")
+
+
 class HeraldState:
     def __init__(self, commit_index: CommitIndex, vesting: VestingLedger, slash: SlashLedger,
                  disputes: DisputeLedger = None, pool_spent: dict = None,
@@ -60,7 +67,9 @@ class HeraldState:
     def save(self, path: str):
         tmp = path + ".tmp"
         with open(tmp, "w", encoding="utf-8") as f:
-            json.dump(self.to_dict(), f)
+            # bittensor 10.x hands numpy scalars (int64 uids, float32 stakes) into the domain
+            # objects; unbox them so persistence never dies on "int64 is not JSON serializable".
+            json.dump(self.to_dict(), f, default=_json_np_safe)
         os.replace(tmp, path)  # atomic: a crash never leaves a half-written state file
 
     @classmethod
