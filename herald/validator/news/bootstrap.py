@@ -84,7 +84,7 @@ def main():
     resp.raise_for_status()
     rows = resp.json()
 
-    subtensor = bt.subtensor(network=args.network)
+    subtensor = bt.Subtensor(network=args.network)
     metagraph = subtensor.metagraph(args.netuid)
     hotkey_to_uid = {hk: uid for uid, hk in enumerate(metagraph.hotkeys)}
     current_epoch = max(0, subtensor.get_current_block() - HERALD_EPOCH_LAG) // VEST_EPOCH_LEN

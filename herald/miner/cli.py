@@ -37,8 +37,8 @@ def _build_evidence(args) -> dict:
 
 def cmd_commit(args):
     evidence = _build_evidence(args)
-    wallet = bt.wallet(name=args.wallet_name, hotkey=args.hotkey)
-    subtensor = bt.subtensor(network=args.network)
+    wallet = bt.Wallet(name=args.wallet_name, hotkey=args.hotkey)
+    subtensor = bt.Subtensor(network=args.network)
     onchain = submit_commitment(
         subtensor, wallet, args.netuid, ClaimStore(args.store),
         brief_id=args.brief, target_outlet_id=args.outlet,
