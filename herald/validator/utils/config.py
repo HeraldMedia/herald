@@ -103,9 +103,9 @@ TRANSCRIPT_MAX_RETRY = 10
 # transcript maximum length in characters
 TRANSCRIPT_MAX_LENGTH = 250000
 
-# validation cycle
-VALIDATOR_WAIT = 60 # 60 seconds
-VALIDATOR_STEPS_INTERVAL = 240 # 4 hours
+# validation cycle (env-tunable so a local test can score every few seconds; prod defaults unchanged)
+VALIDATOR_WAIT = int(os.getenv('HERALD_VALIDATOR_WAIT', '60'))  # seconds between forward passes
+VALIDATOR_STEPS_INTERVAL = int(os.getenv('HERALD_VALIDATOR_STEPS_INTERVAL', '240'))  # score every Nth step
 
 # synapse limits
 MAX_ACCOUNTS_PER_SYNAPSE = 1000
@@ -135,6 +135,16 @@ BRAVE_API_KEY = os.getenv('BRAVE_API_KEY')
 # can't verify that outlet (fail-closed) and will fork from validators that have it — so these keys
 # are consensus-affecting (surfaced in the fingerprint) and must be provisioned fleet-wide.
 HERALD_NYT_API_KEY = os.getenv('HERALD_NYT_API_KEY')
+# ── Local-sim testing hooks — all default to the REAL endpoints/behaviour, so production is
+# unchanged. Point these at a localhost simulator to run the whole pipeline offline. NEVER set the
+# overrides (or HERALD_ALLOW_LOCAL_FETCH) in production. They are deployment infra, not scoring
+# params, so they are intentionally NOT part of the consensus fingerprint.
+HERALD_NYT_API_BASE = os.getenv('HERALD_NYT_API_BASE', 'https://api.nytimes.com/svc/search/v2/articlesearch.json')
+HERALD_SCRAPINGBEE_BASE = os.getenv('HERALD_SCRAPINGBEE_BASE', 'https://app.scrapingbee.com/api/v1')
+HERALD_SERPAPI_BASE = os.getenv('HERALD_SERPAPI_BASE', 'https://serpapi.com/search.json')
+HERALD_BRAVE_BASE = os.getenv('HERALD_BRAVE_BASE', 'https://api.search.brave.com/res/v1/web/search')
+# Allow the SSRF-guarded direct fetch to reach loopback/private hosts (for a localhost sim only).
+HERALD_ALLOW_LOCAL_FETCH = os.getenv('HERALD_ALLOW_LOCAL_FETCH', 'false').lower() in ('1', 'true', 'yes')
 HERALD_SEARCH_TOP_N = int(os.getenv('HERALD_SEARCH_TOP_N', '20'))
 HERALD_MIN_BODY_BYTES = int(os.getenv('HERALD_MIN_BODY_BYTES', '500'))
 HERALD_MAX_BODY_BYTES = int(os.getenv('HERALD_MAX_BODY_BYTES', str(5_000_000)))

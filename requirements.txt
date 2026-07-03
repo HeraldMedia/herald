@@ -7,10 +7,10 @@ async-substrate-interface==1.6.4
 asyncstdlib==3.13.1
 attrs==25.3.0
 base58==2.1.1
-bittensor==9.12.2
-bittensor-cli==9.15.3
+bittensor==10.5.0
+bittensor-cli==9.23.1
 bittensor-commit-reveal==0.4.0
-bittensor-wallet==4.0.0
+bittensor-wallet==4.1.0
 bt-decode==0.8.0
 cachetools==5.5.2
 certifi==2025.1.31

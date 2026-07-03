@@ -17,10 +17,11 @@ from urllib.parse import urlsplit
 
 import httpx
 
+from herald.validator.utils.config import HERALD_NYT_API_BASE
 from .fetch import FetchResult, _cache, _cache_put
 from .url import canonicalize
 
-_NYT_SEARCH = "https://api.nytimes.com/svc/search/v2/articlesearch.json"
+_NYT_SEARCH = HERALD_NYT_API_BASE  # real Article Search API by default; overridable for a localhost sim
 
 
 def _url_slug(url: str) -> str:

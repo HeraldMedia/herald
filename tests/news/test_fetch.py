@@ -1,6 +1,37 @@
+from types import SimpleNamespace
+
 from herald.validator.news import fetch as fetchmod
 from herald.validator.news.fetch import FetchResult, fetch, fetch_article
 from herald.validator.news.registry import OutletRegistry
+
+
+def test_allow_local_fetch_flag(monkeypatch):
+    # Default: literal loopback/private is SSRF-blocked. (conftest's _stub_dns keeps hostnames
+    # resolving public, so we assert against literal IPs here.) HERALD_ALLOW_LOCAL_FETCH allows them
+    # for a localhost sim ONLY (never set in prod); the http(s) scheme gate still applies.
+    monkeypatch.setattr(fetchmod, "HERALD_ALLOW_LOCAL_FETCH", False)
+    assert fetchmod.is_safe_fetch_url("http://127.0.0.1:9100/x") is False
+    assert fetchmod.is_safe_fetch_url("http://10.0.0.1/x") is False
+    monkeypatch.setattr(fetchmod, "HERALD_ALLOW_LOCAL_FETCH", True)
+    assert fetchmod.is_safe_fetch_url("http://127.0.0.1:9100/x") is True
+    assert fetchmod.is_safe_fetch_url("http://localhost:9100/nytimes/x") is True
+    assert fetchmod.is_safe_fetch_url("ftp://localhost/x") is False  # scheme still enforced
+
+
+def test_scrapingbee_base_is_configurable(monkeypatch):
+    captured = {}
+    monkeypatch.setattr(fetchmod, "HERALD_SCRAPINGBEE_BASE", "http://localhost:9100/scrapingbee/api/v1")
+    monkeypatch.setattr(fetchmod, "SCRAPINGBEE_API_KEY", "sim")
+
+    def fake_get(base, params=None, timeout=None):
+        captured.update(base=base, url=params.get("url"))
+        return SimpleNamespace(status_code=200, content=b"x" * 600)
+
+    monkeypatch.setattr(fetchmod.httpx, "get", fake_get)
+    status, _, _ = fetchmod._scrapingbee_get("http://localhost:9100/reuters/slug")
+    assert status == 200
+    assert captured["base"] == "http://localhost:9100/scrapingbee/api/v1"
+    assert captured["url"] == "http://localhost:9100/reuters/slug"
 
 
 def _stub(monkeypatch, status, body):

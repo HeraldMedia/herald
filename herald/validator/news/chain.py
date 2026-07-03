@@ -4,7 +4,7 @@
 directly so every validator derives the same commit ordering regardless of when it observed.
 """
 
-from bittensor.core.chain_data.utils import decode_account_id, decode_metadata
+from bittensor.core.chain_data.utils import decode_metadata
 
 
 def _block_of(value) -> int:
@@ -20,7 +20,9 @@ def get_commitments_with_block(subtensor, netuid: int, block=None) -> dict:
     )
     for id_, value in query:
         try:
-            hotkey = decode_account_id(id_[0])
+            # bittensor >= 10 decodes the map key to an ss58 string directly (9.x handed back the
+            # raw account bytes that needed decode_account_id, which 10.x removed).
+            hotkey = id_ if isinstance(id_, str) else id_[0]
             result[hotkey] = (decode_metadata(value), _block_of(value))
         except Exception:
             continue

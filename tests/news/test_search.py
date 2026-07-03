@@ -1,5 +1,23 @@
+from types import SimpleNamespace
+
 from herald.validator.news import search as searchmod
 from herald.validator.news.search import in_index
+
+
+def test_serpapi_base_is_configurable(monkeypatch):
+    captured = {}
+    monkeypatch.setattr(searchmod, "HERALD_SERPAPI_BASE", "http://localhost:9100/serpapi/search.json")
+    monkeypatch.setattr(searchmod, "SERPAPI_API_KEY", "sim")
+
+    def fake_get(base, params=None, timeout=None):
+        captured["base"] = base
+        return SimpleNamespace(raise_for_status=lambda: None,
+                               json=lambda: {"organic_results": [{"link": params["q"]}]})
+
+    monkeypatch.setattr(searchmod.httpx, "get", fake_get)
+    links = searchmod._serpapi_search("http://localhost:9100/nytimes/x", 20)
+    assert captured["base"] == "http://localhost:9100/serpapi/search.json"
+    assert links == ["http://localhost:9100/nytimes/x"]
 
 
 def _stub(monkeypatch, links):

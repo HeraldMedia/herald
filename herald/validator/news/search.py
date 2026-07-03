@@ -7,8 +7,10 @@ import httpx
 
 from herald.validator.utils.config import (
     BRAVE_API_KEY,
+    HERALD_BRAVE_BASE,
     HERALD_QUORUM_THRESHOLD,
     HERALD_SEARCH_TOP_N,
+    HERALD_SERPAPI_BASE,
     SERPAPI_API_KEY,
 )
 from .url import canonicalize
@@ -34,7 +36,7 @@ class SearchResult:
 
 def _serpapi_search(query: str, num: int) -> List[str]:
     r = httpx.get(
-        "https://serpapi.com/search.json",
+        HERALD_SERPAPI_BASE,
         params={"engine": "google", "q": query, "num": num,
                 "gl": "us", "hl": "en", "api_key": SERPAPI_API_KEY},
         timeout=20.0,
@@ -46,7 +48,7 @@ def _serpapi_search(query: str, num: int) -> List[str]:
 
 def _brave_search(query: str, num: int) -> List[str]:
     r = httpx.get(
-        "https://api.search.brave.com/res/v1/web/search",
+        HERALD_BRAVE_BASE,
         params={"q": query, "count": num},
         headers={"X-Subscription-Token": BRAVE_API_KEY},
         timeout=20.0,

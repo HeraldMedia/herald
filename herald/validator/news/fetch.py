@@ -11,9 +11,11 @@ from urllib.parse import urlsplit
 import httpx
 
 from herald.validator.utils.config import (
+    HERALD_ALLOW_LOCAL_FETCH,
     HERALD_MAX_BODY_BYTES,
     HERALD_MIN_BODY_BYTES,
     HERALD_QUORUM_THRESHOLD,
+    HERALD_SCRAPINGBEE_BASE,
     SCRAPINGBEE_API_KEY,
 )
 from .url import canonicalize
@@ -42,6 +44,8 @@ def is_safe_fetch_url(url: str) -> bool:
     host = parts.hostname
     if not host:
         return False
+    if HERALD_ALLOW_LOCAL_FETCH:
+        return True  # local-sim testing only: loopback/private allowed (never set this in prod)
     try:
         return not _ip_blocked(host)  # literal IP
     except ValueError:
@@ -186,7 +190,7 @@ def _http_get(url: str):
 
 def _scrapingbee_get(url: str):
     r = httpx.get(
-        "https://app.scrapingbee.com/api/v1",
+        HERALD_SCRAPINGBEE_BASE,
         params={"api_key": SCRAPINGBEE_API_KEY, "url": url, "render_js": "false"},
         timeout=30.0,
     )
