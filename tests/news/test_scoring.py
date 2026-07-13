@@ -4,8 +4,8 @@ from herald.validator.utils.config import HERALD_BASE_PAYOUT_USD
 
 def test_tier_multipliers():
     assert article_usd(tier=1, in_search=True) == HERALD_BASE_PAYOUT_USD * 1.0
-    assert article_usd(tier=2, in_search=True) == HERALD_BASE_PAYOUT_USD * 0.5
-    assert article_usd(tier=3, in_search=True) == HERALD_BASE_PAYOUT_USD * 0.25
+    assert article_usd(tier=2, in_search=True) == HERALD_BASE_PAYOUT_USD * 0.6
+    assert article_usd(tier=3, in_search=True) == HERALD_BASE_PAYOUT_USD * 0.2
 
 
 def test_not_in_search_pays_the_floor():

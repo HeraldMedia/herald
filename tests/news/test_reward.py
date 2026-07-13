@@ -60,7 +60,7 @@ def test_two_miners_distinct_outlets_both_paid():
         {1: [c1], 2: [c2]}, commitments, index_for(commitments),
         {1: "hkA", 2: "hkB"}, {1: 5000.0, 2: 5000.0}, BRIEFS, REGISTRY, fetch_fn=live, search_fn=indexed)
     assert usd[1] == HERALD_BASE_PAYOUT_USD * 1.0 * HERALD_ATTR_MULT[0]
-    assert usd[2] == HERALD_BASE_PAYOUT_USD * 0.5 * HERALD_ATTR_MULT[0]
+    assert usd[2] == HERALD_BASE_PAYOUT_USD * 0.6 * HERALD_ATTR_MULT[0]
 
 
 def test_same_url_earliest_commit_wins():

@@ -94,10 +94,10 @@ async def test_forward_vests_first_installment(monkeypatch):
 
     await fwd.forward(self)
 
-    # installments: tier1 500/2=250, tier2 250/2=125 -> proportional weights 2:1
+    # installments: tier1 500/2=250, tier2 300/2=150 -> proportional weights 250:150 = 5:3
     weights = dict(zip(captured["uids"], captured["rewards"]))
-    assert weights[1] == pytest.approx(2 / 3)
-    assert weights[2] == pytest.approx(1 / 3)
+    assert weights[1] == pytest.approx(5 / 8)
+    assert weights[2] == pytest.approx(3 / 8)
 
 
 @pytest.mark.asyncio

@@ -157,7 +157,7 @@ HERALD_USE_LLM_JUDGE = os.getenv('HERALD_USE_LLM_JUDGE', 'false').lower() == 'tr
 HERALD_QUORUM_THRESHOLD = int(os.getenv('HERALD_QUORUM_THRESHOLD', '1'))
 
 HERALD_BASE_PAYOUT_USD = float(os.getenv('HERALD_BASE_PAYOUT_USD', '500'))
-HERALD_TIER_MULTIPLIER = {1: 1.0, 2: 0.5, 3: 0.25}
+HERALD_TIER_MULTIPLIER = {1: 1.0, 2: 0.6, 3: 0.2}  # publications sheet weights 5/3/1, normalized
 # Payout multiplier for a live-but-not-indexed article. Search results vary per validator
 # (IP/region/rate limits); a floor of 0 turns that variance into a pay/no-pay fork that splits
 # vesting ledgers for 30 days. 0.5 softens the cliff to a 2x spread — with SEVERAL validators
