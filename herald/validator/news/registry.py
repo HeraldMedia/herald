@@ -23,6 +23,11 @@ class Outlet:
     # agrees): "direct" = plain HTTP (default), "proxy" = JS-rendering fetch provider (bot-walled
     # sites), "api:<name>" = authoritative publisher metadata + the miner snapshot anchored to it.
     fetch: str = "direct"
+    # This outlet's OWN branded/sponsored/contributor programs — the main Tier-1 cheat vector.
+    # paid_patterns: regexes (re.search, case-insensitive) vs the URL path that mark PAID content
+    # (e.g. Forbes "brandvoice"); paid_markers: on-page disclosure labels. Both travel signed.
+    paid_patterns: List[str] = field(default_factory=list)
+    paid_markers: List[str] = field(default_factory=list)
 
     def matches(self, url: str) -> bool:
         host = host_of(url)
@@ -51,6 +56,8 @@ class OutletRegistry:
                 domains=list(o["domains"]),
                 section_patterns=list(o.get("section_patterns", [])),
                 fetch=str(o.get("fetch", "direct")),
+                paid_patterns=list(o.get("paid_patterns", [])),
+                paid_markers=list(o.get("paid_markers", [])),
             )
             for o in data.get("outlets", [])
         ]
