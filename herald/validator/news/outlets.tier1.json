@@ -1,0 +1,1318 @@
+{
+  "version_id": 1,
+  "outlets": [
+    {
+      "outlet_id": "abc_news",
+      "tier": 1,
+      "domains": [
+        "abcnews.com",
+        "abcnews.go.com"
+      ],
+      "section_patterns": [],
+      "fetch": "direct",
+      "paid_patterns": [
+        "/gma/shop(/|$)",
+        "/shop/story/"
+      ],
+      "paid_markers": [
+        "By clicking on these shopping links, visitors will leave",
+        "commission for purchases made through these links",
+        "Deals & Steals"
+      ]
+    },
+    {
+      "outlet_id": "agence_france_presse",
+      "tier": 1,
+      "domains": [
+        "www.afp.com",
+        "factcheck.afp.com",
+        "correspondent.afp.com",
+        "making-of.afp.com",
+        "focus.afp.com"
+      ],
+      "section_patterns": [],
+      "fetch": "proxy",
+      "paid_patterns": [
+        "/press-releases?(/|$)",
+        "/communiques?-de-presse",
+        "/afp_communique",
+        "/comunicados?-de-prensa",
+        "/comunicados?-de-imprensa",
+        "/pressemitteilungen?",
+        "/corporate-content"
+      ],
+      "paid_markers": [
+        "Press releases",
+        "Press release",
+        "Communiqu\u00e9 de presse",
+        "Comunicado de prensa",
+        "Comunicado de imprensa",
+        "Pressemitteilung",
+        "Business Wire",
+        "Cision-PR Newswire",
+        "PR Newswire",
+        "GlobeNewswire",
+        "ACCESS newswire",
+        "Media OutReach",
+        "Notified",
+        "EQS Group"
+      ]
+    },
+    {
+      "outlet_id": "al_jazeera",
+      "tier": 1,
+      "domains": [
+        "aljazeera.com",
+        "www.aljazeera.com",
+        "aljazeera.net",
+        "www.aljazeera.net",
+        "balkans.aljazeera.net"
+      ],
+      "section_patterns": [
+        "/\\d{4}/\\d{1,2}/\\d{1,2}/"
+      ],
+      "fetch": "direct",
+      "paid_patterns": [
+        "/sponsored(?:/|$)",
+        "/paid-content(?:/|$)"
+      ],
+      "paid_markers": [
+        "Paid Partner Content",
+        "Sponsored Content",
+        "Sponsored",
+        "Paid for by",
+        "Sponsored Post"
+      ]
+    },
+    {
+      "outlet_id": "ars_technica",
+      "tier": 1,
+      "domains": [
+        "arstechnica.com",
+        "www.arstechnica.com"
+      ],
+      "section_patterns": [
+        "^/[a-z0-9-]+/20\\d{2}/\\d{2}/"
+      ],
+      "fetch": "direct",
+      "paid_patterns": [
+        "^/sponsored/",
+        "^/sponsored-content/",
+        "^/author/sponsored/"
+      ],
+      "paid_markers": [
+        "Sponsored",
+        "byline: Sponsored",
+        "author/sponsored",
+        "section: sponsored"
+      ]
+    },
+    {
+      "outlet_id": "associated_press",
+      "tier": 1,
+      "domains": [
+        "apnews.com",
+        "www.apnews.com"
+      ],
+      "section_patterns": [
+        "/article/",
+        "/live/"
+      ],
+      "fetch": "direct",
+      "paid_patterns": [
+        "/press-release/",
+        "/hub/press-releases",
+        "/buyline"
+      ],
+      "paid_markers": [
+        "Press Release",
+        "(BUSINESS WIRE)--",
+        "PRNewswire",
+        "GlobeNewswire",
+        "This press release",
+        "AP Buyline",
+        "we may earn a commission"
+      ]
+    },
+    {
+      "outlet_id": "bbc_news",
+      "tier": 1,
+      "domains": [
+        "bbc.co.uk",
+        "www.bbc.co.uk",
+        "bbc.com",
+        "www.bbc.com"
+      ],
+      "section_patterns": [
+        "/news/",
+        "/sport/"
+      ],
+      "fetch": "direct",
+      "paid_patterns": [
+        "/storyworks/",
+        "(?i)/story-?works"
+      ],
+      "paid_markers": [
+        "In association with",
+        "Paid and presented by",
+        "Paid content",
+        "Branded Content",
+        "Sponsored Content",
+        "BBC StoryWorks",
+        "Advertisement feature"
+      ]
+    },
+    {
+      "outlet_id": "bloomberg",
+      "tier": 1,
+      "domains": [
+        "www.bloomberg.com",
+        "bloomberg.com",
+        "sponsored.bloomberg.com"
+      ],
+      "section_patterns": [
+        "/(news|opinion)/"
+      ],
+      "fetch": "proxy",
+      "paid_patterns": [
+        "^/sponsor/",
+        "/news/sponsors/",
+        "^/press-releases/",
+        "^/article/",
+        "^/quicksight/",
+        "^/immersive-story/",
+        "^/immersive/",
+        "^/smart-paper/",
+        "^/campaign/",
+        "^/hub/"
+      ],
+      "paid_markers": [
+        "Sponsored Content",
+        "Sponsor Content",
+        "This content is made possible by our sponsor",
+        "does not necessarily reflect the views of Bloomberg",
+        "Brought to you by",
+        "Bloomberg Media Studios",
+        "Paid Content"
+      ]
+    },
+    {
+      "outlet_id": "business_insider",
+      "tier": 1,
+      "domains": [
+        "businessinsider.com",
+        "www.businessinsider.com",
+        "africa.businessinsider.com"
+      ],
+      "section_patterns": [],
+      "fetch": "direct",
+      "paid_patterns": [
+        "^/sc/",
+        "^/apo/",
+        "/news/[a-z-]+/.+-\\d{6,}$"
+      ],
+      "paid_markers": [
+        "Sponsor Post",
+        "Sponsored",
+        "Sponsored Content",
+        "Insider Studios",
+        "provided by",
+        "has not been independently verified",
+        "GlobeNewswire",
+        "PR Newswire",
+        "ACCESSWIRE",
+        "APO Group",
+        "Distributed by APO Group on behalf of",
+        "apo-importer",
+        "on behalf of"
+      ]
+    },
+    {
+      "outlet_id": "cbs_news",
+      "tier": 1,
+      "domains": [
+        "www.cbsnews.com",
+        "cbsnews.com"
+      ],
+      "section_patterns": [],
+      "fetch": "direct",
+      "paid_patterns": [
+        "/brandstudio/",
+        "/essentials/",
+        "/cbs-essentials/",
+        "-paid-content/?$",
+        "-sponsored-content/?$"
+      ],
+      "paid_markers": [
+        "CBS News Brand Studio is the content marketing and advertising service of CBS News. The CBS News newsroom is not involved with the creation of this content.",
+        "Paid Content",
+        "Paid Program",
+        "Sponsored",
+        "Sponsored Content",
+        "paid for by",
+        "This program was produced by Paramount for",
+        "We may receive commissions from some links to products on this page",
+        "created independently of CBS News editorial staff"
+      ]
+    },
+    {
+      "outlet_id": "cnbc",
+      "tier": 1,
+      "domains": [
+        "cnbc.com",
+        "www.cnbc.com"
+      ],
+      "section_patterns": [],
+      "fetch": "direct",
+      "paid_patterns": [
+        "^/advertorials?/",
+        "^/[^/]*-sponsored-content"
+      ],
+      "paid_markers": [
+        "PAID POST",
+        "PAID POST BY",
+        "ADVERTORIAL",
+        "This page was paid for by",
+        "The editorial staff of CNBC had no role in the creation of this page",
+        "paid for by"
+      ]
+    },
+    {
+      "outlet_id": "cnn",
+      "tier": 1,
+      "domains": [
+        "www.cnn.com",
+        "edition.cnn.com",
+        "us.cnn.com",
+        "cnn.com"
+      ],
+      "section_patterns": [],
+      "fetch": "direct",
+      "paid_patterns": [
+        "^/cnn-underscored(/|$)",
+        "(^|/)paid-content(/|$)",
+        "(^|/)paid-partner-content(/|$)",
+        "(^|/)sponsor-content(/|$)"
+      ],
+      "paid_markers": [
+        "Paid Content",
+        "Paid Partner Content",
+        "Paid Content by",
+        "Sponsor Content",
+        "Courageous Studios",
+        "Paid Post",
+        "CNN Underscored"
+      ]
+    },
+    {
+      "outlet_id": "daily_mail_mailonline",
+      "tier": 1,
+      "domains": [
+        "www.dailymail.co.uk",
+        "www.dailymail.com"
+      ],
+      "section_patterns": [
+        "/article-\\d+"
+      ],
+      "fetch": "direct",
+      "paid_patterns": [
+        "/buyline/",
+        "/best-buys/"
+      ],
+      "paid_markers": [
+        "If you make a purchase via links on this page we will earn commission",
+        "/news/article-11640649/Affiliate-disclosure.html",
+        "sponsored&quot;:true",
+        "ADVERTISEMENT FEATURE",
+        "PAID CONTENT",
+        "PROMOTED"
+      ]
+    },
+    {
+      "outlet_id": "daily_mirror",
+      "tier": 1,
+      "domains": [
+        "www.mirror.co.uk",
+        "mirror.co.uk"
+      ],
+      "section_patterns": [
+        "-\\d+$"
+      ],
+      "fetch": "direct",
+      "paid_patterns": [
+        "/partner-stories/",
+        "/sponsored/"
+      ],
+      "paid_markers": [
+        "Advertorial",
+        "Sponsored",
+        "Partner Stories"
+      ]
+    },
+    {
+      "outlet_id": "daily_telegraph",
+      "tier": 1,
+      "domains": [
+        "telegraph.co.uk",
+        "www.telegraph.co.uk"
+      ],
+      "section_patterns": [],
+      "fetch": "proxy",
+      "paid_patterns": [
+        "^/spark(-development)?/",
+        "^/sponsored/",
+        "^/recommended/",
+        "^/deals/",
+        "^/betting/",
+        "^/vouchercodes/",
+        "^/promotions/"
+      ],
+      "paid_markers": [
+        "Advertisement feature",
+        "Sponsored",
+        "In partnership with",
+        "Partner content",
+        "Partnership",
+        "Produced by Telegraph Spark",
+        "Telegraph Spark",
+        "affiliate links",
+        "We may earn a commission",
+        "commission on sales"
+      ]
+    },
+    {
+      "outlet_id": "der_spiegel",
+      "tier": 1,
+      "domains": [
+        "www.spiegel.de",
+        "spiegel.de"
+      ],
+      "section_patterns": [],
+      "fetch": "direct",
+      "paid_patterns": [
+        "^/serien/",
+        "^/filme/",
+        "^/rundreisen/",
+        "^/reisetrends/",
+        "^/genussreisen/",
+        "^/uncategorized/",
+        "^/gluecksspirale/",
+        "^/eurojackpot/",
+        "^/lotto6aus49/",
+        "^/streamingdienste/"
+      ],
+      "paid_markers": [
+        "Anzeige",
+        "ANZEIGE",
+        "Sponsored Site"
+      ]
+    },
+    {
+      "outlet_id": "economist",
+      "tier": 1,
+      "domains": [
+        "www.economist.com",
+        "economist.com"
+      ],
+      "section_patterns": [
+        "/\\d{4}/\\d{2}/\\d{2}/"
+      ],
+      "fetch": "proxy",
+      "paid_patterns": [
+        "^/impact(/|$)",
+        "^/(sponsored|sponsor-content|sponsorship)(/|$)",
+        "^/(advertisement-feature|advertorial)(/|$)",
+        "^/paid-post(/|$)",
+        "^/(branded-content|brand-content|brandconnect|brand-connect)(/|$)",
+        "^/partner-content(/|$)",
+        "^/promoted(/|$)"
+      ],
+      "paid_markers": [
+        "Advertisement feature",
+        "Sponsored by",
+        "Sponsored content",
+        "Paid Post",
+        "Promoted by",
+        "Produced by Economist Impact",
+        "Economist Impact"
+      ]
+    },
+    {
+      "outlet_id": "evening_standard",
+      "tier": 1,
+      "domains": [
+        "www.standard.co.uk",
+        "standard.co.uk"
+      ],
+      "section_patterns": [],
+      "fetch": "direct",
+      "paid_patterns": [
+        "^/advertorials(/|$)",
+        "^/storystudio(/|$)",
+        "^/shopping(/|$)",
+        "/esbest(/|$)",
+        "^/esrewards(/|$)",
+        "^/voucher-?codes(/|$)",
+        "^/business/(axastartupangel|facebookcommunityboost|trade-and-invest-wales|midtown-big-ideas-exchange|royal-albert-dock|viagogo-tickets2|xe-international-money-transfers)(/|$)"
+      ],
+      "paid_markers": [
+        "Commercial content",
+        "advertisement feature",
+        "in association with",
+        "brought to you by",
+        "advertiser funded",
+        "we may earn an affiliate commission"
+      ]
+    },
+    {
+      "outlet_id": "financial_times",
+      "tier": 1,
+      "domains": [
+        "www.ft.com",
+        "ft.com"
+      ],
+      "section_patterns": [
+        "/content/",
+        "/article/"
+      ],
+      "fetch": "proxy",
+      "paid_patterns": [
+        "/partnercontent/",
+        "/brandsuite/",
+        "/paidpost/"
+      ],
+      "paid_markers": [
+        "Paid Post",
+        "Partner Content",
+        "FT Partner Content",
+        "Paid for by",
+        "This content was paid for by",
+        "Produced by the FT's Commercial department"
+      ]
+    },
+    {
+      "outlet_id": "forbes",
+      "tier": 1,
+      "domains": [
+        "www.forbes.com",
+        "forbes.com"
+      ],
+      "section_patterns": [
+        "^/sites/"
+      ],
+      "fetch": "direct",
+      "paid_patterns": [
+        "/councils/",
+        "/sites/forbes[a-z]*council/",
+        "/sites/forbesbooks",
+        "brandvoice",
+        "/sites/insights-",
+        "/sites/(1850brandcoffee|1850byfolgers|abb|aberdeen|accenture|adobe|adobepartnership|adp|airbus|akamai|alfresco|allclearid|alliantgroup|americanexpress|americanfunds|anabluewing|appdynamics|arizonacommerce|ascm|athenahealth|att|audi|avigilon|bankofsingapore|bcg|blackstarcapitalltd|bmoharrisbank|bnymellon|bnymellonwealthmanagement|braintree|braze|businessaviation|canon|capitalone|capitalonefutureedge|capitalonespark|cargill|cartier|castlight|cbre|cdw|celebritycruises|centurylink|cftc|charlesschwab|charlesschwabadvisor|chicagobooth|cisco|cit|citi|citizensaccess|citrix|civicnation|cmstesting|colehaan|colorado|comcastbusiness|concertocloud|constantcontact|cornelljohnson|courtyardmarriott|coxbusiness|crowe|dassaultsystemes|datingcom|dbsbank|dbsprivatebank|dell|delltechnologies|deloitte|deloitteriskandfinancialadvisory|delta|discoverpersonalloans|disneyinstitute|domperignon|drexeluniversity|eidoo|emc|emerson|emirates|epson|etrade|extrahop|ey|eycybersecurity|f5|fedex|fidelity|firstrepublicbank|flexport|freeenterprise|frisco|gapincthiswayahead|gapinternational|gradsoflife|gwcic|gyro|harvardpilgrimhealthcare|hec|hennessyparadisimperial|hewlettpackardenterprise|hiscox|honeywell|houlihanlawrence|hp|hpeenterprisenxt|hpinc|hpincemea|hsbc|huawei|hyatt|ibm|ibmperformancecomputing|ibmpowersystems|icims|icoengine|impactpartners|indiana|infiniti|infosys|intelai|inteliotpartnership|internationaliotcouncil|intuitivesurgical|intuitquickbooks|iowa|iwc|japan|johnhancock|josabank|jpmorganchase|juniper|kellogg|kinetica|koreanair|kpmg|kyocera|lasvegas|lilly|lincoln|mahindracomviva|mdanderson|medidata|meero|mercedesbenz|merrilllynch|microsoft|microsoft365|microsoftdynamics|microsoftinnovation|ministryoftourismindia|mitsubishiheavyindustries|mmedric|montblanc|morganstanley|mypos|netapp|netjets|neustar|nice|northerntrust|northwesternmutual|norton|nuveen|nuveencef|nvidia|ofx|olddominion|opentext|oppenheimerfunds|optum|oracle|orlando|oticon|pace|paloaltonetworks|paulevans|paycom|paypal|paysafe|peerfit|pega|personalcapital|pfizer|philips|pimco|ppg|providencedigitalinnovation|ptc|publicissapient|puremichigan|qa|qlik|qualityassurance|quantcast|rackspace|ramcommercial|raymondjames|rbcwealthmanagement|relateiq|ritz-carltonleadershipcenter|riverbed|robertocoin|sage|salesforce|salesforceessentials|samsung|samsungbusiness|samsungtv|sap|seagate|secret|servicenow|shinola|siemenshealthineers|smartsheet|socialimpact|spdr|sprintbusiness|statefarm|statoil|sungardas|sunovion|suntrust|suntrustprivatewealth|symantec|taboola|tanotofoundation|teradata|tesaro|testbrandvoice|theglenlivet|thehartford|theleukemialymphomasociety|themacallan|thomsonreuters|thriventmutualfunds|tmfgroup|toyota|transamerica|ubs|unicefusa|unify|united|universityofcalifornia|universityofphoenix|ups|urogen|usaa|usbankaltitudereserve|vanguard|vanguardcharitable|visa|vmware|wellsfargo|whittiertrust|workday|xerox|zenithwatches|zurich|schneiderelectric|commure)/"
+      ],
+      "paid_markers": [
+        "Brand Contributor",
+        "Council Post",
+        "BrandVoice",
+        "Paid Program"
+      ]
+    },
+    {
+      "outlet_id": "fortune",
+      "tier": 1,
+      "domains": [
+        "fortune.com",
+        "www.fortune.com"
+      ],
+      "section_patterns": [
+        "/\\d{4}/\\d{2}/\\d{2}/"
+      ],
+      "fetch": "direct",
+      "paid_patterns": [
+        "/press-releases/",
+        "/sponsored/",
+        "/brandstudio/"
+      ],
+      "paid_markers": [
+        "Paid Content",
+        "PaidContent",
+        "SPONSORED CONTENT",
+        "Partner / Source:",
+        "EZ Newswire",
+        "Fortune Brand Studio",
+        "Brand Studio"
+      ]
+    },
+    {
+      "outlet_id": "fox_news",
+      "tier": 1,
+      "domains": [
+        "www.foxnews.com",
+        "foxnews.com"
+      ],
+      "section_patterns": [],
+      "fetch": "direct",
+      "paid_patterns": [
+        "/category/special/sponsored",
+        "/deals/"
+      ],
+      "paid_markers": [
+        "Sponsored",
+        "SPECIAL/SPONSORED taxonomy tag (e.g. /FOX NEWS/SPECIAL/SPONSORED/American Legends)",
+        "FOX News may be compensated for, or earn a commission if you buy through, our referral links",
+        "This content was created by a team that works independently from the FOX newsroom"
+      ]
+    },
+    {
+      "outlet_id": "globe_and_mail",
+      "tier": 1,
+      "domains": [
+        "www.theglobeandmail.com",
+        "theglobeandmail.com"
+      ],
+      "section_patterns": [
+        "/article-"
+      ],
+      "fetch": "direct",
+      "paid_patterns": [
+        "/adv/",
+        "/partners(/|$)"
+      ],
+      "paid_markers": [
+        "Sponsor Content",
+        "Advertising feature produced by",
+        "Paid Post",
+        "AdvertiserContentArticle",
+        "Globe Content Studio"
+      ]
+    },
+    {
+      "outlet_id": "guardian",
+      "tier": 1,
+      "domains": [
+        "www.theguardian.com",
+        "theguardian.com",
+        "amp.theguardian.com"
+      ],
+      "section_patterns": [
+        "/20\\d{2}/[a-z]{3}/\\d{1,2}/"
+      ],
+      "fetch": "direct",
+      "paid_patterns": [
+        "/tone/advertisement-features",
+        "^/guardian-labs",
+        "^/(audible-true-crime-and-investigations|britains-ai-powered-creative-economy|christopher-nolans-the-odyssey|ferrero-australia-quality-at-heart-2026|guardian-clearing|uni-clearing-find-your-place-at-york|making-healthy-choices-easier-for-families-with-tesco|hilton|power-of-green|science-will-win|climate-academy|soil-matters|vax-facts|voice-of-empowerment|rising-voices|resistance-rises|the-brave-of-heart-fund|whats-in-your-blood-|renegades|mythical-creatures|rise-of-robert-the-bruce|double-take|inclusive-sustainable-future|business-briefs|the-future-of-work--forging-an-inclusive-economy)(/[a-z-]+)?/20\\d{2}/[a-z]{3}/\\d{1,2}/"
+      ],
+      "paid_markers": [
+        "Paid content",
+        "Paid for by",
+        "Advertiser content",
+        "About this content",
+        "\"isPaidContent\":true",
+        "\"sponsorshipType\":\"paid\""
+      ]
+    },
+    {
+      "outlet_id": "gulf_news",
+      "tier": 1,
+      "domains": [
+        "gulfnews.com",
+        "www.gulfnews.com",
+        "m.gulfnews.com"
+      ],
+      "section_patterns": [
+        "-1\\.\\d+"
+      ],
+      "fetch": "direct",
+      "paid_patterns": [
+        "/gn-focus/",
+        "/gn-reach/",
+        "/best-buys/",
+        "/corporate-news/",
+        "/company-releases/",
+        "/friday-partner/"
+      ],
+      "paid_markers": [
+        "GN Focus",
+        "GN Reach",
+        "Partner Content",
+        "Advertorial",
+        "Sponsored",
+        "Supplied"
+      ]
+    },
+    {
+      "outlet_id": "i_paper",
+      "tier": 1,
+      "domains": [
+        "inews.co.uk",
+        "www.inews.co.uk"
+      ],
+      "section_patterns": [
+        "-\\d+/?$"
+      ],
+      "fetch": "direct",
+      "paid_patterns": [
+        "(?:^|/)advertorial/",
+        "-advertorial-\\d+/?$"
+      ],
+      "paid_markers": [
+        "Ad Feature",
+        "inews__post__label-sponsored",
+        "\"article_label\":\"sponsored\""
+      ]
+    },
+    {
+      "outlet_id": "independent",
+      "tier": 1,
+      "domains": [
+        "www.independent.co.uk",
+        "independent.co.uk"
+      ],
+      "section_patterns": [
+        "-[a-z]?\\d{6,}\\.html$"
+      ],
+      "fetch": "direct",
+      "paid_patterns": [
+        "/sponsoredcontent(?:/|$)",
+        "/betting(?:/|$)",
+        "/commercial(?:/|$)",
+        "/deals(?:/|$)",
+        "/vouchercodes(?:/|$)"
+      ],
+      "paid_markers": [
+        "Sponsored Content",
+        "Advertisement feature",
+        "in association with",
+        "Paid for by",
+        "Promoted"
+      ]
+    },
+    {
+      "outlet_id": "itv_news",
+      "tier": 1,
+      "domains": [
+        "www.itv.com",
+        "itv.com"
+      ],
+      "section_patterns": [
+        "/news/"
+      ],
+      "fetch": "direct",
+      "paid_patterns": [
+        "/presscentre/"
+      ],
+      "paid_markers": [
+        "Sponsored",
+        "In partnership with",
+        "Paid partnership",
+        "Presented by",
+        "Advertisement feature",
+        "Press release"
+      ]
+    },
+    {
+      "outlet_id": "le_monde",
+      "tier": 1,
+      "domains": [
+        "www.lemonde.fr",
+        "lemonde.fr"
+      ],
+      "section_patterns": [
+        "/\\d{4}/\\d{2}/\\d{2}/.+_\\d+_\\d+\\.html$"
+      ],
+      "fetch": "proxy",
+      "paid_patterns": [
+        "^/partenaires?[-/]",
+        "^/publicite/",
+        "^/les-cles-de-demain/"
+      ],
+      "paid_markers": [
+        "Article sponsoris\u00e9",
+        "En partenariat avec",
+        "Contenu partenaire",
+        "Contenu propos\u00e9 par",
+        "Publicit\u00e9",
+        "Publi-information"
+      ]
+    },
+    {
+      "outlet_id": "los_angeles_times",
+      "tier": 1,
+      "domains": [
+        "www.latimes.com",
+        "latimes.com"
+      ],
+      "section_patterns": [
+        "/story/\\d{4}-\\d{2}-\\d{2}/"
+      ],
+      "fetch": "direct",
+      "paid_patterns": [
+        "/b2b(/|$)",
+        "/paid-posts",
+        "/brandpublishing",
+        "/sponsored/",
+        "/shopping/",
+        "-adstory\\.html",
+        "/cbp-",
+        "-ugc-",
+        "/bestcovery"
+      ],
+      "paid_markers": [
+        "Business by LA Times Studios",
+        "at LA Times Studios",
+        "Brand Publishing",
+        "B2B Publishing",
+        "Paid Post"
+      ]
+    },
+    {
+      "outlet_id": "marketwatch",
+      "tier": 1,
+      "domains": [
+        "www.marketwatch.com",
+        "marketwatch.com"
+      ],
+      "section_patterns": [
+        "^/story/",
+        "^/livecoverage/",
+        "^/data-news/"
+      ],
+      "fetch": "proxy",
+      "paid_patterns": [
+        "^/insurance-services/",
+        "^/financial-guides/",
+        "^/business-services/",
+        "^/guides/",
+        "^/picks/",
+        "^/partner-center"
+      ],
+      "paid_markers": [
+        "Advertiser Disclosure",
+        "compensation from companies that appear on this page",
+        "compensation may impact how, where and in what order products appear",
+        "Our Partners",
+        "Partner Content",
+        "Presented By",
+        "Sponsored"
+      ]
+    },
+    {
+      "outlet_id": "mit_technology_review",
+      "tier": 1,
+      "domains": [
+        "www.technologyreview.com",
+        "technologyreview.com"
+      ],
+      "section_patterns": [
+        "^/\\d{4}/\\d{2}/\\d{2}/\\d+/"
+      ],
+      "fetch": "direct",
+      "paid_patterns": [
+        "^/custom-content"
+      ],
+      "paid_markers": [
+        "This content was produced by Insights, the custom content arm of MIT Technology Review",
+        "In partnership with",
+        "Produced by Insights",
+        "MIT Technology Review Insights",
+        "\"paywallType\":\"sponsored\""
+      ]
+    },
+    {
+      "outlet_id": "national",
+      "tier": 1,
+      "domains": [
+        "www.thenationalnews.com",
+        "thenationalnews.com"
+      ],
+      "section_patterns": [
+        "/\\d{4}/\\d{2}/\\d{2}/"
+      ],
+      "fetch": "direct",
+      "paid_patterns": [
+        "(^|/)advertorial/",
+        "(^|/)sponsored/",
+        "(^|/)branded-content/",
+        "(^|/)partner-content/",
+        "(^|/)promoted-content/"
+      ],
+      "paid_markers": [
+        "Advertorial",
+        "Sponsored",
+        "articleSection: Advertorial",
+        "author: Advertorial",
+        "subtype-sponsored",
+        "section=Advertorial"
+      ]
+    },
+    {
+      "outlet_id": "nbc_news",
+      "tier": 1,
+      "domains": [
+        "www.nbcnews.com",
+        "nbcnews.com"
+      ],
+      "section_patterns": [],
+      "fetch": "direct",
+      "paid_patterns": [
+        "^/select(/|$)"
+      ],
+      "paid_markers": [
+        "Paid content",
+        "Sponsored by",
+        "Promoted by"
+      ]
+    },
+    {
+      "outlet_id": "new_york_times",
+      "tier": 1,
+      "domains": [
+        "www.nytimes.com",
+        "nytimes.com",
+        "cooking.nytimes.com"
+      ],
+      "section_patterns": [],
+      "fetch": "proxy",
+      "paid_patterns": [
+        "/paidpost/"
+      ],
+      "paid_markers": [
+        "PAID POST",
+        "PAID POST by",
+        "Paid Post",
+        "T Brand Studio"
+      ]
+    },
+    {
+      "outlet_id": "npr",
+      "tier": 1,
+      "domains": [
+        "www.npr.org",
+        "npr.org"
+      ],
+      "section_patterns": [
+        "/\\d{4}/\\d{2}/\\d{2}/"
+      ],
+      "fetch": "direct",
+      "paid_patterns": [],
+      "paid_markers": [
+        "Sponsor Message",
+        "Support for NPR comes from",
+        "Advertisement"
+      ]
+    },
+    {
+      "outlet_id": "observer",
+      "tier": 1,
+      "domains": [
+        "observer.co.uk",
+        "www.observer.co.uk"
+      ],
+      "section_patterns": [
+        "/article/"
+      ],
+      "fetch": "direct",
+      "paid_patterns": [],
+      "paid_markers": [
+        "Sponsored by",
+        "Sponsored",
+        "Studio 1791"
+      ]
+    },
+    {
+      "outlet_id": "pa_media",
+      "tier": 1,
+      "domains": [
+        "pa.media",
+        "www.pa.media"
+      ],
+      "section_patterns": [
+        "^/blogs/"
+      ],
+      "fetch": "direct",
+      "paid_patterns": [
+        "^/blogs/company-news/",
+        "^/blogs/company-blog/",
+        "^/blogs/pr-services/",
+        "/pa-mediapoint/",
+        "^/blogs/training/",
+        "^/blogs/betting-services/",
+        "^/blogs/globelynx/",
+        "^/blogs/media-and-digital/",
+        "^/blogs/pa-group-people/",
+        "/pa-tv-metadata/"
+      ],
+      "paid_markers": [
+        "PA Mediapoint",
+        "PR Services",
+        "Company News",
+        "Company Blog",
+        "Increase the coverage of your press release"
+      ]
+    },
+    {
+      "outlet_id": "reuters",
+      "tier": 1,
+      "domains": [
+        "reuters.com",
+        "www.reuters.com"
+      ],
+      "section_patterns": [],
+      "fetch": "proxy",
+      "paid_patterns": [
+        "^/press-releases?/",
+        "^/plus/",
+        "^/sponsored/",
+        "^/brandfeatures/",
+        "^/coupons/"
+      ],
+      "paid_markers": [
+        "Reuters Plus",
+        "Produced by Reuters Plus",
+        "Sponsored Content",
+        "Sponsored",
+        "Paid Post",
+        "Paid Content",
+        "provided by",
+        "This content was produced by",
+        "not created by Reuters",
+        "Press Release",
+        "PR Newswire",
+        "Business Wire",
+        "GlobeNewswire"
+      ]
+    },
+    {
+      "outlet_id": "sky_news",
+      "tier": 1,
+      "domains": [
+        "news.sky.com"
+      ],
+      "section_patterns": [
+        "^/story/"
+      ],
+      "fetch": "proxy",
+      "paid_patterns": [
+        "^/sponsored(?:/|-|$)",
+        "^/paid-content(?:/|-|$)",
+        "^/partner-?content(?:/|-|$)",
+        "^/branded-content(?:/|-|$)",
+        "^/promoted(?:/|-|$)",
+        "^/advertorial(?:/|-|$)",
+        "^/advertisement-feature(?:/|-|$)",
+        "^/commercial(?:/|-|$)"
+      ],
+      "paid_markers": [
+        "Advertisement feature",
+        "Sponsored",
+        "Sponsored by",
+        "Paid content",
+        "In partnership with",
+        "Promoted by",
+        "Paid for by"
+      ]
+    },
+    {
+      "outlet_id": "south_china_morning_post",
+      "tier": 1,
+      "domains": [
+        "www.scmp.com",
+        "scmp.com"
+      ],
+      "section_patterns": [
+        "/article/\\d+/"
+      ],
+      "fetch": "direct",
+      "paid_patterns": [
+        "^/presented/",
+        "^/native/",
+        "^/scmp-pr-blog/"
+      ],
+      "paid_markers": [
+        "Paid Post:",
+        "In partnership with:",
+        "Branded",
+        "sponsorType",
+        "Morning Studio"
+      ]
+    },
+    {
+      "outlet_id": "sun",
+      "tier": 1,
+      "domains": [
+        "www.thesun.co.uk",
+        "thesun.co.uk"
+      ],
+      "section_patterns": [
+        "/[0-9]{6,}/"
+      ],
+      "fetch": "proxy",
+      "paid_patterns": [
+        "^/sun-selects/",
+        "^/shopping/",
+        "^/betting/",
+        "^/sun-bingo/",
+        "^/sun-savers/"
+      ],
+      "paid_markers": [
+        "Commercial content notice:",
+        "may result in a payment to The Sun",
+        "data-nyp-affiliate=\"true\"",
+        "If you click a link and buy a product we may earn revenue"
+      ]
+    },
+    {
+      "outlet_id": "sunday_times",
+      "tier": 1,
+      "domains": [
+        "www.thetimes.com",
+        "thetimes.com",
+        "www.thetimes.co.uk",
+        "thetimes.co.uk"
+      ],
+      "section_patterns": [
+        "/article/"
+      ],
+      "fetch": "proxy",
+      "paid_patterns": [
+        "^/static/",
+        "^/best-law-firms/",
+        "^/best-places-to-work/"
+      ],
+      "paid_markers": [
+        "Sponsored",
+        "PROMOTED CONTENT",
+        "In partnership with",
+        "In co-operation with",
+        "Paid post",
+        "Advertisement feature",
+        "Brought to you by"
+      ]
+    },
+    {
+      "outlet_id": "sydney_morning_herald",
+      "tier": 1,
+      "domains": [
+        "www.smh.com.au",
+        "smh.com.au"
+      ],
+      "section_patterns": [
+        "-\\d{8}-p[0-9a-z]+\\.html$"
+      ],
+      "fetch": "direct",
+      "paid_patterns": [
+        "/brand-discover(/|$)"
+      ],
+      "paid_markers": [
+        "Sponsored",
+        "Presented by",
+        "AssetAdsSponsor"
+      ]
+    },
+    {
+      "outlet_id": "techcrunch",
+      "tier": 1,
+      "domains": [
+        "techcrunch.com"
+      ],
+      "section_patterns": [
+        "^/\\d{4}/\\d{2}/\\d{2}/"
+      ],
+      "fetch": "direct",
+      "paid_patterns": [
+        "^/sponsor",
+        "^/brand-studio",
+        "^/tag/sponsored"
+      ],
+      "paid_markers": [
+        "Sponsored by:",
+        "Sponsored Content",
+        "sponsored_post",
+        "tc_sponsored_post-template"
+      ]
+    },
+    {
+      "outlet_id": "times",
+      "tier": 1,
+      "domains": [
+        "www.thetimes.com",
+        "thetimes.com",
+        "www.thetimes.co.uk",
+        "thetimes.co.uk"
+      ],
+      "section_patterns": [
+        "/article/"
+      ],
+      "fetch": "proxy",
+      "paid_patterns": [
+        "/static/",
+        "/money-mentor"
+      ],
+      "paid_markers": [
+        "Advertisement Feature",
+        "SPONSORED",
+        "advertising feature",
+        "advertorial",
+        "In partnership with",
+        "In association with",
+        "brought to you by",
+        "Paid for by",
+        "Promoted by"
+      ]
+    },
+    {
+      "outlet_id": "usa_today",
+      "tier": 1,
+      "domains": [
+        "www.usatoday.com",
+        "usatoday.com"
+      ],
+      "section_patterns": [
+        "^/story/.+/\\d{4}/\\d{2}/\\d{2}/.+/\\d+/?$"
+      ],
+      "fetch": "direct",
+      "paid_patterns": [
+        "^/story/sponsor-story/",
+        "^/story/studiog/",
+        "^/story/shopping/",
+        "^/story/grocery/",
+        "^/story/money/home-services/",
+        "^/story/money/shopping/",
+        "^/money/blueprint/",
+        "^/online-betting/"
+      ],
+      "paid_markers": [
+        "Branded Content",
+        "Sponsor Story",
+        "paid for by",
+        "Sponsored",
+        "Advertiser Disclosure",
+        "We may earn a commission",
+        "Our editors independently selected"
+      ]
+    },
+    {
+      "outlet_id": "verge",
+      "tier": 1,
+      "domains": [
+        "www.theverge.com",
+        "theverge.com"
+      ],
+      "section_patterns": [
+        "/\\d{4,}/"
+      ],
+      "fetch": "direct",
+      "paid_patterns": [
+        "/sponsored/",
+        "/advertiser-content/"
+      ],
+      "paid_markers": [
+        "Advertiser Content",
+        "Advertiser Content From",
+        "From our sponsor",
+        "Sponsored"
+      ]
+    },
+    {
+      "outlet_id": "wall_street_journal",
+      "tier": 1,
+      "domains": [
+        "www.wsj.com",
+        "wsj.com"
+      ],
+      "section_patterns": [],
+      "fetch": "proxy",
+      "paid_patterns": [
+        "^/ad/",
+        "^/(cio|cfo|cmo|ceo|riskandcompliance|sustainable-business)(/|$)",
+        "/(?:news/)?articles?/(?:bt-co|dn-co|pr-co)-"
+      ],
+      "paid_markers": [
+        "Paid Program",
+        "PAID PROGRAM",
+        "Custom Content from WSJ",
+        "Sponsored",
+        "Presented by",
+        "Content From Our Sponsor"
+      ]
+    },
+    {
+      "outlet_id": "washington_post",
+      "tier": 1,
+      "domains": [
+        "www.washingtonpost.com",
+        "washingtonpost.com"
+      ],
+      "section_patterns": [],
+      "fetch": "proxy",
+      "paid_patterns": [
+        "/creativegroup/",
+        "/brand[- ]?connect/",
+        "/brand[- ]?studio/",
+        "/wp-advertising/",
+        "/mediakit/",
+        "/coupons/"
+      ],
+      "paid_markers": [
+        "Content from",
+        "WP Creative Group",
+        "WP BrandStudio",
+        "WP Brand Studio",
+        "BrandConnect",
+        "WP BrandConnect",
+        "Sponsor Generated Content",
+        "This content is paid for by an advertiser and published by WP Creative Group",
+        "The Washington Post newsroom was not involved in the creation of this content",
+        "Content is developed and paid for by the advertiser"
+      ]
+    },
+    {
+      "outlet_id": "wired",
+      "tier": 1,
+      "domains": [
+        "www.wired.com",
+        "wired.com"
+      ],
+      "section_patterns": [
+        "^/story/",
+        "^/review/",
+        "^/gallery/"
+      ],
+      "fetch": "direct",
+      "paid_patterns": [
+        "^/sponsored/",
+        "/sponsored/story/"
+      ],
+      "paid_markers": [
+        "Sponsored Content",
+        "PAID POST",
+        "Produced By",
+        "In Partnership With",
+        "Presented By",
+        "Promoted",
+        "Paid Program",
+        "Paid Partner",
+        "Advertiser Content",
+        "WIRED Consulting"
+      ]
+    },
+    {
+      "outlet_id": "yahoo_finance",
+      "tier": 1,
+      "domains": [
+        "finance.yahoo.com",
+        "uk.finance.yahoo.com",
+        "ca.finance.yahoo.com"
+      ],
+      "section_patterns": [],
+      "fetch": "direct",
+      "paid_patterns": [],
+      "paid_markers": [
+        "This is a paid press release",
+        "Contact the press release distributor directly with any inquiries",
+        "paid press release",
+        "This press release was published by a CLEAR"
+      ]
+    }
+  ]
+}

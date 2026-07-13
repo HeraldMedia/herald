@@ -1,0 +1,776 @@
+[
+  {
+    "outlet_id": "abc_news",
+    "editorial_url": "https://abcnews.com/US/ice-agent-involved-shooting-maine-authorities/story?id=134714502",
+    "paid_example_url": "https://abcnews.com/GMA/Shop/abc-secret-savings-outdoor/story?id=134652948",
+    "paid_patterns": [
+      "/gma/shop(/|$)",
+      "/shop/story/"
+    ],
+    "domains": [
+      "abcnews.com",
+      "abcnews.go.com"
+    ]
+  },
+  {
+    "outlet_id": "agence_france_presse",
+    "editorial_url": "https://correspondent.afp.com/buried-past-comes-back-haunt-france",
+    "paid_example_url": "https://www.afp.com/en/agency/inside-afp/press-release/afp-launches-mediagen-generative-ai-project-media",
+    "paid_patterns": [
+      "/press-releases?(/|$)",
+      "/communiques?-de-presse",
+      "/afp_communique",
+      "/comunicados?-de-prensa",
+      "/comunicados?-de-imprensa",
+      "/pressemitteilungen?",
+      "/corporate-content"
+    ],
+    "domains": [
+      "www.afp.com",
+      "factcheck.afp.com",
+      "correspondent.afp.com",
+      "making-of.afp.com",
+      "focus.afp.com"
+    ]
+  },
+  {
+    "outlet_id": "al_jazeera",
+    "editorial_url": "https://www.aljazeera.com/news/2026/7/13/eu-unveils-1bn-fund-for-gaza-war-recovery",
+    "paid_example_url": "https://www.aljazeera.com/paid-content/kazakhstans-quiet-ascent-a-new-frontier-for-robust-investment",
+    "paid_patterns": [
+      "/sponsored(?:/|$)",
+      "/paid-content(?:/|$)"
+    ],
+    "domains": [
+      "aljazeera.com",
+      "www.aljazeera.com",
+      "aljazeera.net",
+      "www.aljazeera.net",
+      "balkans.aljazeera.net"
+    ]
+  },
+  {
+    "outlet_id": "ars_technica",
+    "editorial_url": "https://arstechnica.com/space/2026/07/china-recovered-its-first-reusable-rocket-and-showed-a-new-way-to-do-it/",
+    "paid_example_url": "https://arstechnica.com/sponsored/how-amds-server-hardware-is-ushering-in-an-age-of-confidential-computing/",
+    "paid_patterns": [
+      "^/sponsored/",
+      "^/sponsored-content/",
+      "^/author/sponsored/"
+    ],
+    "domains": [
+      "arstechnica.com",
+      "www.arstechnica.com"
+    ]
+  },
+  {
+    "outlet_id": "associated_press",
+    "editorial_url": "https://apnews.com/article/hungary-constitutional-amendment-remove-president-59620a0313e402be3b2cb6db2668f2ee",
+    "paid_example_url": "https://apnews.com/press-release/business-wire/press-release-5cf4d18727164e309622d3682b4c5445",
+    "paid_patterns": [
+      "/press-release/",
+      "/hub/press-releases",
+      "/buyline"
+    ],
+    "domains": [
+      "apnews.com",
+      "www.apnews.com"
+    ]
+  },
+  {
+    "outlet_id": "bbc_news",
+    "editorial_url": "https://www.bbc.co.uk/news/articles/c0mydjl12mwo",
+    "paid_example_url": "https://www.bbc.com/storyworks/detour-trkiye/detour-turkiye-mediterranean",
+    "paid_patterns": [
+      "/storyworks/",
+      "(?i)/story-?works"
+    ],
+    "domains": [
+      "bbc.co.uk",
+      "www.bbc.co.uk",
+      "bbc.com",
+      "www.bbc.com"
+    ]
+  },
+  {
+    "outlet_id": "bloomberg",
+    "editorial_url": "https://www.bloomberg.com/news/articles/2026-07-13/waller-says-fed-may-need-to-raise-rates-to-tame-core-inflation",
+    "paid_example_url": "https://sponsored.bloomberg.com/article/jp-morgan/credit-markets-enter-the-algorithm-era",
+    "paid_patterns": [
+      "^/sponsor/",
+      "/news/sponsors/",
+      "^/press-releases/",
+      "^/article/",
+      "^/quicksight/",
+      "^/immersive-story/",
+      "^/immersive/",
+      "^/smart-paper/",
+      "^/campaign/",
+      "^/hub/"
+    ],
+    "domains": [
+      "www.bloomberg.com",
+      "bloomberg.com",
+      "sponsored.bloomberg.com"
+    ]
+  },
+  {
+    "outlet_id": "business_insider",
+    "editorial_url": "https://www.businessinsider.com/ai-job-impact-read-letter-economists-executives-openai-anthropic-google-2026-7",
+    "paid_example_url": "https://www.businessinsider.com/sc/introducing-the-better-work-project-hub",
+    "paid_patterns": [
+      "^/sc/",
+      "^/apo/",
+      "/news/[a-z-]+/.+-\\d{6,}$"
+    ],
+    "domains": [
+      "businessinsider.com",
+      "www.businessinsider.com",
+      "africa.businessinsider.com"
+    ]
+  },
+  {
+    "outlet_id": "cbs_news",
+    "editorial_url": "https://www.cbsnews.com/news/georgia-power-ai-data-centers-eminent-domain/",
+    "paid_example_url": "https://www.cbsnews.com/news/cisco-teams-up-with-the-nfl-to-defend-super-bowl-paid-content/",
+    "paid_patterns": [
+      "/brandstudio/",
+      "/essentials/",
+      "/cbs-essentials/",
+      "-paid-content/?$",
+      "-sponsored-content/?$"
+    ],
+    "domains": [
+      "www.cbsnews.com",
+      "cbsnews.com"
+    ]
+  },
+  {
+    "outlet_id": "cnbc",
+    "editorial_url": "https://www.cnbc.com/2026/07/13/bank-earnings-jpmorgan-chase-goldman-sachs-bank-of-america.html",
+    "paid_example_url": "https://www.cnbc.com/advertorial/upping-the-game-for-switzerlands-largest-stadium-with-huawei-wi-fi-6/",
+    "paid_patterns": [
+      "^/advertorials?/",
+      "^/[^/]*-sponsored-content"
+    ],
+    "domains": [
+      "cnbc.com",
+      "www.cnbc.com"
+    ]
+  },
+  {
+    "outlet_id": "cnn",
+    "editorial_url": "https://www.cnn.com/2026/07/13/politics/rubio-dismantle-international-criminal-court",
+    "paid_example_url": "https://sponsorcontent.cnn.com/int/meta/reinventing-business-models/",
+    "paid_patterns": [
+      "^/cnn-underscored(/|$)",
+      "(^|/)paid-content(/|$)",
+      "(^|/)paid-partner-content(/|$)",
+      "(^|/)sponsor-content(/|$)"
+    ],
+    "domains": [
+      "www.cnn.com",
+      "edition.cnn.com",
+      "us.cnn.com",
+      "cnn.com"
+    ]
+  },
+  {
+    "outlet_id": "daily_mail_mailonline",
+    "editorial_url": "https://www.dailymail.co.uk/news/article-15973541/Counter-terror-police-leading-Ann-Widdecombe-murder-investigation-ex-MP-dead-home.html",
+    "paid_example_url": "https://www.dailymail.co.uk/buyline/beauty/article-15944109/Prai-neck-dcolletage-cream-free-gift-marks-spencer.html",
+    "paid_patterns": [
+      "/buyline/",
+      "/best-buys/"
+    ],
+    "domains": [
+      "www.dailymail.co.uk",
+      "www.dailymail.com"
+    ]
+  },
+  {
+    "outlet_id": "daily_mirror",
+    "editorial_url": "https://www.mirror.co.uk/news/uk-news/dovestones-moorland-wildfire-police-arrest-37426187",
+    "paid_example_url": "https://www.mirror.co.uk/partner-stories/harry-styles-making-modern-icon-37320117",
+    "paid_patterns": [
+      "/partner-stories/",
+      "/sponsored/"
+    ],
+    "domains": [
+      "www.mirror.co.uk",
+      "mirror.co.uk"
+    ]
+  },
+  {
+    "outlet_id": "der_spiegel",
+    "editorial_url": "https://www.spiegel.de/kultur/german-stare-was-hat-es-mit-dem-social-media-trend-auf-sich-a-851c2cd1-08d8-40d8-9209-ad0c551fbd01",
+    "paid_example_url": "https://streaming-guide.spiegel.de/serien/the-agency/",
+    "paid_patterns": [
+      "^/serien/",
+      "^/filme/",
+      "^/rundreisen/",
+      "^/reisetrends/",
+      "^/genussreisen/",
+      "^/uncategorized/",
+      "^/gluecksspirale/",
+      "^/eurojackpot/",
+      "^/lotto6aus49/",
+      "^/streamingdienste/"
+    ],
+    "domains": [
+      "www.spiegel.de",
+      "spiegel.de"
+    ]
+  },
+  {
+    "outlet_id": "evening_standard",
+    "editorial_url": "https://www.standard.co.uk/news/london/wildfire-heatwave-firebreak-gardens-homes-lfb-b1289815.html",
+    "paid_example_url": "https://www.standard.co.uk/advertorials/a-revolution-in-home-blood-pressure-monitoring-a3511956.html",
+    "paid_patterns": [
+      "^/advertorials(/|$)",
+      "^/storystudio(/|$)",
+      "^/shopping(/|$)",
+      "/esbest(/|$)",
+      "^/esrewards(/|$)",
+      "^/voucher-?codes(/|$)",
+      "^/business/(axastartupangel|facebookcommunityboost|trade-and-invest-wales|midtown-big-ideas-exchange|royal-albert-dock|viagogo-tickets2|xe-international-money-transfers)(/|$)"
+    ],
+    "domains": [
+      "www.standard.co.uk",
+      "standard.co.uk"
+    ]
+  },
+  {
+    "outlet_id": "financial_times",
+    "editorial_url": "https://www.ft.com/content/1f97b548-1bd8-41c8-8380-043ec688d77a",
+    "paid_example_url": "https://www.ft.com/partnercontent/abb/energy-efficiency-the-unsung-hero-on-the-route-to-decarbonisation.html",
+    "paid_patterns": [
+      "/partnercontent/",
+      "/brandsuite/",
+      "/paidpost/"
+    ],
+    "domains": [
+      "www.ft.com",
+      "ft.com"
+    ]
+  },
+  {
+    "outlet_id": "forbes",
+    "editorial_url": "https://www.forbes.com/sites/tylerroush/2026/07/13/elon-musks-fortune-falls-below-900-billion-as-spacex-slide-worsens/",
+    "paid_example_url": "https://www.forbes.com/sites/schneiderelectric/2026/07/13/3-ideas-to-efficiently-solve-ais-emerging-energy-problem/",
+    "paid_patterns": [
+      "/councils/",
+      "/sites/forbes[a-z]*council/",
+      "/sites/forbesbooks",
+      "brandvoice",
+      "/sites/insights-",
+      "/sites/(1850brandcoffee|1850byfolgers|abb|aberdeen|accenture|adobe|adobepartnership|adp|airbus|akamai|alfresco|allclearid|alliantgroup|americanexpress|americanfunds|anabluewing|appdynamics|arizonacommerce|ascm|athenahealth|att|audi|avigilon|bankofsingapore|bcg|blackstarcapitalltd|bmoharrisbank|bnymellon|bnymellonwealthmanagement|braintree|braze|businessaviation|canon|capitalone|capitalonefutureedge|capitalonespark|cargill|cartier|castlight|cbre|cdw|celebritycruises|centurylink|cftc|charlesschwab|charlesschwabadvisor|chicagobooth|cisco|cit|citi|citizensaccess|citrix|civicnation|cmstesting|colehaan|colorado|comcastbusiness|concertocloud|constantcontact|cornelljohnson|courtyardmarriott|coxbusiness|crowe|dassaultsystemes|datingcom|dbsbank|dbsprivatebank|dell|delltechnologies|deloitte|deloitteriskandfinancialadvisory|delta|discoverpersonalloans|disneyinstitute|domperignon|drexeluniversity|eidoo|emc|emerson|emirates|epson|etrade|extrahop|ey|eycybersecurity|f5|fedex|fidelity|firstrepublicbank|flexport|freeenterprise|frisco|gapincthiswayahead|gapinternational|gradsoflife|gwcic|gyro|harvardpilgrimhealthcare|hec|hennessyparadisimperial|hewlettpackardenterprise|hiscox|honeywell|houlihanlawrence|hp|hpeenterprisenxt|hpinc|hpincemea|hsbc|huawei|hyatt|ibm|ibmperformancecomputing|ibmpowersystems|icims|icoengine|impactpartners|indiana|infiniti|infosys|intelai|inteliotpartnership|internationaliotcouncil|intuitivesurgical|intuitquickbooks|iowa|iwc|japan|johnhancock|josabank|jpmorganchase|juniper|kellogg|kinetica|koreanair|kpmg|kyocera|lasvegas|lilly|lincoln|mahindracomviva|mdanderson|medidata|meero|mercedesbenz|merrilllynch|microsoft|microsoft365|microsoftdynamics|microsoftinnovation|ministryoftourismindia|mitsubishiheavyindustries|mmedric|montblanc|morganstanley|mypos|netapp|netjets|neustar|nice|northerntrust|northwesternmutual|norton|nuveen|nuveencef|nvidia|ofx|olddominion|opentext|oppenheimerfunds|optum|oracle|orlando|oticon|pace|paloaltonetworks|paulevans|paycom|paypal|paysafe|peerfit|pega|personalcapital|pfizer|philips|pimco|ppg|providencedigitalinnovation|ptc|publicissapient|puremichigan|qa|qlik|qualityassurance|quantcast|rackspace|ramcommercial|raymondjames|rbcwealthmanagement|relateiq|ritz-carltonleadershipcenter|riverbed|robertocoin|sage|salesforce|salesforceessentials|samsung|samsungbusiness|samsungtv|sap|seagate|secret|servicenow|shinola|siemenshealthineers|smartsheet|socialimpact|spdr|sprintbusiness|statefarm|statoil|sungardas|sunovion|suntrust|suntrustprivatewealth|symantec|taboola|tanotofoundation|teradata|tesaro|testbrandvoice|theglenlivet|thehartford|theleukemialymphomasociety|themacallan|thomsonreuters|thriventmutualfunds|tmfgroup|toyota|transamerica|ubs|unicefusa|unify|united|universityofcalifornia|universityofphoenix|ups|urogen|usaa|usbankaltitudereserve|vanguard|vanguardcharitable|visa|vmware|wellsfargo|whittiertrust|workday|xerox|zenithwatches|zurich|schneiderelectric|commure)/"
+    ],
+    "domains": [
+      "www.forbes.com",
+      "forbes.com"
+    ]
+  },
+  {
+    "outlet_id": "fortune",
+    "editorial_url": "https://fortune.com/2026/07/13/eu-social-media-under-13-safety-burden/",
+    "paid_example_url": "https://fortune.com/press-releases/opportune-llp-strategy-realization-practice-2026-07-13/",
+    "paid_patterns": [
+      "/press-releases/",
+      "/sponsored/",
+      "/brandstudio/"
+    ],
+    "domains": [
+      "fortune.com",
+      "www.fortune.com"
+    ]
+  },
+  {
+    "outlet_id": "fox_news",
+    "editorial_url": "https://www.foxnews.com/politics/trump-makes-surprise-pick-fill-grahams-senate-seat",
+    "paid_example_url": "https://www.foxnews.com/category/special/sponsored/american-legends",
+    "paid_patterns": [
+      "/category/special/sponsored",
+      "/deals/"
+    ],
+    "domains": [
+      "www.foxnews.com",
+      "foxnews.com"
+    ]
+  },
+  {
+    "outlet_id": "gulf_news",
+    "editorial_url": "https://gulfnews.com/world/mena/us-strikes-iran-again-as-strait-of-hormuz-tensions-rise-gulf-nations-remain-on-alert-1.500605748",
+    "paid_example_url": "https://gulfnews.com/gn-focus/company-news/honor-becomes-second-largest-smartphone-brand-in-the-middle-east-1.500602397",
+    "paid_patterns": [
+      "/gn-focus/",
+      "/gn-reach/",
+      "/best-buys/",
+      "/corporate-news/",
+      "/company-releases/",
+      "/friday-partner/"
+    ],
+    "domains": [
+      "gulfnews.com",
+      "www.gulfnews.com",
+      "m.gulfnews.com"
+    ]
+  },
+  {
+    "outlet_id": "itv_news",
+    "editorial_url": "https://www.itv.com/news/2026-07-13/sam-neill-star-of-jurassic-park-and-peaky-blinders-has-died-aged-78",
+    "paid_example_url": "https://www.itv.com/presscentre/media-releases/itv-launches-new-commercial-innovations",
+    "paid_patterns": [
+      "/presscentre/"
+    ],
+    "domains": [
+      "www.itv.com",
+      "itv.com"
+    ]
+  },
+  {
+    "outlet_id": "le_monde",
+    "editorial_url": "https://www.lemonde.fr/international/article/2026/07/13/la-diplomatie-americaine-impuissante-face-a-la-reprise-des-hostilites-entre-l-iran-et-les-etats-unis_6723050_3210.html",
+    "paid_example_url": "https://www.lemonde.fr/les-cles-de-demain/article/2015/11/12/et-si-le-cognitif-aidait-a-trouver-l-ame-s-ur_4808198_4758288.html",
+    "paid_patterns": [
+      "^/partenaires?[-/]",
+      "^/publicite/",
+      "^/les-cles-de-demain/"
+    ],
+    "domains": [
+      "www.lemonde.fr",
+      "lemonde.fr"
+    ]
+  },
+  {
+    "outlet_id": "los_angeles_times",
+    "editorial_url": "https://www.latimes.com/california/story/2026-07-13/super-el-nino-is-brewing-how-bad-would-historic-weather-system-get",
+    "paid_example_url": "https://www.latimes.com/b2b/entertainment/story/2026-07-09/dunkin-kylie-jenner-collaboration",
+    "paid_patterns": [
+      "/b2b(/|$)",
+      "/paid-posts",
+      "/brandpublishing",
+      "/sponsored/",
+      "/shopping/",
+      "-adstory\\.html",
+      "/cbp-",
+      "-ugc-",
+      "/bestcovery"
+    ],
+    "domains": [
+      "www.latimes.com",
+      "latimes.com"
+    ]
+  },
+  {
+    "outlet_id": "marketwatch",
+    "editorial_url": "https://www.marketwatch.com/story/a-hot-inflation-reading-this-week-could-mean-a-rate-hike-soon-feds-waller-says-15acf7a2",
+    "paid_example_url": "https://www.marketwatch.com/insurance-services/car-warranty/best-extended-car-warranty/",
+    "paid_patterns": [
+      "^/insurance-services/",
+      "^/financial-guides/",
+      "^/business-services/",
+      "^/guides/",
+      "^/picks/",
+      "^/partner-center"
+    ],
+    "domains": [
+      "www.marketwatch.com",
+      "marketwatch.com"
+    ]
+  },
+  {
+    "outlet_id": "mit_technology_review",
+    "editorial_url": "https://www.technologyreview.com/2026/07/10/1140289/sperm-donors-need-limits-says-a-european-fertility-group/",
+    "paid_example_url": "https://www.technologyreview.com/2026/07/07/1139413/the-foundational-elements-of-ai-architecture-that-it-leaders-need-to-scale/",
+    "paid_patterns": [
+      "^/custom-content"
+    ],
+    "domains": [
+      "www.technologyreview.com",
+      "technologyreview.com"
+    ]
+  },
+  {
+    "outlet_id": "nbc_news",
+    "editorial_url": "https://www.nbcnews.com/news/us-news/jay-z-apologizes-yankee-stadium-show-starts-hours-late-says-was-safety-rcna587268",
+    "paid_example_url": "",
+    "paid_patterns": [
+      "^/select(/|$)"
+    ],
+    "domains": [
+      "www.nbcnews.com",
+      "nbcnews.com"
+    ]
+  },
+  {
+    "outlet_id": "npr",
+    "editorial_url": "https://www.npr.org/2026/07/13/nx-s1-5887668/pythons-metabolism-digestion-human-disease-treatment",
+    "paid_example_url": "",
+    "paid_patterns": [],
+    "domains": [
+      "www.npr.org",
+      "npr.org"
+    ]
+  },
+  {
+    "outlet_id": "pa_media",
+    "editorial_url": "https://pa.media/blogs/pa-editors-picks/jannik-sinner-bounces-back-from-french-open-woe-to-defend-wimbledon-title/",
+    "paid_example_url": "https://pa.media/blogs/pr-services/why-media-monitoring-essential-pr-success/",
+    "paid_patterns": [
+      "^/blogs/company-news/",
+      "^/blogs/company-blog/",
+      "^/blogs/pr-services/",
+      "/pa-mediapoint/",
+      "^/blogs/training/",
+      "^/blogs/betting-services/",
+      "^/blogs/globelynx/",
+      "^/blogs/media-and-digital/",
+      "^/blogs/pa-group-people/",
+      "/pa-tv-metadata/"
+    ],
+    "domains": [
+      "pa.media",
+      "www.pa.media"
+    ]
+  },
+  {
+    "outlet_id": "reuters",
+    "editorial_url": "https://www.reuters.com/world/europe/ukraine-awaits-new-government-after-prime-ministers-shock-dismissal-2026-07-13/",
+    "paid_example_url": "https://www.reuters.com/press-releases/forbes-tower-egypt-new-capital-acud-sustainability-magnom-properties-2026-07-13/",
+    "paid_patterns": [
+      "^/press-releases?/",
+      "^/plus/",
+      "^/sponsored/",
+      "^/brandfeatures/",
+      "^/coupons/"
+    ],
+    "domains": [
+      "reuters.com",
+      "www.reuters.com"
+    ]
+  },
+  {
+    "outlet_id": "sky_news",
+    "editorial_url": "https://news.sky.com/story/jurassic-park-star-sam-neill-has-died-13562906",
+    "paid_example_url": "",
+    "paid_patterns": [
+      "^/sponsored(?:/|-|$)",
+      "^/paid-content(?:/|-|$)",
+      "^/partner-?content(?:/|-|$)",
+      "^/branded-content(?:/|-|$)",
+      "^/promoted(?:/|-|$)",
+      "^/advertorial(?:/|-|$)",
+      "^/advertisement-feature(?:/|-|$)",
+      "^/commercial(?:/|-|$)"
+    ],
+    "domains": [
+      "news.sky.com"
+    ]
+  },
+  {
+    "outlet_id": "south_china_morning_post",
+    "editorial_url": "https://www.scmp.com/news/world/americas/article/3360428/mexico-file-legal-complaints-over-us-immigration-deaths-says-president-sheinbaum",
+    "paid_example_url": "https://www.scmp.com/presented/news/hong-kong/education/topics/cais-celebrates-student-achievements/article/3360046/nurturing-top-students-and-global-citizens-cais",
+    "paid_patterns": [
+      "^/presented/",
+      "^/native/",
+      "^/scmp-pr-blog/"
+    ],
+    "domains": [
+      "www.scmp.com",
+      "scmp.com"
+    ]
+  },
+  {
+    "outlet_id": "techcrunch",
+    "editorial_url": "https://techcrunch.com/2026/07/13/anthropic-starts-localizing-claude-pricing-for-india-its-biggest-market-after-the-us/",
+    "paid_example_url": "https://techcrunch.com/sponsor/f5/your-gpus-arent-the-problem-ais-real-bottleneck-is-data-delivery/",
+    "paid_patterns": [
+      "^/sponsor",
+      "^/brand-studio",
+      "^/tag/sponsored"
+    ],
+    "domains": [
+      "techcrunch.com"
+    ]
+  },
+  {
+    "outlet_id": "daily_telegraph",
+    "editorial_url": "https://www.telegraph.co.uk/news/2026/07/13/counter-terror-police-leading-ann-widdecombe-investigation/",
+    "paid_example_url": "https://www.telegraph.co.uk/sponsored/11912725/how-to-get-paid.html",
+    "paid_patterns": [
+      "^/spark(-development)?/",
+      "^/sponsored/",
+      "^/recommended/",
+      "^/deals/",
+      "^/betting/",
+      "^/vouchercodes/",
+      "^/promotions/"
+    ],
+    "domains": [
+      "telegraph.co.uk",
+      "www.telegraph.co.uk"
+    ]
+  },
+  {
+    "outlet_id": "economist",
+    "editorial_url": "https://www.economist.com/finance-and-economics/2026/07/12/storm-clouds-gather-over-americas-financial-supremacy",
+    "paid_example_url": "",
+    "paid_patterns": [
+      "^/impact(/|$)",
+      "^/(sponsored|sponsor-content|sponsorship)(/|$)",
+      "^/(advertisement-feature|advertorial)(/|$)",
+      "^/paid-post(/|$)",
+      "^/(branded-content|brand-content|brandconnect|brand-connect)(/|$)",
+      "^/partner-content(/|$)",
+      "^/promoted(/|$)"
+    ],
+    "domains": [
+      "www.economist.com",
+      "economist.com"
+    ]
+  },
+  {
+    "outlet_id": "globe_and_mail",
+    "editorial_url": "https://www.theglobeandmail.com/canada/article-tick-borne-disease-anaplasmosis-new-cmaj-report/",
+    "paid_example_url": "https://www.theglobeandmail.com/business/adv/article-how-bmo-insurance-is-simplifying-health-and-dental-insurance/",
+    "paid_patterns": [
+      "/adv/",
+      "/partners(/|$)"
+    ],
+    "domains": [
+      "www.theglobeandmail.com",
+      "theglobeandmail.com"
+    ]
+  },
+  {
+    "outlet_id": "guardian",
+    "editorial_url": "https://www.theguardian.com/world/2026/jul/13/del-monte-pineapple-farm-kenya-deaths-g4s",
+    "paid_example_url": "https://www.theguardian.com/hilton/2026/jul/07/less-planning-more-paradise",
+    "paid_patterns": [
+      "/tone/advertisement-features",
+      "^/guardian-labs",
+      "^/(audible-true-crime-and-investigations|britains-ai-powered-creative-economy|christopher-nolans-the-odyssey|ferrero-australia-quality-at-heart-2026|guardian-clearing|uni-clearing-find-your-place-at-york|making-healthy-choices-easier-for-families-with-tesco|hilton|power-of-green|science-will-win|climate-academy|soil-matters|vax-facts|voice-of-empowerment|rising-voices|resistance-rises|the-brave-of-heart-fund|whats-in-your-blood-|renegades|mythical-creatures|rise-of-robert-the-bruce|double-take|inclusive-sustainable-future|business-briefs|the-future-of-work--forging-an-inclusive-economy)(/[a-z-]+)?/20\\d{2}/[a-z]{3}/\\d{1,2}/"
+    ],
+    "domains": [
+      "www.theguardian.com",
+      "theguardian.com",
+      "amp.theguardian.com"
+    ]
+  },
+  {
+    "outlet_id": "i_paper",
+    "editorial_url": "https://inews.co.uk/news/politics/burnham-leaves-room-migration-u-turn-4642419",
+    "paid_example_url": "https://inews.co.uk/inews-lifestyle/money/advertorial/living-heat-pump-make-switch-from-gas-boiler-4283054",
+    "paid_patterns": [
+      "(?:^|/)advertorial/",
+      "-advertorial-\\d+/?$"
+    ],
+    "domains": [
+      "inews.co.uk",
+      "www.inews.co.uk"
+    ]
+  },
+  {
+    "outlet_id": "independent",
+    "editorial_url": "https://www.independent.co.uk/news/world/americas/us-politics/trump-irs-settlement-slush-fund-lawsuit-b3014060.html",
+    "paid_example_url": "https://www.independent.co.uk/sponsoredcontent/confused-about-crypto-iconomi-is-a-platform-that-lets-you-copy-every-move-of-the-most-skilled-traders-b2381016.html",
+    "paid_patterns": [
+      "/sponsoredcontent(?:/|$)",
+      "/betting(?:/|$)",
+      "/commercial(?:/|$)",
+      "/deals(?:/|$)",
+      "/vouchercodes(?:/|$)"
+    ],
+    "domains": [
+      "www.independent.co.uk",
+      "independent.co.uk"
+    ]
+  },
+  {
+    "outlet_id": "national",
+    "editorial_url": "https://www.thenationalnews.com/news/uae/2026/07/13/abu-dhabi-residents-dh30m-lottery-win-will-fulfil-biggest-dream-for-daughter/",
+    "paid_example_url": "https://www.thenationalnews.com/advertorial/2026/05/08/landmark-retail-and-landmark-arabia-recognised-among-middle-easts-best-workplaces/",
+    "paid_patterns": [
+      "(^|/)advertorial/",
+      "(^|/)sponsored/",
+      "(^|/)branded-content/",
+      "(^|/)partner-content/",
+      "(^|/)promoted-content/"
+    ],
+    "domains": [
+      "www.thenationalnews.com",
+      "thenationalnews.com"
+    ]
+  },
+  {
+    "outlet_id": "new_york_times",
+    "editorial_url": "https://www.nytimes.com/athletic/7433296/2026/07/13/andrey-santos-manchester-united-transfer-news/",
+    "paid_example_url": "https://www.nytimes.com/paidpost/netflix/women-inmates-separate-but-not-equal.html",
+    "paid_patterns": [
+      "/paidpost/"
+    ],
+    "domains": [
+      "www.nytimes.com",
+      "nytimes.com",
+      "cooking.nytimes.com"
+    ]
+  },
+  {
+    "outlet_id": "observer",
+    "editorial_url": "https://observer.co.uk/news/national/article/unused-ventilators-bought-for-135m-during-covid-auctioned-off-for-less-than-15m",
+    "paid_example_url": "https://observer.co.uk/news/health/article/how-to-bio-hack-your-way-to-good-health",
+    "paid_patterns": [],
+    "domains": [
+      "observer.co.uk",
+      "www.observer.co.uk"
+    ]
+  },
+  {
+    "outlet_id": "sun",
+    "editorial_url": "https://www.thesun.co.uk/news/39746513/brits-killed-spanish-wildfire-pictured-daughter-tribute/",
+    "paid_example_url": "https://www.thesun.co.uk/sun-selects/11731890/best-sprinklers-for-kids/",
+    "paid_patterns": [
+      "^/sun-selects/",
+      "^/shopping/",
+      "^/betting/",
+      "^/sun-bingo/",
+      "^/sun-savers/"
+    ],
+    "domains": [
+      "www.thesun.co.uk",
+      "thesun.co.uk"
+    ]
+  },
+  {
+    "outlet_id": "sunday_times",
+    "editorial_url": "https://www.thetimes.com/uk/crime/article/counterterrorism-police-leading-investigation-ann-widdecombe-death-zphd83jhv",
+    "paid_example_url": "https://www.thetimes.com/static/travel-deals-hotels-cruises-times-holidays/",
+    "paid_patterns": [
+      "^/static/",
+      "^/best-law-firms/",
+      "^/best-places-to-work/"
+    ],
+    "domains": [
+      "www.thetimes.com",
+      "thetimes.com",
+      "www.thetimes.co.uk",
+      "thetimes.co.uk"
+    ]
+  },
+  {
+    "outlet_id": "sydney_morning_herald",
+    "editorial_url": "https://www.smh.com.au/national/professor-richard-scolyer-remembered-as-a-national-treasure-20260713-p60eyh.html",
+    "paid_example_url": "https://www.smh.com.au/goodfood/recipes/golden-bubbling-goodness-30-ways-cheese-and-butter-make-everything-better-20260701-p60bny.html",
+    "paid_patterns": [
+      "/brand-discover(/|$)"
+    ],
+    "domains": [
+      "www.smh.com.au",
+      "smh.com.au"
+    ]
+  },
+  {
+    "outlet_id": "times",
+    "editorial_url": "https://www.thetimes.com/uk/politics/article/keir-starmer-world-cup-zh62fwnck",
+    "paid_example_url": "https://www.thetimes.com/static/the-open-road/a-weekend-break-with-a-difference/",
+    "paid_patterns": [
+      "/static/",
+      "/money-mentor"
+    ],
+    "domains": [
+      "www.thetimes.com",
+      "thetimes.com",
+      "www.thetimes.co.uk",
+      "thetimes.co.uk"
+    ]
+  },
+  {
+    "outlet_id": "verge",
+    "editorial_url": "https://www.theverge.com/tech/964843/apple-openai-lawsuit-wildest-claims",
+    "paid_example_url": "https://www.theverge.com/sponsored/12344134/mr-robot-cybersecurity-hpe",
+    "paid_patterns": [
+      "/sponsored/",
+      "/advertiser-content/"
+    ],
+    "domains": [
+      "www.theverge.com",
+      "theverge.com"
+    ]
+  },
+  {
+    "outlet_id": "wall_street_journal",
+    "editorial_url": "https://www.wsj.com/business/media/paramount-warner-merger-california-0b46fb98",
+    "paid_example_url": "https://partnerswsj.com/nec-connecting-the-dots",
+    "paid_patterns": [
+      "^/ad/",
+      "^/(cio|cfo|cmo|ceo|riskandcompliance|sustainable-business)(/|$)",
+      "/(?:news/)?articles?/(?:bt-co|dn-co|pr-co)-"
+    ],
+    "domains": [
+      "www.wsj.com",
+      "wsj.com"
+    ]
+  },
+  {
+    "outlet_id": "washington_post",
+    "editorial_url": "https://www.washingtonpost.com/obituaries/2026/07/13/actor-sam-neill-dies-78/",
+    "paid_example_url": "https://www.washingtonpost.com/creativegroup/sponsor/intel/",
+    "paid_patterns": [
+      "/creativegroup/",
+      "/brand[- ]?connect/",
+      "/brand[- ]?studio/",
+      "/wp-advertising/",
+      "/mediakit/",
+      "/coupons/"
+    ],
+    "domains": [
+      "www.washingtonpost.com",
+      "washingtonpost.com"
+    ]
+  },
+  {
+    "outlet_id": "usa_today",
+    "editorial_url": "https://www.usatoday.com/story/news/nation/2026/07/13/ice-shooting-biddeford-maine/90899748007/",
+    "paid_example_url": "https://www.usatoday.com/story/sponsor-story/nature-made/2026/07/13/easy-ways-to-get-more-greens-in-your-daily-routine/90877599007/",
+    "paid_patterns": [
+      "^/story/sponsor-story/",
+      "^/story/studiog/",
+      "^/story/shopping/",
+      "^/story/grocery/",
+      "^/story/money/home-services/",
+      "^/story/money/shopping/",
+      "^/money/blueprint/",
+      "^/online-betting/"
+    ],
+    "domains": [
+      "www.usatoday.com",
+      "usatoday.com"
+    ]
+  },
+  {
+    "outlet_id": "wired",
+    "editorial_url": "https://www.wired.com/story/what-is-wi-fi-8/",
+    "paid_example_url": "https://www.wired.com/sponsored/story/qvac-turboquant/",
+    "paid_patterns": [
+      "^/sponsored/",
+      "/sponsored/story/"
+    ],
+    "domains": [
+      "www.wired.com",
+      "wired.com"
+    ]
+  },
+  {
+    "outlet_id": "yahoo_finance",
+    "editorial_url": "https://finance.yahoo.com/markets/stocks/articles/rich-spacex-workers-ipo-143700468.html",
+    "paid_example_url": "https://finance.yahoo.com/news/access-newswire-launches-partner-marketplace-142000174.html",
+    "paid_patterns": [],
+    "domains": [
+      "finance.yahoo.com",
+      "uk.finance.yahoo.com",
+      "ca.finance.yahoo.com"
+    ]
+  }
+]
