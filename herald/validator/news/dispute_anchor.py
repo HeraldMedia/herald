@@ -6,7 +6,7 @@ A disputer commits ``HRLDDIS|<article_id_hash>`` from their hotkey. Validators r
 value bounded and is taken over the canonical article_id the oracle already uses (the canonical URL).
 
 A dispute only *triggers* the validator's own escalated re-check (mandatory pinned judge); the
-existing oracle/persistence verdict decides upheld vs rejected. See DISPUTE_DESIGN.md.
+existing oracle/persistence verdict decides upheld vs rejected. See dev/DISPUTE_DESIGN.md.
 """
 
 import hashlib

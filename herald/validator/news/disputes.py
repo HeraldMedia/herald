@@ -4,7 +4,7 @@ Consensus-safe by construction: a dispute only marks an article for the escalate
 existing deterministic oracle/persistence path decides upheld (article failed -> clawback+slash the
 miner, reward the disputer) vs rejected (still alive at window close -> slash the disputer). One
 active dispute per article — the earliest on-chain filer wins (the caller registers in block order).
-Incentives are weight-only; see DISPUTE_DESIGN.md.
+Incentives are weight-only; see dev/DISPUTE_DESIGN.md.
 """
 
 from dataclasses import dataclass

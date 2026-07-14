@@ -4,7 +4,7 @@ trust-the-endpoint value.
 
 Mirrors `registry.load_registry`'s verification and reuses `registry_signing`. The signature is the
 trusted "funded" signal: the operator confirms the client's treasury payment, then signs the brief
-funded with its reward pool. See FUNDING_DESIGN.md.
+funded with its reward pool. See dev/FUNDING_DESIGN.md.
 
 CAVEAT: briefs are dynamic, so the board signs them with an online key — that gives tamper-evidence
 in transit + operator attribution, but a board compromise could still forge briefs. An on-chain brief

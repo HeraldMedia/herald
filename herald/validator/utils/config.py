@@ -199,7 +199,7 @@ HERALD_DEAD_CONFIRM_EPOCHS = int(os.getenv('HERALD_DEAD_CONFIRM_EPOCHS', '2'))
 # Expire an article still vesting long after its window (bounds state; terminates held entries).
 HERALD_VEST_GRACE_EPOCHS = int(os.getenv('HERALD_VEST_GRACE_EPOCHS', '30'))
 
-# ── Disputes (escalated re-scrutiny of a placement; see DISPUTE_DESIGN.md) ──────
+# ── Disputes (escalated re-scrutiny of a placement; see dev/DISPUTE_DESIGN.md) ──────
 # A dispute (on-chain HRLDDIS commit) forces the pinned judge on a placement; the existing
 # persistence verdict decides it. Resolution runs the judge, so it is DISABLED unless
 # HERALD_REF_MODEL_ID is pinned identically across validators (a mixed fleet would diverge).
@@ -209,7 +209,7 @@ HERALD_DISPUTE_REWARD_FRACTION = float(os.getenv('HERALD_DISPUTE_REWARD_FRACTION
 # the disputer. Kept >= HERALD_DEAD_CONFIRM_EPOCHS so an upheld dispute has time to confirm dead.
 HERALD_DISPUTE_WINDOW_EPOCHS = int(os.getenv('HERALD_DISPUTE_WINDOW_EPOCHS', '4'))
 
-# ── Client-funded briefs (prepaid reward pool + DSV treasury; see FUNDING_DESIGN.md) ──
+# ── Client-funded briefs (prepaid reward pool + DSV treasury; see dev/FUNDING_DESIGN.md) ──
 # A client brief is paid from its prepaid `reward_pool` (USD), funded when the client pays alpha/TAO
 # into the DSV treasury; the standing brief pays from emissions. The operator confirms the payment and
 # signs the brief funded (the trusted funded signal). Treasury address for that settlement:

@@ -20,7 +20,7 @@ terraform/
 .venv/
 cache/
 
-# internal ops/design docs — keep local, never on GitHub
-RUNBOOK.md
-DISPUTE_DESIGN.md
-FUNDING_DESIGN.md
+# internal ops/design docs — keep local, never on GitHub. AGENTS.md stays at the repo root
+# (Codex auto-loads it there, same as CLAUDE.md); everything else lives under dev/.
+AGENTS.md
+dev/*.md
