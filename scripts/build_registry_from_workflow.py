@@ -32,7 +32,7 @@ def _norm_domains(domains):
     return out
 
 
-def merge(entry: dict) -> dict:
+def merge(entry: dict, tier: int = 1) -> dict:
     r = entry.get("research") or {}
     v = entry.get("verdict") or {}
     oid = entry["outlet_id"]  # canonical id from our input list
@@ -49,7 +49,7 @@ def merge(entry: dict) -> dict:
 
     return {
         "outlet_id": oid,
-        "tier": 1,
+        "tier": tier,
         "domains": domains,
         "section_patterns": list(section_patterns),
         "fetch": fetch,
@@ -110,12 +110,17 @@ def _safe_search(pat, s):
 
 
 def main():
-    src = sys.argv[1]
-    out_dir = sys.argv[2] if len(sys.argv) > 2 else "herald/validator/news"
-    data = json.load(open(src))
+    import argparse
+    ap = argparse.ArgumentParser()
+    ap.add_argument("src")
+    ap.add_argument("--tier", type=int, default=1)
+    ap.add_argument("--out", default="herald/validator/news/outlets.tier1.json")
+    ap.add_argument("--fixture", default="tests/news/tier1_fixture.json")
+    a = ap.parse_args()
+    data = json.load(open(a.src))
     if isinstance(data, dict) and "result" in data:
         data = data["result"]  # unwrap the workflow task envelope
-    merged = [merge(e) for e in data if isinstance(e, dict) and e.get("research")]
+    merged = [merge(e, a.tier) for e in data if isinstance(e, dict) and e.get("research")]
 
     print(f"outlets: {len(merged)}  with_verdict: {sum(o['_has_verdict'] for o in merged)}")
     fetch_kinds = {}
@@ -141,18 +146,16 @@ def main():
         {k: v for k, v in o.items() if not k.startswith("_")}
         for o in sorted(merged, key=lambda x: x["outlet_id"])
     ]}
-    reg_path = f"{out_dir}/outlets.tier1.json"
-    with open(reg_path, "w") as f:
+    with open(a.out, "w") as f:
         json.dump(registry, f, indent=2)
-    print(f"\nwrote {reg_path}  ({len(registry['outlets'])} outlets)")
+    print(f"\nwrote {a.out}  ({len(registry['outlets'])} outlets)")
 
     fixture = [{"outlet_id": o["outlet_id"], "editorial_url": o["_editorial_url"],
                 "paid_example_url": o["_paid_example_url"], "paid_patterns": o["paid_patterns"],
                 "domains": o["domains"]} for o in merged]
-    fix_path = f"{out_dir}/../../../tests/news/tier1_fixture.json"
-    with open(fix_path, "w") as f:
+    with open(a.fixture, "w") as f:
         json.dump(fixture, f, indent=2)
-    print(f"wrote {fix_path}")
+    print(f"wrote {a.fixture}")
     print("VALIDATION:", "PROBLEMS FOUND" if any_problem else "clean")
 
 

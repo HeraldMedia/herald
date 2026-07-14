@@ -1,0 +1,1236 @@
+[
+  {
+    "outlet_id": "american_banker",
+    "editorial_url": "https://www.americanbanker.com/news/first-hawaiian-strikes-2b-deal-to-return-to-u-s-mainland",
+    "paid_example_url": "https://www.americanbanker.com/whitepaper/why-capital-relief-alone-wont-save-banks-from-digital-mortgage-rivals",
+    "paid_patterns": [
+      "/press-release",
+      "/whitepaper",
+      "/web-seminar",
+      "/partnerinsights"
+    ],
+    "domains": [
+      "www.americanbanker.com",
+      "americanbanker.com"
+    ]
+  },
+  {
+    "outlet_id": "arabian_business",
+    "editorial_url": "https://www.arabianbusiness.com/abnews/luxury-watches-standout-timepieces-from-watches-and-wonders-2024",
+    "paid_example_url": "https://www.arabianbusiness.com/resources/modern-day-media-coupled-with-traditional-media-the-driving-force-of-modern-marketing",
+    "paid_patterns": [
+      "/resources/",
+      "/press-releases?/",
+      "/sponsored-content"
+    ],
+    "domains": [
+      "www.arabianbusiness.com",
+      "arabianbusiness.com",
+      "arabic.arabianbusiness.com"
+    ]
+  },
+  {
+    "outlet_id": "axios",
+    "editorial_url": "https://www.axios.com/2026/07/13/lindsey-graham-russia-sanctions-senate-trump",
+    "paid_example_url": "https://www.axios.com/sponsored/how-rewards-turn-advertising-into-a-win-win-for-brands-and-consumers",
+    "paid_patterns": [
+      "^/sponsored/",
+      "^/advertise/"
+    ],
+    "domains": [
+      "www.axios.com",
+      "axios.com"
+    ]
+  },
+  {
+    "outlet_id": "beincrypto",
+    "editorial_url": "https://beincrypto.com/grayscale-crypto-market-rewards-fundamentals/",
+    "paid_example_url": "https://beincrypto.com/bitcoin-suisse-advances-middle-east-expansion/",
+    "paid_patterns": [
+      "^/type/press-release(/|$)",
+      "^/author/advertorial(/|$)",
+      "^/press-releases(-submission)?/?$",
+      "^/type/sponsored(/|$)",
+      "^/author/sponsored(/|$)",
+      "^/sponsored(/|$)"
+    ],
+    "domains": [
+      "beincrypto.com",
+      "www.beincrypto.com",
+      "fr.beincrypto.com",
+      "de.beincrypto.com",
+      "es.beincrypto.com",
+      "it.beincrypto.com",
+      "nl.beincrypto.com",
+      "pl.beincrypto.com",
+      "br.beincrypto.com",
+      "tr.beincrypto.com",
+      "ru.beincrypto.com",
+      "jp.beincrypto.com",
+      "id.beincrypto.com",
+      "th.beincrypto.com",
+      "ar.beincrypto.com",
+      "hi.beincrypto.com",
+      "ua.beincrypto.com",
+      "cn.beincrypto.com"
+    ]
+  },
+  {
+    "outlet_id": "belfast_telegraph",
+    "editorial_url": "https://www.belfasttelegraph.co.uk/news/northern-ireland/murder-investigation-launched-after-three-found-dead-in-ballymena-family-home/a/158681008.html",
+    "paid_example_url": "https://www.belfasttelegraph.co.uk/ad-features/how-the-coca-cola-thank-you-fund-is-helping-local-organisations-at-the-heart-of-communities-across-ireland/a/155247663.html",
+    "paid_patterns": [
+      "^/ad-features/",
+      "/ad-features/"
+    ],
+    "domains": [
+      "www.belfasttelegraph.co.uk",
+      "belfasttelegraph.co.uk"
+    ]
+  },
+  {
+    "outlet_id": "birmingham_mail",
+    "editorial_url": "https://www.birminghammail.co.uk/news/midlands-news/scooter-rider-dies-midlands-collision-34285499",
+    "paid_example_url": "https://www.birminghammail.co.uk/special-features/revolut-offering-5-aer-variable-34050834",
+    "paid_patterns": [
+      "/special-features/",
+      "/sponsored/"
+    ],
+    "domains": [
+      "www.birminghammail.co.uk",
+      "birminghammail.co.uk"
+    ]
+  },
+  {
+    "outlet_id": "bitcoin_com_news",
+    "editorial_url": "https://news.bitcoin.com/convenience-store-giant-lawson-tests-jpyc-stablecoin-payments-in-japans-first-pos-retail-pilot/",
+    "paid_example_url": "https://news.bitcoin.com/cce-cash-lightning-fast-crypto-trading-platform-built-for-privacy/",
+    "paid_patterns": [
+      "^/hands-on-review-by-bitcoin-com"
+    ],
+    "domains": [
+      "news.bitcoin.com"
+    ]
+  },
+  {
+    "outlet_id": "bmj",
+    "editorial_url": "https://www.bmj.com/content/394/bmj-2026-100259",
+    "paid_example_url": "https://www.bmj.com/content/385/bmj-2023-074892/rapid-responses",
+    "paid_patterns": [
+      "suppl",
+      "/rapid-response",
+      "^/company/newsroom"
+    ],
+    "domains": [
+      "www.bmj.com",
+      "bmj.com"
+    ]
+  },
+  {
+    "outlet_id": "bristol_post_bristol_live",
+    "editorial_url": "https://www.bristolpost.co.uk/news/bristol-news/man-charged-following-alleged-museum-11057799",
+    "paid_example_url": "https://www.bristolpost.co.uk/special-features/revolut-offering-5-aer-variable-10996076",
+    "paid_patterns": [
+      "/special-features/",
+      "/sponsored/"
+    ],
+    "domains": [
+      "www.bristolpost.co.uk"
+    ]
+  },
+  {
+    "outlet_id": "building",
+    "editorial_url": "https://www.building.co.uk/news/mace-boss-among-construction-figures-recognised-in-kings-new-years-honours/5139989.article",
+    "paid_example_url": "https://www.building.co.uk/sponsored-content/from-ambition-to-action-how-can-wales-build-the-homes-it-needs/5139836.article",
+    "paid_patterns": [
+      "^/sponsored-content/",
+      "^/cpd/"
+    ],
+    "domains": [
+      "www.building.co.uk",
+      "building.co.uk"
+    ]
+  },
+  {
+    "outlet_id": "campaign",
+    "editorial_url": "https://www.campaignlive.co.uk/article/1955490",
+    "paid_example_url": "https://www.campaignlive.co.uk/resources/partnercontent",
+    "paid_patterns": [
+      "partnercontent",
+      "^/insight/"
+    ],
+    "domains": [
+      "www.campaignlive.co.uk",
+      "campaignlive.co.uk"
+    ]
+  },
+  {
+    "outlet_id": "chicago_tribune",
+    "editorial_url": "https://www.chicagotribune.com/2026/07/13/chicago-cubs-2026-draft-takeaways/",
+    "paid_example_url": "https://www.chicagotribune.com/2026/07/09/pricing-strategies-for-ai-agents-in-a-maturing-market/",
+    "paid_patterns": [
+      "^/branded-content",
+      "^/sponsor-content-hub",
+      "^/author/bestreviews"
+    ],
+    "domains": [
+      "www.chicagotribune.com",
+      "chicagotribune.com"
+    ]
+  },
+  {
+    "outlet_id": "chronicle_live",
+    "editorial_url": "https://www.chroniclelive.co.uk/news/north-east-news/north-tyneside-meadow-well-community-34285299",
+    "paid_example_url": "https://www.chroniclelive.co.uk/sponsored/same-core-values-two-north-23867954",
+    "paid_patterns": [
+      "^/special-features/",
+      "^/sponsored/"
+    ],
+    "domains": [
+      "www.chroniclelive.co.uk"
+    ]
+  },
+  {
+    "outlet_id": "cio",
+    "editorial_url": "https://www.cio.com/article/4195246/cios-must-rethink-operating-models-to-unlock-ai-at-scale.html",
+    "paid_example_url": "https://www.cio.com/brandposts/close-the-gap-why-ais-next-edge-is-under-your-desk/",
+    "paid_patterns": [
+      "/brandposts?/",
+      "/brandhubs?/"
+    ],
+    "domains": [
+      "cio.com",
+      "www.cio.com"
+    ]
+  },
+  {
+    "outlet_id": "cio_germany",
+    "editorial_url": "https://www.cio.de/article/4195932/mercedes-benz-cio-katrin-lehmann-wirft-das-handtuch.html",
+    "paid_example_url": "https://www.cio.de/brandposts/so-verhandeln-sie-mit-sap-einen-rise-vertrag/",
+    "paid_patterns": [
+      "/brandposts?/",
+      "/brandhubs?/",
+      "/native/"
+    ],
+    "domains": [
+      "www.cio.de",
+      "cio.de"
+    ]
+  },
+  {
+    "outlet_id": "city_a_m",
+    "editorial_url": "https://www.cityam.com/reeves-issues-warning-to-successor-as-she-battles-to-defend-record/",
+    "paid_example_url": "https://www.cityam.com/boardroom-diversity-supported-by-etoro/",
+    "paid_patterns": [
+      "/category/city-talk/",
+      "/businesswire",
+      "/partner-content",
+      "/sponsored",
+      "/city-am-curated",
+      "supported-by",
+      "in-association-with",
+      "(?:sign-up|welcome|deposit)-offer",
+      "-bonus-code"
+    ],
+    "domains": [
+      "cityam.com",
+      "www.cityam.com"
+    ]
+  },
+  {
+    "outlet_id": "coinmarketcap",
+    "editorial_url": "https://coinmarketcap.com/academy/article/robinhood-chain-hits-top-5-in-dex-volume",
+    "paid_example_url": "https://coinmarketcap.com/academy/article/acurast-smartphone-compute-revolution-cargo-decentralized-cloud",
+    "paid_patterns": [],
+    "domains": [
+      "coinmarketcap.com"
+    ]
+  },
+  {
+    "outlet_id": "computer_weekly",
+    "editorial_url": "https://www.computerweekly.com/news/366645814/MPs-call-on-NHS-to-scrap-Palantir-and-its-Federated-Data-Platform",
+    "paid_example_url": "https://www.computerweekly.com/ehandbook/Technology-at-the-2026-World-Cup",
+    "paid_patterns": [
+      "/sponsored[_-]communit",
+      "/ehandbook/"
+    ],
+    "domains": [
+      "www.computerweekly.com",
+      "computerweekly.com"
+    ]
+  },
+  {
+    "outlet_id": "computerworld",
+    "editorial_url": "https://www.computerworld.com/article/4196365/openclaw-becomes-a-nonprofit-foundation-as-it-seeks-to-be-the-switzerland-of-ai.html",
+    "paid_example_url": "https://www.computerworld.com/brandposts/future-of-ai-report/",
+    "paid_patterns": [
+      "/brandposts?/"
+    ],
+    "domains": [
+      "www.computerworld.com",
+      "computerworld.com"
+    ]
+  },
+  {
+    "outlet_id": "construction_news",
+    "editorial_url": "https://www.constructionnews.co.uk/financial/jrl-group-secures-record-2bn-order-book-and-returns-to-profit-13-07-2026/",
+    "paid_example_url": "https://www.constructionnews.co.uk/sponsored/the-challenge-of-firestopping-in-modern-construction-06-07-2026/",
+    "paid_patterns": [
+      "^/sponsored/"
+    ],
+    "domains": [
+      "www.constructionnews.co.uk",
+      "constructionnews.co.uk"
+    ]
+  },
+  {
+    "outlet_id": "cso_online",
+    "editorial_url": "https://www.csoonline.com/article/4196093/rabbitmq-flaws-expose-oauth-secrets-risk-complete-takeover-of-the-broker.html",
+    "paid_example_url": "https://www.csoonline.com/brandposts/smart-patch-automation/",
+    "paid_patterns": [
+      "/brandposts?/"
+    ],
+    "domains": [
+      "www.csoonline.com",
+      "csoonline.com"
+    ]
+  },
+  {
+    "outlet_id": "cso_online_germany",
+    "editorial_url": "https://www.computerwoche.de/article/4193645/welche-cybersicherheits-kpis-cisos-und-cios-wirklich-brauchen.html",
+    "paid_example_url": "https://www.computerwoche.de/brandposts/penetration-test-einmal-im-jahr-ist-zu-wenig/",
+    "paid_patterns": [
+      "/brandposts?/",
+      "^/webcasts?[/-]",
+      "/brandhubs?/"
+    ],
+    "domains": [
+      "www.computerwoche.de",
+      "computerwoche.de"
+    ]
+  },
+  {
+    "outlet_id": "cybernews",
+    "editorial_url": "https://cybernews.com/security/24-billion-credentials-data-leak/",
+    "paid_example_url": "https://cybernews.com/partner-content/why-your-hosting-provider-is-the-most-overlooked-link-in-your-supply-chain-security-in-2026/",
+    "paid_patterns": [
+      "^/partner-content/",
+      "^/press-releases/"
+    ],
+    "domains": [
+      "cybernews.com",
+      "www.cybernews.com"
+    ]
+  },
+  {
+    "outlet_id": "daily_express",
+    "editorial_url": "https://www.express.co.uk/news/royal/2228760/major-royal-appalled-harry-meghan-s-king-charles-reunion-says-royal-author",
+    "paid_example_url": "https://www.express.co.uk/sponsoredfeatures/entertainment/films/1497954/Candys-smart-laundry-Addams-Family-2",
+    "paid_patterns": [
+      "^/sponsoredfeatures/",
+      "^/partner-stories/",
+      "^/sponsored/",
+      "^/sponsoredcontent/",
+      "^/promotions/"
+    ],
+    "domains": [
+      "www.express.co.uk",
+      "express.co.uk"
+    ]
+  },
+  {
+    "outlet_id": "daily_record",
+    "editorial_url": "https://www.dailyrecord.co.uk/news/scottish-news/viral-tartan-army-traffic-cone-37426776",
+    "paid_example_url": "https://www.dailyrecord.co.uk/special-features/dont-sidelined-scammers-football-season-37348663",
+    "paid_patterns": [
+      "/special-features/",
+      "/partner-stories/",
+      "/sponsored/"
+    ],
+    "domains": [
+      "www.dailyrecord.co.uk",
+      "dailyrecord.co.uk"
+    ]
+  },
+  {
+    "outlet_id": "daily_star",
+    "editorial_url": "https://www.dailystar.co.uk/news/latest-news/teacher-admits-sex-boy-16-37426819",
+    "paid_example_url": "https://www.dailystar.co.uk/sponsored/level-up-your-laptop-christmas-36398793",
+    "paid_patterns": [
+      "^/sponsored/",
+      "^/partner-stories/",
+      "^/subscriber-rewards/"
+    ],
+    "domains": [
+      "www.dailystar.co.uk",
+      "dailystar.co.uk"
+    ]
+  },
+  {
+    "outlet_id": "decrypt",
+    "editorial_url": "https://decrypt.co/373439/openai-new-gpt-5-6-prompt-guide-chatgpt",
+    "paid_example_url": "https://decrypt.co/373248/predicting-the-world-cup-without-learning-to-trade-waterx-predict-is-live",
+    "paid_patterns": [],
+    "domains": [
+      "decrypt.co",
+      "www.decrypt.co"
+    ]
+  },
+  {
+    "outlet_id": "digital_trends",
+    "editorial_url": "https://www.digitaltrends.com/computing/how-to-install-macos-27-golden-gate-public-beta-on-your-mac/",
+    "paid_example_url": "https://www.digitaltrends.com/contributor-content/how-ai-tools-are-changing-product-development-in-modern-business/",
+    "paid_patterns": [
+      "/contributor-content/"
+    ],
+    "domains": [
+      "digitaltrends.com",
+      "www.digitaltrends.com",
+      "es.digitaltrends.com"
+    ]
+  },
+  {
+    "outlet_id": "engadget",
+    "editorial_url": "https://www.engadget.com/2214227/microsoft-is-making-the-windows-search-box-more-streamlined-and-useful/",
+    "paid_example_url": "https://www.engadget.com/sponsored-30-days-of-savings-2020-walmart-sale-arlo-essential-pack-video-doorbell-123005154.html",
+    "paid_patterns": [
+      "^/sponsored[-/]",
+      "^/sponsoredcontent/"
+    ],
+    "domains": [
+      "www.engadget.com",
+      "engadget.com"
+    ]
+  },
+  {
+    "outlet_id": "entrepreneur",
+    "editorial_url": "https://www.entrepreneur.com/business-news/gen-z-workers-can-make-34400-a-month-interning-at-this-wall-street-firm-and-housing-is-free",
+    "paid_example_url": "https://www.entrepreneur.com/growing-a-business/how-reachdesk-scaled-meaningful-corporate-gifting-with/502220",
+    "paid_patterns": [
+      "^/provider/",
+      "^/partner-studio(/|$)",
+      "^/spotlight(/|$)"
+    ],
+    "domains": [
+      "www.entrepreneur.com",
+      "entrepreneur.com",
+      "india.entrepreneur.com",
+      "apac.entrepreneur.com",
+      "eu.entrepreneur.com",
+      "mena.entrepreneur.com",
+      "spanish.entrepreneur.com"
+    ]
+  },
+  {
+    "outlet_id": "entrepreneur_uk",
+    "editorial_url": "https://uk.entrepreneur.com/entrepreneurs/alina-suedi-is-building-smarter-commerce-experiences-and-brand-strategy",
+    "paid_example_url": "https://uk.entrepreneur.com/leadership/ben-cornelius-how-authentic-leadership-can-support-more/500668",
+    "paid_patterns": [],
+    "domains": [
+      "uk.entrepreneur.com"
+    ]
+  },
+  {
+    "outlet_id": "estates_gazette",
+    "editorial_url": "https://www.estatesgazette.co.uk/news/derwent-secures-100m-credit-line-with-handelsbanken/",
+    "paid_example_url": "https://www.estatesgazette.co.uk/news/power-in-partnership/",
+    "paid_patterns": [],
+    "domains": [
+      "estatesgazette.co.uk",
+      "www.estatesgazette.co.uk"
+    ]
+  },
+  {
+    "outlet_id": "etf_com",
+    "editorial_url": "https://www.etf.com/sections/news/spacex-joins-nasdaq-100-july-7-here-are-etfs-feel-it-most",
+    "paid_example_url": "https://www.etf.com/sections/etf-industry-perspective/active-etf-approach-gold-and-silver-investing",
+    "paid_patterns": [
+      "^/sections/etf-industry-perspective(?:/|$)",
+      "^/sections/etf-report-sponsored-content(?:/|$)"
+    ],
+    "domains": [
+      "www.etf.com",
+      "etf.com"
+    ]
+  },
+  {
+    "outlet_id": "financial_planning",
+    "editorial_url": "https://www.financial-planning.com/news/what-clients-miss-about-hsas-and-how-advisors-can-help",
+    "paid_example_url": "https://www.financial-planning.com/whitepaper/the-future-of-advice-is-after-tax",
+    "paid_patterns": [
+      "/whitepaper/",
+      "/web-seminars?/",
+      "/research-report/",
+      "/playbook/",
+      "/press-releases?(?:/|$)",
+      "/partnerinsights(?:/|$)",
+      "/resources(?:/|$)"
+    ],
+    "domains": [
+      "www.financial-planning.com",
+      "financial-planning.com"
+    ]
+  },
+  {
+    "outlet_id": "fxstreet",
+    "editorial_url": "https://www.fxstreet.com/news/gold-tumbles-below-4-000-on-trumps-iran-port-blockade-move-us-cpi-data-looms-202607132325",
+    "paid_example_url": "https://www.fxstreet.com/press-releases/cbridge-now-delivers-starprimes-institutional-liquidity-to-brokers-202607130840",
+    "paid_patterns": [
+      "^/press-releases/",
+      "/cryptocurrencies/industry-news",
+      "^/brokers/"
+    ],
+    "domains": [
+      "www.fxstreet.com",
+      "fxstreet.com"
+    ]
+  },
+  {
+    "outlet_id": "game_rant",
+    "editorial_url": "https://gamerant.com/destiny-2-best-solar-titan-build-monument-of-triumph-update/",
+    "paid_example_url": "https://gamerant.com/autofull-esl-partner-m6-ultra-gaming-chair-shiatsu-massage/",
+    "paid_patterns": [
+      "^/promoted(/|$)",
+      "^/feed/promoted"
+    ],
+    "domains": [
+      "gamerant.com"
+    ]
+  },
+  {
+    "outlet_id": "givemesport",
+    "editorial_url": "https://www.givemesport.com/brendon-mccullum-real-reason-sacked-england-cricket-test-coach/",
+    "paid_example_url": "",
+    "paid_patterns": [],
+    "domains": [
+      "givemesport.com",
+      "www.givemesport.com"
+    ]
+  },
+  {
+    "outlet_id": "houston_chronicle",
+    "editorial_url": "https://www.houstonchronicle.com/news/houston-texas/immigration/article/houston-salgado-araujo-immigration-shooting-22343694.php",
+    "paid_example_url": "https://storystudio.houstonchronicle.com/2025/09/26/expert-tips-to-help-you-find-your-perfect-car/",
+    "paid_patterns": [
+      "/press-releases/",
+      "/hearstmagazines/",
+      "/marketplace/",
+      "/houston-marketplace/",
+      "^/20\\d\\d/\\d\\d/\\d\\d/"
+    ],
+    "domains": [
+      "www.houstonchronicle.com",
+      "houstonchronicle.com"
+    ]
+  },
+  {
+    "outlet_id": "how_to_geek",
+    "editorial_url": "https://www.howtogeek.com/windows-11-search-box-less-ads-clearer-results/",
+    "paid_example_url": "https://www.howtogeek.com/dreame-smart-locks-home-security/",
+    "paid_patterns": [
+      "/author/sponsoredcontent(?:/|$)",
+      "/category/promoted(?:/|$)"
+    ],
+    "domains": [
+      "www.howtogeek.com",
+      "howtogeek.com"
+    ]
+  },
+  {
+    "outlet_id": "hr_magazine",
+    "editorial_url": "https://www.hrmagazine.co.uk/content/news/c-suite-leaders-lack-ai-competency-survey-suggests",
+    "paid_example_url": "https://www.hrmagazine.co.uk/content/advertorial/best-employee-assistance-programmes-in-2026",
+    "paid_patterns": [
+      "^/content/advertorial/",
+      "^/content/insights/"
+    ],
+    "domains": [
+      "www.hrmagazine.co.uk",
+      "hrmagazine.co.uk"
+    ]
+  },
+  {
+    "outlet_id": "huffpost_uk",
+    "editorial_url": "https://www.huffingtonpost.co.uk/entry/new-air-travel-rules-eu_uk_6a54f527e4b04a4b8d2e016d",
+    "paid_example_url": "https://www.huffingtonpost.co.uk/2015/02/27/chef-ching-he-huang-profile_n_6531162.html",
+    "paid_patterns": [
+      "/(news|topic)/sponsored-content",
+      "/(topic|author)/huffpost-partner-studio",
+      "_b_[0-9]+"
+    ],
+    "domains": [
+      "www.huffingtonpost.co.uk",
+      "huffingtonpost.co.uk",
+      "huffpost.co.uk"
+    ]
+  },
+  {
+    "outlet_id": "infoworld",
+    "editorial_url": "https://www.infoworld.com/article/4196378/go-based-typescript-7-0-arrives.html",
+    "paid_example_url": "https://www.infoworld.com/article/4156177/yael-nardi-names-minimus-as-chief-business-officer-to-head-growth-strategy.html",
+    "paid_patterns": [
+      "/brandposts?/",
+      "/resources/"
+    ],
+    "domains": [
+      "www.infoworld.com",
+      "infoworld.com"
+    ]
+  },
+  {
+    "outlet_id": "insider_media",
+    "editorial_url": "https://www.insidermedia.com/news/national/british-business-bank-makes-further-10m-commitment-to-sfc-capital",
+    "paid_example_url": "https://www.insidermedia.com/partner-reports/cordia-reshaping-birminghams-jewellery-quarter",
+    "paid_patterns": [
+      "^/blogs/",
+      "^/partner-report",
+      "^/roundtable",
+      "^/guides?/",
+      "^/experts",
+      "^/(business|property|professional)_director",
+      "^/advertising-sponsorship"
+    ],
+    "domains": [
+      "www.insidermedia.com",
+      "insidermedia.com"
+    ]
+  },
+  {
+    "outlet_id": "insider_monkey",
+    "editorial_url": "https://www.insidermonkey.com/blog/morgan-stanley-says-this-ai-pick-and-shovel-stock-has-25-upside-1800821/",
+    "paid_example_url": "https://www.insidermonkey.com/blog/primexbt-launches-gold-24-7-trading-on-pxtrader-2-0-1797097/",
+    "paid_patterns": [],
+    "domains": [
+      "insidermonkey.com",
+      "www.insidermonkey.com"
+    ]
+  },
+  {
+    "outlet_id": "investing_com",
+    "editorial_url": "https://www.investing.com/news/economy-news/australia-consumer-sentiment-climbs-in-july-as-fuel-rate-worries-ease-4789635",
+    "paid_example_url": "https://www.investing.com/news/press-releases/mexc-expands-ondo-tokenized-stock-lineup-with-sk-hynix-and-four-other-trading-pairs-4787852",
+    "paid_patterns": [
+      "/news/press-releases/",
+      "^/analysis/"
+    ],
+    "domains": [
+      "www.investing.com",
+      "m.investing.com",
+      "uk.investing.com",
+      "in.investing.com",
+      "ca.investing.com",
+      "au.investing.com",
+      "za.investing.com",
+      "ng.investing.com",
+      "ph.investing.com"
+    ]
+  },
+  {
+    "outlet_id": "khaleej_times",
+    "editorial_url": "https://www.khaleejtimes.com/business/difc-courts-record-dh10-billion-in-claims-as-caseload-hits-first-half-high",
+    "paid_example_url": "https://www.khaleejtimes.com/kt-network/honor-becomes-second-largest-smartphone-brand-in-the-middle-east",
+    "paid_patterns": [
+      "^/kt-network/",
+      "^/kt-engage/",
+      "^/business/innovation-city/",
+      "^/supplements/",
+      "^/business/galadari-brothers/"
+    ],
+    "domains": [
+      "www.khaleejtimes.com",
+      "khaleejtimes.com"
+    ]
+  },
+  {
+    "outlet_id": "ladbible",
+    "editorial_url": "https://www.ladbible.com/news/us-news/united-airlines-passenger-claims-told-change-offensive-t-shirt-251266-20260714",
+    "paid_example_url": "https://www.ladbible.com/news/usitworkaustralia-207806-20230601",
+    "paid_patterns": [],
+    "domains": [
+      "www.ladbible.com",
+      "ladbible.com"
+    ]
+  },
+  {
+    "outlet_id": "lawyers_weekly",
+    "editorial_url": "https://www.lawyersweekly.com.au/biglaw/44641-court-investment-continues-despite-criticism-of-tough-on-crime-agenda",
+    "paid_example_url": "https://www.lawyersweekly.com.au/corporate-counsel/44571-what-s-in-your-contracts-why-legal-teams-are-turning-to-morae-s-contract-intelligence",
+    "paid_patterns": [
+      "^/companies/[0-9]+-",
+      "^/profiles/[0-9]+-",
+      "^/partner-features/",
+      "/tags/sponsored-features",
+      "^/discover"
+    ],
+    "domains": [
+      "www.lawyersweekly.com.au",
+      "lawyersweekly.com.au"
+    ]
+  },
+  {
+    "outlet_id": "liverpool_echo",
+    "editorial_url": "https://www.liverpoolecho.co.uk/news/liverpool-news/ryanair-flight-drops-300ft-passengers-34284965",
+    "paid_example_url": "https://www.liverpoolecho.co.uk/special-features/meet-award-winning-orthodontists-helping-34034155",
+    "paid_patterns": [
+      "^/special-features/",
+      "^/sponsored/"
+    ],
+    "domains": [
+      "www.liverpoolecho.co.uk",
+      "liverpoolecho.co.uk"
+    ]
+  },
+  {
+    "outlet_id": "makeuseof",
+    "editorial_url": "https://www.makeuseof.com/banking-apps-android-private-space/",
+    "paid_example_url": "https://www.makeuseof.com/hisense-u6sf-pro-premium-picture-quality/",
+    "paid_patterns": [
+      "/author/sponsored(?:/|$)",
+      "/category/sponsored(?:/|$)"
+    ],
+    "domains": [
+      "www.makeuseof.com",
+      "makeuseof.com"
+    ]
+  },
+  {
+    "outlet_id": "manchester_evening_news",
+    "editorial_url": "https://www.manchestereveningnews.co.uk/news/greater-manchester-news/day-three-moors-still-burning-34285651",
+    "paid_example_url": "https://www.manchestereveningnews.co.uk/special-features/tescos-new-life-insurance-offering-33291265",
+    "paid_patterns": [
+      "/special-features/",
+      "/sponsored/"
+    ],
+    "domains": [
+      "www.manchestereveningnews.co.uk",
+      "manchestereveningnews.co.uk"
+    ]
+  },
+  {
+    "outlet_id": "marketing_week",
+    "editorial_url": "https://www.marketingweek.com/influencer-marketing-partnerships/",
+    "paid_example_url": "https://www.marketingweek.com/nestle-waters-premium-beverages-better4you/",
+    "paid_patterns": [
+      "/author/marketing-week-partner"
+    ],
+    "domains": [
+      "www.marketingweek.com",
+      "marketingweek.com"
+    ]
+  },
+  {
+    "outlet_id": "mashable",
+    "editorial_url": "https://mashable.com/tech/apple-wwdc-2026-macos-27-macbook-compatibility-list-public-beta",
+    "paid_example_url": "https://mashable.com/ad/article/samsung-galaxy-ai-changing-smartphone-photography",
+    "paid_patterns": [
+      "(^|/)ad/"
+    ],
+    "domains": [
+      "mashable.com",
+      "www.mashable.com",
+      "sea.mashable.com",
+      "in.mashable.com",
+      "me.mashable.com"
+    ]
+  },
+  {
+    "outlet_id": "metro",
+    "editorial_url": "https://metro.co.uk/2026/07/14/british-soldiers-dropped-afghan-prisoners-forklift-fun-29129289/",
+    "paid_example_url": "",
+    "paid_patterns": [],
+    "domains": [
+      "metro.co.uk",
+      "www.metro.co.uk"
+    ]
+  },
+  {
+    "outlet_id": "national_law_review",
+    "editorial_url": "https://natlawreview.com/article/new-hipaa-security-rule-delayed-until-2027",
+    "paid_example_url": "https://natlawreview.com/advertorial/ai-quantitative-investment-goes-global-invromining-leads-new-trend-smart",
+    "paid_patterns": [
+      "^/press-releases/",
+      "^/advertorial/",
+      "^/author/(globenewswire|businesswire|ein-presswire|access-newswire|newmediawire|tmx-newsfile)"
+    ],
+    "domains": [
+      "natlawreview.com",
+      "www.natlawreview.com"
+    ]
+  },
+  {
+    "outlet_id": "network_world",
+    "editorial_url": "https://www.networkworld.com/article/4196358/weather-grows-as-one-of-data-center-growths-greatest-risks.html",
+    "paid_example_url": "https://www.networkworld.com/brandposts/clearing-the-network-runway-for-agentic-ai/",
+    "paid_patterns": [
+      "/brandposts?/"
+    ],
+    "domains": [
+      "www.networkworld.com",
+      "networkworld.com"
+    ]
+  },
+  {
+    "outlet_id": "new_york_post",
+    "editorial_url": "https://nypost.com/2026/07/13/us-news/westchester-man-caught-pretending-to-be-an-fbi-agent-cops/",
+    "paid_example_url": "https://nypost.com/2024/01/11/lifestyle/food-bloggers-pick-best-nyc-pizza-bagels-for-post-studios-series/",
+    "paid_patterns": [
+      "^/(personal-finance|credit-cards|loans|personal-loans|student-loans|refinance-student-loans|mortgages|mortgage-rates|mortgage-refinance|home-equity|banking)/",
+      "/tag/credible/",
+      "/shopping/",
+      "/betting/",
+      "post-studios"
+    ],
+    "domains": [
+      "nypost.com",
+      "www.nypost.com"
+    ]
+  },
+  {
+    "outlet_id": "newsweek",
+    "editorial_url": "https://www.newsweek.com/american-infected-with-ebola-as-who-warns-outbreak-far-larger-12185285",
+    "paid_example_url": "",
+    "paid_patterns": [
+      "/sponsored/",
+      "/amplify/",
+      "/vault/"
+    ],
+    "domains": [
+      "www.newsweek.com",
+      "newsweek.com"
+    ]
+  },
+  {
+    "outlet_id": "people_management",
+    "editorial_url": "https://www.peoplemanagement.co.uk/article/1964408/manager-accused-using-cougar-dating-sites-wins-120k",
+    "paid_example_url": "https://www.peoplemanagement.co.uk/article/1948204/promote-employee-health-happiness-eatfruit",
+    "paid_patterns": [],
+    "domains": [
+      "www.peoplemanagement.co.uk"
+    ]
+  },
+  {
+    "outlet_id": "pocket_lint",
+    "editorial_url": "https://www.pocket-lint.com/best-google-pixel-camera-settings/",
+    "paid_example_url": "https://www.pocket-lint.com/save-with-metro-by-t-mobile/",
+    "paid_patterns": [
+      "^/sponsored/?$",
+      "^/author/sponsored/?$"
+    ],
+    "domains": [
+      "www.pocket-lint.com",
+      "pocket-lint.com"
+    ]
+  },
+  {
+    "outlet_id": "politico",
+    "editorial_url": "https://www.politico.com/news/2026/01/15/karoline-leavitt-maha-mom-00730261",
+    "paid_example_url": "https://www.politico.com/sponsored-content/2023/01/building-james-webb-space-telescope",
+    "paid_patterns": [
+      "/sponsor-content/",
+      "/sponsored-content/"
+    ],
+    "domains": [
+      "www.politico.com",
+      "politico.com"
+    ]
+  },
+  {
+    "outlet_id": "pr_week",
+    "editorial_url": "https://www.prweek.com/article/1956001/finn-partners-names-head-futures-client-transformation",
+    "paid_example_url": "https://www.prweek.com/article/1959823/new-influencer-playbook",
+    "paid_patterns": [
+      "^/partner-?content(/|$)",
+      "^/(us|uk|asia|middleeast|global)/partner-?content(/|$)",
+      "^/(us|uk)/(webcasts|customevents)(/|$)"
+    ],
+    "domains": [
+      "www.prweek.com",
+      "prweek.com",
+      "www.prweek.co.uk",
+      "prweek.co.uk"
+    ]
+  },
+  {
+    "outlet_id": "retail_week",
+    "editorial_url": "https://www.retail-week.com/fashion/shein-gets-green-light-for-long-awaited-ipo/7051623.article",
+    "paid_example_url": "https://www.retail-week.com/industry-insight/why-there-is-more-to-railway-stations-than-trains/7049971.article",
+    "paid_patterns": [
+      "^/industry-insight/",
+      "^/reports/industry-insight",
+      "^/retail-voice",
+      "/solutions-spotlight",
+      "\\.bio$"
+    ],
+    "domains": [
+      "www.retail-week.com",
+      "retail-week.com"
+    ]
+  },
+  {
+    "outlet_id": "salon",
+    "editorial_url": "https://www.salon.com/2026/07/11/little-house-on-the-prairie-netflix/",
+    "paid_example_url": "https://www.salon.com/2026/06/17/surfshark-vpn-review-affordable-protection-with-solid-performance/",
+    "paid_patterns": [
+      "vpns?(?:[-/]|$)",
+      "(?:^|[-/])(?:antivirus|password-managers?|web-hosting|proxy-services?)(?:[-/]|$)",
+      "^/sponsored(?:/|$)"
+    ],
+    "domains": [
+      "salon.com",
+      "www.salon.com"
+    ]
+  },
+  {
+    "outlet_id": "simple_flying",
+    "editorial_url": "https://simpleflying.com/flamingo-air-grounded-10-killed-cessna-402-crash/",
+    "paid_example_url": "https://simpleflying.com/european-passengers-cancun-airport-best-summer/",
+    "paid_patterns": [
+      "(^|/)category/sponsored(/|$)",
+      "(^|/)deal-alert[-/]",
+      "(^|/)flight-deal[-/]"
+    ],
+    "domains": [
+      "simpleflying.com",
+      "www.simpleflying.com"
+    ]
+  },
+  {
+    "outlet_id": "startups_co_uk",
+    "editorial_url": "https://startups.co.uk/news/new-government-support-for-exporters/",
+    "paid_example_url": "https://startups.co.uk/accounting/ai-invoicing/",
+    "paid_patterns": [
+      "^/sponsor/"
+    ],
+    "domains": [
+      "startups.co.uk",
+      "www.startups.co.uk"
+    ]
+  },
+  {
+    "outlet_id": "techrepublic",
+    "editorial_url": "https://www.techrepublic.com/article/news-ai-coding-agents-microsoft-pull-requests/",
+    "paid_example_url": "https://www.techrepublic.com/a/artificial-intelligence/the-rise-of-ai-powered-self-driving-decisions/",
+    "paid_patterns": [
+      "^/a/",
+      "/sponsored/",
+      "/sponsor/",
+      "/resource-library/",
+      "/resource/",
+      "/company/"
+    ],
+    "domains": [
+      "techrepublic.com",
+      "www.techrepublic.com"
+    ]
+  },
+  {
+    "outlet_id": "block",
+    "editorial_url": "https://www.theblock.co/post/408054/trump-white-house-press-senate-advance-clarity-act-ethics-fight-looms",
+    "paid_example_url": "https://www.theblock.co/press-releases/407921/nowpayments-ceo-kate-lifshits-says-businesses-should-stop-paying-for-crypto-payouts",
+    "paid_patterns": [
+      "^/press-releases?/",
+      "^/sponsored(/|$)"
+    ],
+    "domains": [
+      "www.theblock.co",
+      "theblock.co",
+      "www.theblockcrypto.com",
+      "theblockcrypto.com"
+    ]
+  },
+  {
+    "outlet_id": "caterer",
+    "editorial_url": "https://www.thecaterer.com/news/luke-johnson-in-talks-to-acquire-wahaca-restaurants",
+    "paid_example_url": "https://www.thecaterer.com/promoted-content/ai-in-hospitality-the-future-is-now",
+    "paid_patterns": [
+      "^/promoted-content/",
+      "/sponsored-"
+    ],
+    "domains": [
+      "www.thecaterer.com",
+      "thecaterer.com"
+    ]
+  },
+  {
+    "outlet_id": "drum",
+    "editorial_url": "https://www.thedrum.com/news/how-stanley-1913-is-hoping-to-outgrow-the-quencher",
+    "paid_example_url": "https://www.thedrum.com/industry-insight/2026-a-new-era-of-more-flexible-ooh-transactions",
+    "paid_patterns": [
+      "/industry-?insights?/",
+      "/open-mic/",
+      "/profile/"
+    ],
+    "domains": [
+      "www.thedrum.com",
+      "thedrum.com"
+    ]
+  },
+  {
+    "outlet_id": "grocer",
+    "editorial_url": "https://www.thegrocer.co.uk/news/iceland-foods-microloans-scheme-returns-to-fight-school-holiday-hunger/721225.article",
+    "paid_example_url": "https://www.thegrocer.co.uk/promotional-features/how-e-commerce-can-turbocharge-fmcg-brand-growth-in-a-tough-market/720086.article",
+    "paid_patterns": [
+      "^/promotional-features?/",
+      "^/promotional-videos?/",
+      "^/promotional-webinars?/",
+      "^/whitepapers?/",
+      "^/webinars?/",
+      "^/the-grocer-vision/",
+      "^/suppliers-and-products-guide/"
+    ],
+    "domains": [
+      "www.thegrocer.co.uk",
+      "thegrocer.co.uk"
+    ]
+  },
+  {
+    "outlet_id": "herald_glasgow",
+    "editorial_url": "https://www.heraldscotland.com/news/26274456.edinburgh-scientists-make-lung-cancer-testing-breakthrough/",
+    "paid_example_url": "https://www.heraldscotland.com/business_hq/16884367.commercial-content-loganair-in-travel-partner-and-sponsorship-agreement-with-norwich-city-fc/",
+    "paid_patterns": [
+      "\\.commercial[_-]content",
+      "\\.sponsored[_-]content",
+      "\\.advertising-feature",
+      "\\.advertorial"
+    ],
+    "domains": [
+      "www.heraldscotland.com",
+      "heraldscotland.com"
+    ]
+  },
+  {
+    "outlet_id": "lancet",
+    "editorial_url": "https://www.thelancet.com/journals/lancet/article/PIIS0140-6736(26)00652-5/fulltext",
+    "paid_example_url": "https://www.elsmediakits.com/capabilities/lancet-clinic",
+    "paid_patterns": [
+      "/webinars",
+      "/for-advertisers",
+      "/(sponsored|advertorial|advertising|advertisement|promotional?)"
+    ],
+    "domains": [
+      "www.thelancet.com",
+      "thelancet.com"
+    ]
+  },
+  {
+    "outlet_id": "next_web",
+    "editorial_url": "https://thenextweb.com/news/waze-gemini-less-chatty-motorcycle-mode",
+    "paid_example_url": "https://thenextweb.com/news/automation-customer-experience-self-service",
+    "paid_patterns": [
+      "^/podium(/|$)",
+      "^/contributors?(/|$)",
+      "^/press-release(/|$)",
+      "^/shareables(/|$)",
+      "^/(sponsored|sponsored-post|sponsored-content|partner-content|branded-content|advertorial|promoted|native-ad)(/|$)",
+      "^/(partnerships|advertise|media)(/|$)"
+    ],
+    "domains": [
+      "thenextweb.com",
+      "www.thenextweb.com"
+    ]
+  },
+  {
+    "outlet_id": "scotsman",
+    "editorial_url": "https://www.scotsman.com/news/politics/nicola-sturgeon-refuses-to-publish-statement-she-provided-to-police-after-arrest-8795960",
+    "paid_example_url": "https://www.scotsman.com/community/aldi-crowned-best-for-scottish-sourcing-at-scottish-food-drink-excellence-awards-5305431",
+    "paid_patterns": [
+      "^/community/",
+      "^/recommended/",
+      "^/sponsored(/|$)",
+      "^/must-read/"
+    ],
+    "domains": [
+      "www.scotsman.com",
+      "foodanddrink.scotsman.com"
+    ]
+  },
+  {
+    "outlet_id": "thegamer",
+    "editorial_url": "https://www.thegamer.com/halo-studios-head-allegations-new-report/",
+    "paid_example_url": "https://www.thegamer.com/world-of-warcraft-raids-avoiding-wrong-reasons/",
+    "paid_patterns": [
+      "^/category/sponsored(/|$)",
+      "^/feed/category/sponsored(/|$)"
+    ],
+    "domains": [
+      "www.thegamer.com",
+      "thegamer.com"
+    ]
+  },
+  {
+    "outlet_id": "thetravel",
+    "editorial_url": "https://www.thetravel.com/united-airlines-forces-passenger-into-uncomfortable-encounter-with-family-who-wanted-her-paid-for-window-seat/",
+    "paid_example_url": "",
+    "paid_patterns": [],
+    "domains": [
+      "www.thetravel.com",
+      "thetravel.com"
+    ]
+  },
+  {
+    "outlet_id": "time_out",
+    "editorial_url": "https://www.timeout.com/news/this-underrated-town-in-portugal-is-getting-a-massive-glow-up-with-a-new-museum-and-refreshed-cultural-spaces-071326",
+    "paid_example_url": "https://www.timeout.com/cape-town/news/where-to-take-the-music-with-you-this-summer-in-cape-town-121825",
+    "paid_patterns": [
+      "/profile/(?:sponsored|branded)[-_]?content"
+    ],
+    "domains": [
+      "www.timeout.com",
+      "timeout.com",
+      "www.timeout.es",
+      "www.timeout.fr",
+      "www.timeout.jp",
+      "www.timeout.pt",
+      "www.timeout.cat",
+      "www.timeout.com.hk"
+    ]
+  },
+  {
+    "outlet_id": "tipranks",
+    "editorial_url": "https://www.tipranks.com/news/positive-catalyst-ahead-says-goldman-sachs-about-nvidia-stock",
+    "paid_example_url": "https://www.tipranks.com/news/press-releases/jounce-therapeutics-announces-restructuring",
+    "paid_patterns": [
+      "/news/press-releases/",
+      "/news/company-announcements/",
+      "/news/private-companies/"
+    ],
+    "domains": [
+      "www.tipranks.com",
+      "tipranks.com"
+    ]
+  },
+  {
+    "outlet_id": "tradingview",
+    "editorial_url": "https://www.tradingview.com/news/tradingview:ba45596874a6c:0-grupo-financiero-galicia-director-purchased-shares-worth-over-2-1m/",
+    "paid_example_url": "https://www.tradingview.com/news/globenewswire:b92438850094b:0-alkane-extends-high-grade-gold-trend-at-brunswick-south/",
+    "paid_patterns": [
+      "/news/globenewswire[:/]",
+      "newsml_GNE",
+      "/news/pr-?newswire[:/]",
+      "/news/business-?wire[:/]",
+      "newsml_JCN",
+      "newsml_ACS",
+      "newsml_ACN",
+      "newsml_NFC",
+      "newsml_Tnw",
+      "/news/tmx_newsfile[:/]",
+      "/news/eqs[:/]"
+    ],
+    "domains": [
+      "www.tradingview.com",
+      "ar.tradingview.com",
+      "br.tradingview.com",
+      "cn.tradingview.com",
+      "de.tradingview.com",
+      "es.tradingview.com",
+      "fr.tradingview.com",
+      "id.tradingview.com",
+      "il.tradingview.com",
+      "in.tradingview.com",
+      "it.tradingview.com",
+      "jp.tradingview.com",
+      "kr.tradingview.com",
+      "my.tradingview.com",
+      "pl.tradingview.com",
+      "ru.tradingview.com",
+      "th.tradingview.com",
+      "tr.tradingview.com",
+      "tw.tradingview.com",
+      "vn.tradingview.com"
+    ]
+  },
+  {
+    "outlet_id": "travel_weekly",
+    "editorial_url": "https://travelweekly.co.uk/news/travel-agents-see-spending-rebound-after-three-months-of-decline",
+    "paid_example_url": "https://travelweekly.co.uk/iberostar-hub/discover-authentic-majorca-at-iberostars-new-luxury-hotel",
+    "paid_patterns": [
+      "^/?(?!news-hub)[a-z0-9-]+-hub(?:/|$)",
+      "/(?:advertorial|advertising-feature|sponsored)-",
+      "/all-content/",
+      "/competitions/"
+    ],
+    "domains": [
+      "travelweekly.co.uk",
+      "www.travelweekly.co.uk"
+    ]
+  },
+  {
+    "outlet_id": "unilad",
+    "editorial_url": "https://www.unilad.com/news/politics/lindsey-graham-sister-response-donald-trump-take-over-job-793841-20260713",
+    "paid_example_url": "",
+    "paid_patterns": [],
+    "domains": [
+      "www.unilad.com",
+      "unilad.com"
+    ]
+  },
+  {
+    "outlet_id": "venturebeat",
+    "editorial_url": "https://venturebeat.com/security/forget-typosquatting-slopsquatting-is-the-software-supply-chain-threat-created-by-ai-coding-tools",
+    "paid_example_url": "https://venturebeat.com/infrastructure/the-desktop-infrastructure-problem-that-kubernetes-finally-solves",
+    "paid_patterns": [
+      "^/sponsored-posts?(/|$)",
+      "^/vb-lab(/|$)"
+    ],
+    "domains": [
+      "venturebeat.com",
+      "www.venturebeat.com"
+    ]
+  },
+  {
+    "outlet_id": "wales_online",
+    "editorial_url": "https://www.walesonline.co.uk/news/wales-news/huge-wildfire-rages-forces-residents-34280139",
+    "paid_example_url": "https://www.walesonline.co.uk/special-features/jackery-launches-mid-year-sale-34098229",
+    "paid_patterns": [
+      "/special-features/",
+      "/exclusive-offers/",
+      "/comm-part-test/",
+      "/sponsored/"
+    ],
+    "domains": [
+      "www.walesonline.co.uk",
+      "walesonline.co.uk"
+    ]
+  },
+  {
+    "outlet_id": "xda_developers",
+    "editorial_url": "https://www.xda-developers.com/changing-one-setting-solved-windows-11-bluetooth-issues/",
+    "paid_example_url": "https://www.xda-developers.com/hisense-u6sf-pro-miniled-tv/",
+    "paid_patterns": [
+      "/author/sponsored",
+      "^/sponsored/?$"
+    ],
+    "domains": [
+      "www.xda-developers.com",
+      "xda-developers.com"
+    ]
+  },
+  {
+    "outlet_id": "yorkshire_post",
+    "editorial_url": "https://www.yorkshirepost.co.uk/news/end-of-yorkshire-music-festival-after-main-investors-lose-hundreds-of-thousands-8794379",
+    "paid_example_url": "https://www.yorkshirepost.co.uk/sponsored/love-at-first-stay-at-yorkshires-wrea-head-hall-8766780",
+    "paid_patterns": [
+      "^/sponsored/",
+      "^/recommended/",
+      "-aff-\\d+/?$"
+    ],
+    "domains": [
+      "www.yorkshirepost.co.uk",
+      "yorkshirepost.co.uk"
+    ]
+  },
+  {
+    "outlet_id": "zawya",
+    "editorial_url": "https://www.zawya.com/en/business/energy/ais-energy-appetite-is-reshaping-the-renewable-transition-ofzppbhc",
+    "paid_example_url": "https://www.zawya.com/en/press-release/companies-news/space42-reports-strong-q1-2026-results-tpbu9z4y",
+    "paid_patterns": [
+      "/press-release/",
+      "/sponsored-content",
+      "/digitorial"
+    ],
+    "domains": [
+      "zawya.com",
+      "www.zawya.com"
+    ]
+  }
+]
