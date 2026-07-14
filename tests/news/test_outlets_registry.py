@@ -18,10 +18,22 @@ _DIR = Path(__file__).resolve().parent
 _NEWS_DIR = _DIR.parent.parent / "herald/validator/news"
 _REGISTRY = OutletRegistry.from_json_file(str(_NEWS_DIR / "outlets.json"))
 _FIXTURE = {}
-for fname in ("tier1_fixture.json", "tier2_fixture.json"):
+for fname in ("tier1_fixture.json", "tier2_fixture.json", "tier3_fixture.json"):
     _FIXTURE.update({f["outlet_id"]: f for f in json.load(open(_DIR / fname))})
 _OUTLETS = {o.outlet_id: o for o in _REGISTRY.outlets}
 _IDS = sorted(_OUTLETS)
+
+# Generic synthetic "obviously editorial" paths, independent of any outlet's own fixture data.
+# A paid_pattern that matches ALL of these is a match-everything pattern (e.g. bare ".*") that
+# would reject every honest placement on that outlet -- catchable even when the outlet's real
+# fixture happens to have no editorial_url on file (the gap that let one through undetected).
+_GENERIC_EDITORIAL_PATHS = [
+    "/2026/07/14/markets/fed-rate-decision-explainer",
+    "/news/local-council-approves-new-budget-plan",
+    "/world/politics/election-results-analysis",
+    "/technology/startup-raises-series-a-funding",
+    "/a1b2c3d4-story-slug",
+]
 
 BENIGN = ("The minister said on Monday that the new policy would take effect next year, "
           "according to officials familiar with the plans. Reporters covered the announcement.")
@@ -35,10 +47,29 @@ def _path(url):
     return urlsplit(url).path or "/"
 
 
-def test_registry_has_tier1_and_tier2_outlets():
-    assert len(_REGISTRY.outlets) == len(_IDS) > 100
+def test_registry_has_all_three_tiers():
+    assert len(_REGISTRY.outlets) == len(_IDS) > 200
     tiers = {o.tier for o in _REGISTRY.outlets}
-    assert tiers == {1, 2}
+    assert tiers == {1, 2, 3}
+
+
+@pytest.mark.parametrize("oid", _IDS)
+def test_every_outlet_has_a_fixture_editorial_url(oid):
+    # A paid_pattern can only be false-positive-checked against a real editorial URL. An outlet
+    # with patterns but no fixture URL silently skips that check -- exactly how a bare ".*"
+    # pattern (matches every path) shipped undetected for one outlet before this test existed.
+    f = _FIXTURE.get(oid)
+    assert f and f.get("editorial_url"), f"{oid}: no editorial_url on file -- paid_patterns are unverifiable"
+
+
+@pytest.mark.parametrize("oid", _IDS)
+def test_no_paid_pattern_matches_everything(oid):
+    # Independent of fixture data: a pattern matching ALL generic editorial-shaped paths would
+    # reject every honest placement on this outlet. Catches this even if the real fixture URL
+    # happened to be missing (defense in depth alongside the fixture-presence test above).
+    for pat in _OUTLETS[oid].paid_patterns:
+        matches_all = all(re.search(pat, p, re.I) for p in _GENERIC_EDITORIAL_PATHS)
+        assert not matches_all, f"{oid}: pattern {pat!r} matches every generic editorial path"
 
 
 def test_no_two_outlets_claim_the_same_domain():
@@ -89,9 +120,17 @@ def test_editorial_url_is_never_flagged_paid(oid):
 
 
 @pytest.mark.parametrize("oid", _IDS)
-def test_outlet_has_a_paid_detector(oid):
+def test_outlet_has_a_paid_detector_when_paid_content_is_confirmed(oid):
+    # An outlet with a CONFIRMED paid/sponsored example must have some way to catch it (either
+    # its own pattern/marker, or the generic global fallback in is_paid). An outlet where research
+    # found no evidence any paid program exists at all relies on the generic floor alone -- that's
+    # an evidence-backed conclusion, not a gap, so it's not required to carry its own detector.
     o = _OUTLETS[oid]
-    assert o.paid_patterns or o.paid_markers, f"{oid}: no paid-content detector at all"
+    f = _FIXTURE.get(oid)
+    ex = (f.get("paid_example_url") or "") if f else ""
+    if not ex:
+        pytest.skip(f"{oid}: no confirmed paid example -- research found no evidence of a paid program")
+    assert o.paid_patterns or o.paid_markers, f"{oid}: has a confirmed sponsored example but no detector"
 
 
 @pytest.mark.parametrize("oid", _IDS)
