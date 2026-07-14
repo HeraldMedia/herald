@@ -1,0 +1,885 @@
+[
+  {
+    "outlet_id": "advfn_uk",
+    "editorial_url": "https://uk.advfn.com/newspaper/azeez-mustapha/83889/btcusd-stays-close-to-65-000-despite-a-slight-slowdown-in-bullish-momentum",
+    "paid_example_url": "https://uk.advfn.com/newspaper/advfnnews/83842/fxtm-named-best-cfd-broker-at-uf-awards-global-2026",
+    "paid_patterns": [
+      "/newspaper/advfnnews/",
+      "/newspaper/advertorial",
+      "/newspaper/(etoro|iqoption|activtrades|capitalcom|windsorbrokers|torfx)/"
+    ],
+    "domains": [
+      "uk.advfn.com"
+    ]
+  },
+  {
+    "outlet_id": "analytics_insight",
+    "editorial_url": "https://www.analyticsinsight.net/news/chinas-trade-surges-as-ai-boom-fuels-27-export-jump-and-36-import-spike",
+    "paid_example_url": "https://www.analyticsinsight.net/press-release/tcs-and-abb-sign-multi-million-multi-year-deal-to-transform-global-network-operations-with-ai",
+    "paid_patterns": [
+      "^/press-release/",
+      "^/brand-stories/"
+    ],
+    "domains": [
+      "www.analyticsinsight.net"
+    ]
+  },
+  {
+    "outlet_id": "bdaily",
+    "editorial_url": "https://bdaily.co.uk/articles/2026/07/14/cardo-group-heats-up-with-fire-protection-deal",
+    "paid_example_url": "https://bdaily.co.uk/articles/2026/07/03/north-east-entrepreneurs-behind-25bn-turnover-turn-to-each-other-for-support",
+    "paid_patterns": [],
+    "domains": [
+      "bdaily.co.uk",
+      "www.bdaily.co.uk"
+    ]
+  },
+  {
+    "outlet_id": "binance_square",
+    "editorial_url": "https://www.binance.com/en/square/post/344644752512529",
+    "paid_example_url": "https://www.binance.com/en/square/post/340328030654962",
+    "paid_patterns": [],
+    "domains": [
+      "www.binance.com"
+    ]
+  },
+  {
+    "outlet_id": "bizfluent",
+    "editorial_url": "https://bizfluent.com/human-resources/how-land-olakes-flexible-work-schedule-claims-hold-up-to-scrutiny/",
+    "paid_example_url": "",
+    "paid_patterns": [],
+    "domains": [
+      "bizfluent.com"
+    ]
+  },
+  {
+    "outlet_id": "business_live",
+    "editorial_url": "https://www.business-live.co.uk/retail-consumer/grosvenor-casino-owner-rank-group-34288619",
+    "paid_example_url": "https://www.business-live.co.uk/special-features/how-humbers-hydrogen-potential-could-34216293",
+    "paid_patterns": [
+      "/special-features/",
+      "/affiliates/"
+    ],
+    "domains": [
+      "www.business-live.co.uk"
+    ]
+  },
+  {
+    "outlet_id": "business_of_law_digest",
+    "editorial_url": "https://businessoflawdigest.com/content-marketing-how-great-lawyers-can-be-invisible-to-ai-and-why-it-matters/",
+    "paid_example_url": "https://businessoflawdigest.com/sponsored-the-simon-law-firm-on-business-litigation-patent-trademark-copyright-litigation-and-contingency-fees/",
+    "paid_patterns": [
+      "^/sponsored-"
+    ],
+    "domains": [
+      "businessoflawdigest.com"
+    ]
+  },
+  {
+    "outlet_id": "ccn",
+    "editorial_url": "https://www.ccn.com/crypto-com-clears-key-regulatory-hurdle-with-conditional-occ-trust-bank-approval/",
+    "paid_example_url": "https://www.ccn.com/1win-crypto-tournaments-go-global-with-up-to-200k-usdt-in-rewards/",
+    "paid_patterns": [
+      "^/crypto-casinos/",
+      "^/crypto-sports-betting/",
+      "^/crypto-gambling/",
+      "^/crypto-investing/",
+      "^/all-deals/",
+      "^/press-releases/?$"
+    ],
+    "domains": [
+      "www.ccn.com"
+    ]
+  },
+  {
+    "outlet_id": "cio_insight",
+    "editorial_url": "https://www.cioinsight.com/leadership/ethics-of-corporate-data-privacy/",
+    "paid_example_url": "https://www.cioinsight.com/a/artificial-intelligence/cioi-from-dashboards-to-decisions-the-rise-of-agentic-conversational-analytics/",
+    "paid_patterns": [
+      "^/a/"
+    ],
+    "domains": [
+      "www.cioinsight.com"
+    ]
+  },
+  {
+    "outlet_id": "codeguru",
+    "editorial_url": "https://www.codeguru.com/csharp/c-sharp-vs-java/",
+    "paid_example_url": "",
+    "paid_patterns": [
+      "/sponsored/"
+    ],
+    "domains": [
+      "www.codeguru.com"
+    ]
+  },
+  {
+    "outlet_id": "congress_net",
+    "editorial_url": "https://congress.net/june-cpi-drops-most-since-2020-as-energy-prices-plunge-cooling-annual-inflation-to-3-5/",
+    "paid_example_url": "",
+    "paid_patterns": [],
+    "domains": [
+      "congress.net"
+    ]
+  },
+  {
+    "outlet_id": "cpo_magazine",
+    "editorial_url": "https://www.cpomagazine.com/cyber-security/data-breach-impacts-madison-square-garden-sports-and-the-new-york-knicks/",
+    "paid_example_url": "https://www.cpomagazine.com/press-releases/breachlock-named-representative-vendor-in-the-2026-gartner-market-guide-for-adversarial-exposure-validation/",
+    "paid_patterns": [
+      "^/press-releases/",
+      "^/author/cybernewswire/?$"
+    ],
+    "domains": [
+      "www.cpomagazine.com"
+    ]
+  },
+  {
+    "outlet_id": "crypto_briefing",
+    "editorial_url": "https://cryptobriefing.com/tether-pact-labs-series-a-usat-expansion/",
+    "paid_example_url": "https://cryptobriefing.com/how-much-is-blueface-net-worth/",
+    "paid_patterns": [],
+    "domains": [
+      "cryptobriefing.com"
+    ]
+  },
+  {
+    "outlet_id": "cyber_security_news",
+    "editorial_url": "https://cybersecuritynews.com/turla-hackers-exploit-sharepoint-flaw/",
+    "paid_example_url": "https://cybersecuritynews.com/greenhat-announces-successful-delegation-at-web-summit-vancouver-2026/",
+    "paid_patterns": [],
+    "domains": [
+      "cybersecuritynews.com"
+    ]
+  },
+  {
+    "outlet_id": "cybersecurity_insiders",
+    "editorial_url": "https://www.cybersecurity-insiders.com/accenture-data-breach-hacker-claims-massive-data-theft-while-company-disputes-allegations/",
+    "paid_example_url": "https://www.cybersecurity-insiders.com/portfolio/2021-application-security-report-fortinet/",
+    "paid_patterns": [
+      "^/portfolio/"
+    ],
+    "domains": [
+      "www.cybersecurity-insiders.com",
+      "cybersecurity-insiders.com"
+    ]
+  },
+  {
+    "outlet_id": "dailycoin",
+    "editorial_url": "https://dailycoin.com/us-clarity-act-enters-final-window-before-senate-recess-deadline/",
+    "paid_example_url": "https://dailycoin.com/memecoin-enthusiasts-accumulate-0dog-ahead-of-q4-telegram-game-launch/",
+    "paid_patterns": [
+      "/press-releases/"
+    ],
+    "domains": [
+      "dailycoin.com"
+    ]
+  },
+  {
+    "outlet_id": "datamation",
+    "editorial_url": "https://www.datamation.com/cloud/cloud-data-warehouse-companies/",
+    "paid_example_url": "https://www.datamation.com/press-release/envirotech-vehicles-closes-merger-with-azio-ai/",
+    "paid_patterns": [
+      "^/press-release/",
+      "^/white-papers/"
+    ],
+    "domains": [
+      "www.datamation.com"
+    ]
+  },
+  {
+    "outlet_id": "devops_com",
+    "editorial_url": "https://devops.com/github-api-abuse-ghost-accounts-part-of-malicious-efforts-to-map-organizations/",
+    "paid_example_url": "https://devops.com/iceberg-won-the-format-war-now-comes-the-hard-part/",
+    "paid_patterns": [
+      "^/category/sponsored-content",
+      "^/category/press-releases",
+      "^/category/techstrong-council"
+    ],
+    "domains": [
+      "devops.com"
+    ]
+  },
+  {
+    "outlet_id": "dualshockers",
+    "editorial_url": "https://www.dualshockers.com/meet-the-cast-of-halo-campaign-evolved/",
+    "paid_example_url": "",
+    "paid_patterns": [],
+    "domains": [
+      "www.dualshockers.com",
+      "dualshockers.com"
+    ]
+  },
+  {
+    "outlet_id": "dzone",
+    "editorial_url": "https://dzone.com/articles/machine-identity-debt",
+    "paid_example_url": "https://dzone.com/trendreports/machine-learning-deploying-models-at-scale",
+    "paid_patterns": [
+      "^/trendreports/",
+      "^/refcardz/",
+      "^/guides/",
+      "^/whitepapers/"
+    ],
+    "domains": [
+      "dzone.com"
+    ]
+  },
+  {
+    "outlet_id": "ehow",
+    "editorial_url": "https://www.ehow.com/13779757/how-to-watch-the-perseid-meteor-shower-2026-viewing-guide",
+    "paid_example_url": "",
+    "paid_patterns": [],
+    "domains": [
+      "www.ehow.com"
+    ]
+  },
+  {
+    "outlet_id": "esecurity_planet",
+    "editorial_url": "https://www.esecurityplanet.com/threats/spacex-and-starlink-x-accounts-hacked-in-crypto-scam/",
+    "paid_example_url": "https://www.esecurityplanet.com/a/sponsored/active-directory-under-attack-how-to-detect-contain-and-recover-from-identity-based-breaches/",
+    "paid_patterns": [
+      "^/a/sponsored/",
+      "^/sponsored/",
+      "^/press-release/"
+    ],
+    "domains": [
+      "www.esecurityplanet.com"
+    ]
+  },
+  {
+    "outlet_id": "eweek",
+    "editorial_url": "https://www.eweek.com/news/tsmc-record-q2-revenue-ai-chip-demand-apac-taiwan/",
+    "paid_example_url": "https://www.eweek.com/sponsored/secure-all-edges-with-a-broad-integrated-and-automated-cybersecurity-platform/",
+    "paid_patterns": [
+      "/sponsored/",
+      "/press-release/",
+      "/hubs/"
+    ],
+    "domains": [
+      "eweek.com",
+      "www.eweek.com"
+    ]
+  },
+  {
+    "outlet_id": "fextralife",
+    "editorial_url": "https://fextralife.com/bethesda-insider-leaks-the-elder-scrolls-6-release-window/",
+    "paid_example_url": "https://fextralife.com/tainted-grail-the-fall-of-avalon-dark-skyrim-rpg/",
+    "paid_patterns": [],
+    "domains": [
+      "fextralife.com"
+    ]
+  },
+  {
+    "outlet_id": "financefeeds",
+    "editorial_url": "https://financefeeds.com/u-s-government-wallets-move-288-million-in-seized-crypto-to-coinbase-prime/",
+    "paid_example_url": "https://financefeeds.com/cbridge-now-delivers-starprimes-institutional-liquidity-to-brokers/",
+    "paid_patterns": [],
+    "domains": [
+      "financefeeds.com"
+    ]
+  },
+  {
+    "outlet_id": "finbold",
+    "editorial_url": "https://finbold.com/wall-street-analyst-updates-nvidia-stock-price-target-3/",
+    "paid_example_url": "https://finbold.com/as-ai-platforms-move-away-from-unlimited-sogni-ai-launches-a-20-fair-use-unlimited-plan-on-community-gpus/",
+    "paid_patterns": [],
+    "domains": [
+      "finbold.com"
+    ]
+  },
+  {
+    "outlet_id": "finsmes",
+    "editorial_url": "https://www.finsmes.com/2026/07/prolo-raises-4-2m-in-seed-funding.html",
+    "paid_example_url": "",
+    "paid_patterns": [
+      "-sp\\.html$",
+      "-sponsored-post\\.html$"
+    ],
+    "domains": [
+      "www.finsmes.com"
+    ]
+  },
+  {
+    "outlet_id": "fit_small_business",
+    "editorial_url": "https://fitsmallbusiness.com/best-retail-pos-systems/",
+    "paid_example_url": "https://fitsmallbusiness.com/from-first-time-shopper-to-loyal-fan-how-smbs-drive-foot-traffic-with-genius/",
+    "paid_patterns": [],
+    "domains": [
+      "fitsmallbusiness.com"
+    ]
+  },
+  {
+    "outlet_id": "football_fancast",
+    "editorial_url": "https://www.footballfancast.com/chelsea-pushing-to-finalise-transfer-for-cucurella-replacement-chavarria/",
+    "paid_example_url": "",
+    "paid_patterns": [
+      "-sponsored(/|$|\\?)",
+      "/sponsored/",
+      "/sponsored-content/",
+      "/partner-content/",
+      "/promoted/",
+      "/advertorial/",
+      "/press-release/",
+      "/branded-content/",
+      "\\[sponsored\\]"
+    ],
+    "domains": [
+      "www.footballfancast.com",
+      "footballfancast.com"
+    ]
+  },
+  {
+    "outlet_id": "football_league_world",
+    "editorial_url": "https://footballleagueworld.co.uk/blackburn-rovers-wrexham-make-moves-for-seamus-coleman-after-everton-exit/",
+    "paid_example_url": "",
+    "paid_patterns": [],
+    "domains": [
+      "footballleagueworld.co.uk"
+    ]
+  },
+  {
+    "outlet_id": "gadget_hacks",
+    "editorial_url": "https://android.gadgethacks.com/news/whats-behind-the-google-messages-crash-wave-and-how-to-fix-it/",
+    "paid_example_url": "",
+    "paid_patterns": [],
+    "domains": [
+      "www.gadgethacks.com",
+      "gadgethacks.com",
+      "android.gadgethacks.com",
+      "apple.gadgethacks.com",
+      "ios.gadgethacks.com",
+      "ipados.gadgethacks.com",
+      "macos.gadgethacks.com",
+      "watchos.gadgethacks.com",
+      "tvos.gadgethacks.com",
+      "airpods.gadgethacks.com",
+      "chromeos.gadgethacks.com",
+      "windows.gadgethacks.com",
+      "samsung.gadgethacks.com",
+      "pixel.gadgethacks.com",
+      "oneplus.gadgethacks.com",
+      "smartphones.gadgethacks.com",
+      "tablets.gadgethacks.com",
+      "cord-cutters.gadgethacks.com",
+      "roku.gadgethacks.com",
+      "fire.gadgethacks.com",
+      "internet.gadgethacks.com",
+      "digiwonk.gadgethacks.com",
+      "mods-n-hacks.gadgethacks.com",
+      "the-hookup.gadgethacks.com",
+      "tech-pr0n.gadgethacks.com",
+      "nexus5.gadgethacks.com",
+      "nexus7.gadgethacks.com",
+      "htc-one.gadgethacks.com",
+      "lg-g3.gadgethacks.com"
+    ]
+  },
+  {
+    "outlet_id": "gamergen",
+    "editorial_url": "https://www.gamergen.com/actualites/xbox-va-licencier-3200-employes-et-separer-5-studios-sort-arkane-encore-incertain-342513-1",
+    "paid_example_url": "https://www.gamergen.com/actualites/licence-office-windows-promotion-godeal24-saint-valentin-341985-1",
+    "paid_patterns": [
+      "godeal24",
+      "keysoff",
+      "keysworlds",
+      "scdkey",
+      "licence.{0,40}(office|windows)|(office|windows).{0,40}licence"
+    ],
+    "domains": [
+      "www.gamergen.com",
+      "gamergen.com"
+    ]
+  },
+  {
+    "outlet_id": "games_gg",
+    "editorial_url": "https://games.gg/news/umamusume-fans-race-bet-steam-game/",
+    "paid_example_url": "https://games.gg/campaign/world-cup-2026/",
+    "paid_patterns": [
+      "(?:^|/)campaign/"
+    ],
+    "domains": [
+      "games.gg",
+      "www.games.gg"
+    ]
+  },
+  {
+    "outlet_id": "gate_com",
+    "editorial_url": "https://www.gate.com/learn/articles/10-leading-ai-infrastructure-projects-in-the-current-market/6064",
+    "paid_example_url": "https://www.gate.com/help/annlist/newlisted/23303",
+    "paid_patterns": [
+      "/post/",
+      "/announcements/",
+      "/help/annlist/",
+      "/learn/ambassador",
+      "/launchpad/"
+    ],
+    "domains": [
+      "gate.com",
+      "www.gate.com"
+    ]
+  },
+  {
+    "outlet_id": "gbhackers",
+    "editorial_url": "https://gbhackers.com/cisa-adds-cisco-ios-csrf-flaw/",
+    "paid_example_url": "https://gbhackers.com/greenhat-announces-successful-delegation-at-web-summit-vancouver-2026/",
+    "paid_patterns": [],
+    "domains": [
+      "gbhackers.com"
+    ]
+  },
+  {
+    "outlet_id": "global_cybersecurity_network",
+    "editorial_url": "https://globalcybersecuritynetwork.com/blog/what-does-a-threat-intelligence-team-do/",
+    "paid_example_url": "https://globalcybersecuritynetwork.com/blog/squarex-passkey-vulnerability-browser-security/",
+    "paid_patterns": [
+      "^/news/(?!category/)",
+      "^/blog/category/press-release/",
+      "^/news/category/press-release/"
+    ],
+    "domains": [
+      "globalcybersecuritynetwork.com"
+    ]
+  },
+  {
+    "outlet_id": "gurufocus",
+    "editorial_url": "https://www.gurufocus.com/news/8955773/citi-has-a-stark-message-for-nvidia-stock-fans",
+    "paid_example_url": "https://www.gurufocus.com/news/8859491/the-cryptographic-migration-calendar-just-got-real-inside-the-tooling-gap-that-qse-just-closed",
+    "paid_patterns": [],
+    "domains": [
+      "www.gurufocus.com"
+    ]
+  },
+  {
+    "outlet_id": "hackernoon",
+    "editorial_url": "https://hackernoon.com/docker-vs-kubernetes-for-developers-why-docker-is-still-the-right-starting-point",
+    "paid_example_url": "https://hackernoon.com/ready-for-macos-threats-expanding-your-socs-cross-platform-analysis-with-anyrun",
+    "paid_patterns": [],
+    "domains": [
+      "hackernoon.com"
+    ]
+  },
+  {
+    "outlet_id": "hackread",
+    "editorial_url": "https://hackread.com/telegram-t-me-links-offline-registry-domain-serverhold/",
+    "paid_example_url": "https://hackread.com/torq-and-criminal-ip-partner-to-deliver-decision-ready-threat-intelligence-for-autonomous-soc-operations/",
+    "paid_patterns": [],
+    "domains": [
+      "hackread.com"
+    ]
+  },
+  {
+    "outlet_id": "hardcore_gamer",
+    "editorial_url": "https://hardcoregamer.com/beat-the-summer-heat-with-new-content-in-call-of-duty-black-ops-7-warzone-season-5/",
+    "paid_example_url": "https://hardcoregamer.com/gigabyte-enters-ai-laptop-arena/",
+    "paid_patterns": [],
+    "domains": [
+      "hardcoregamer.com"
+    ]
+  },
+  {
+    "outlet_id": "healthfully",
+    "editorial_url": "https://healthfully.com/make-clothes-flotation-devices-2338250.html",
+    "paid_example_url": "",
+    "paid_patterns": [],
+    "domains": [
+      "healthfully.com"
+    ]
+  },
+  {
+    "outlet_id": "homesteady",
+    "editorial_url": "https://homesteady.com/how-8095200-install-screen-tightly.html",
+    "paid_example_url": "",
+    "paid_patterns": [],
+    "domains": [
+      "homesteady.com"
+    ]
+  },
+  {
+    "outlet_id": "htmlgoodies",
+    "editorial_url": "https://www.htmlgoodies.com/seo/top-online-courses-to-learn-seo/",
+    "paid_example_url": "",
+    "paid_patterns": [
+      "(^|/)sponsored(/|$)"
+    ],
+    "domains": [
+      "www.htmlgoodies.com"
+    ]
+  },
+  {
+    "outlet_id": "ibusiness_news",
+    "editorial_url": "https://ibusiness.news/news/2026-07-14/schd-stalls-after-strong-start-to-2026-raising-questions-about-value-investor-opportunity/",
+    "paid_example_url": "https://ibusiness.news/news/2026-05-28/jackpot-wheel-casino-launches-300-welcome-bonus-up-to-7000-for-new-players/",
+    "paid_patterns": [],
+    "domains": [
+      "ibusiness.news"
+    ]
+  },
+  {
+    "outlet_id": "invezz",
+    "editorial_url": "https://invezz.com/news/2026/07/14/nasdaq-rises-as-soft-cpi-eases-fed-fears-ibm-plunges-over-weak-outlook/",
+    "paid_example_url": "https://invezz.com/news/2026/06/23/primexbt-copper-at-records-gold-plunging-why-metals-stopped-trading-as-one-market/",
+    "paid_patterns": [],
+    "domains": [
+      "invezz.com",
+      "www.invezz.com"
+    ]
+  },
+  {
+    "outlet_id": "it_security_guru",
+    "editorial_url": "https://www.itsecurityguru.org/2026/07/01/iran-linked-muddywater-espionage-campaign-targets-organisations-across-four-continents/",
+    "paid_example_url": "https://www.itsecurityguru.org/2026/07/07/mike-winston-on-why-jet-ai-shifted-from-aviation-to-ai-infrastructure/",
+    "paid_patterns": [],
+    "domains": [
+      "www.itsecurityguru.org",
+      "itsecurityguru.org"
+    ]
+  },
+  {
+    "outlet_id": "just_ai_news",
+    "editorial_url": "https://justainews.com/companies/funding-news/promptwatch-raises-e6-million-to-help-brands-stay-visible-in-ai-search/",
+    "paid_example_url": "",
+    "paid_patterns": [
+      "^/sponsored-articles/?$",
+      "^/tech-press-release-publication/?$",
+      "^/write-for-us/?$",
+      "^/tag/press-releases/?$",
+      "^/tag/partnerships/?$"
+    ],
+    "domains": [
+      "justainews.com"
+    ]
+  },
+  {
+    "outlet_id": "latest_hacking_news",
+    "editorial_url": "https://latesthackingnews.com/2026/07/10/edr-bypass-driver-goddamn-ransomware/",
+    "paid_example_url": "https://latesthackingnews.com/2026/07/06/insignary-closes-sbom-accuracy-gap-with-binary-level-clarity-for-regulatory-risk/",
+    "paid_patterns": [],
+    "domains": [
+      "latesthackingnews.com"
+    ]
+  },
+  {
+    "outlet_id": "law_for_families",
+    "editorial_url": "https://www.lawforfamilies.com/13725456-co-ownership-property-rights-in-california-tenants-in-common-vs-joint-tenants.html",
+    "paid_example_url": "",
+    "paid_patterns": [],
+    "domains": [
+      "www.lawforfamilies.com"
+    ]
+  },
+  {
+    "outlet_id": "law_news_day",
+    "editorial_url": "https://lawnewsday.com/clifford-chance-clawback-lawsuit-exposes-law-firm-tactics-to-retain-star-partners/",
+    "paid_example_url": "https://lawnewsday.com/press-release/the-expertise-gap-is-closing-getexpertsonline-com-just-got-new-backing-to-prove-it/",
+    "paid_patterns": [
+      "^/press-release/"
+    ],
+    "domains": [
+      "lawnewsday.com"
+    ]
+  },
+  {
+    "outlet_id": "lawyer_herald",
+    "editorial_url": "https://www.lawyerherald.com/articles/64058/20260713/judge-denies-18-year-olds-request-hug-family-before-serving-life-sentence-murder-15-year-old.htm",
+    "paid_example_url": "",
+    "paid_patterns": [
+      "^/sponsored(?:/|$)"
+    ],
+    "domains": [
+      "www.lawyerherald.com"
+    ]
+  },
+  {
+    "outlet_id": "legal_beagle",
+    "editorial_url": "https://legalbeagle.com/13775691-chapter-9-bankruptcy.html",
+    "paid_example_url": "",
+    "paid_patterns": [],
+    "domains": [
+      "legalbeagle.com"
+    ]
+  },
+  {
+    "outlet_id": "linux_today",
+    "editorial_url": "https://www.linuxtoday.com/blog/handbrake-1-11-2-video-transcoder-fixes-x265-crash/",
+    "paid_example_url": "https://www.linuxtoday.com/sponsored/the-7-best-c-frameworks-for-creating-graphical-interfaces/",
+    "paid_patterns": [
+      "/sponsored/"
+    ],
+    "domains": [
+      "www.linuxtoday.com",
+      "linuxtoday.com"
+    ]
+  },
+  {
+    "outlet_id": "london_insider",
+    "editorial_url": "https://londoninsider.co.uk/bp-bp-l-takes-fresh-1bn-hit-as-net-zero-retreat-deepens-under-new-chief/",
+    "paid_example_url": "https://londoninsider.co.uk/primexbt-expands-global-reach-with-fsca-regulated-crypto-asset-services/",
+    "paid_patterns": [
+      "^/advertise/?$",
+      "^/submit-.*guest-posts?/?$",
+      "^/submit-crypto-blockchain-press-releases/?$",
+      "^/crypto-press-release-(distribution|cointelegraph)/?$",
+      "/category/(chainwire|announcement|press-releases)/?"
+    ],
+    "domains": [
+      "londoninsider.co.uk"
+    ]
+  },
+  {
+    "outlet_id": "mexc",
+    "editorial_url": "https://blog.mexc.com/news/bitcoin-price-prediction-2026-expert-analysis-of-market-cycles-institutional-adoption-and-global-economic-factors/",
+    "paid_example_url": "https://blog.mexc.com/mexc-creators/park-goes-live-on-mexc-trade-stake-and-win-from-a-40k-reward-pool/",
+    "paid_patterns": [
+      "/mexc-creators/",
+      "/press-release/"
+    ],
+    "domains": [
+      "blog.mexc.com"
+    ]
+  },
+  {
+    "outlet_id": "myfxbook",
+    "editorial_url": "https://www.myfxbook.com/news/asian-markets-track-wall-street-lower/51420",
+    "paid_example_url": "https://www.myfxbook.com/press-release/-jay-mawji-helm-starprime/38074",
+    "paid_patterns": [
+      "^/press-release/",
+      "^/broker-news/"
+    ],
+    "domains": [
+      "www.myfxbook.com"
+    ]
+  },
+  {
+    "outlet_id": "nextbigfuture",
+    "editorial_url": "https://www.nextbigfuture.com/2026/07/spacex-starship-flight-13-in-3-days-thursday-july-13.html",
+    "paid_example_url": "https://www.nextbigfuture.com/2026/07/torq-and-criminal-ip-partner-to-deliver-decision-ready-threat-intelligence-for-autonomous-soc-operations.html",
+    "paid_patterns": [],
+    "domains": [
+      "www.nextbigfuture.com"
+    ]
+  },
+  {
+    "outlet_id": "opencritic",
+    "editorial_url": "https://opencritic.com/news/34366/xbox-reset-has-begun-what-does-that-mean-",
+    "paid_example_url": "",
+    "paid_patterns": [],
+    "domains": [
+      "opencritic.com"
+    ]
+  },
+  {
+    "outlet_id": "rtinsights",
+    "editorial_url": "https://www.rtinsights.com/the-hard-part-of-agentic-ai-is-authority-not-accuracy/",
+    "paid_example_url": "https://www.rtinsights.com/a/sponsored/trusted-context-is-the-missing-ingredient-in-enterprise-ai/",
+    "paid_patterns": [
+      "^/a/",
+      "^/hubs/",
+      "^/sponsor/"
+    ],
+    "domains": [
+      "www.rtinsights.com"
+    ]
+  },
+  {
+    "outlet_id": "security_express",
+    "editorial_url": "https://securityexpress.info/microsoft-defender-vulnerability/",
+    "paid_example_url": "https://securityexpress.info/2026-study-from-panorays-85-of-cisos-cant-see-third-party-threats-amid-increasing-supply-chain-attacks/",
+    "paid_patterns": [
+      "/category/press-release/?",
+      "^/(raccoonline-publishes-2026-research-on-vpn-risks-facing-journalists-and-activists|raccoonline-releases-comparative-report-on-wireguard-openvpn-and-vless|lyrie-ai-joins-first-batch-of-anthropics-cyber-verification-program|credshields-leads-owasp-smart-contract-top-10-2026-as-governance-and-access-failures-drive-onchain-risk|2026-study-from-panorays-85-of-cisos-cant-see-third-party-threats-amid-increasing-supply-chain-attacks|aembit-named-to-rising-in-cyber-2025-list-of-top-cybersecurity-startups|criminal-ip-to-showcase-advanced-threat-intelligence-at-rsac-2025)/?$"
+    ],
+    "domains": [
+      "securityexpress.info"
+    ]
+  },
+  {
+    "outlet_id": "security_senses",
+    "editorial_url": "https://securitysenses.com/posts/how-legal-teams-are-responding-faster-cyber-incidents-smarter-technology",
+    "paid_example_url": "https://securitysenses.com/posts/are-you-still-ignoring-basics-dbir-2026-has-notes",
+    "paid_patterns": [],
+    "domains": [
+      "securitysenses.com",
+      "www.securitysenses.com"
+    ]
+  },
+  {
+    "outlet_id": "securityonline",
+    "editorial_url": "https://securityonline.info/vmware-avi-load-balancer-cve-2026-47865/",
+    "paid_example_url": "https://securityonline.info/torq-and-criminal-ip-partner-to-deliver-decision-ready-threat-intelligence-for-autonomous-soc-operations/",
+    "paid_patterns": [],
+    "domains": [
+      "securityonline.info"
+    ]
+  },
+  {
+    "outlet_id": "smallbusiness_co_uk",
+    "editorial_url": "https://smallbusiness.co.uk/using-cloud-servers-data-storage-2538044/",
+    "paid_example_url": "https://smallbusiness.co.uk/friendly-guide-top-tips-for-small-businesses-switching-to-voip-2596032/",
+    "paid_patterns": [
+      "^/partner-content/?$",
+      "^/author/partnercontent/?",
+      "^/author/advertisementfeature/?"
+    ],
+    "domains": [
+      "smallbusiness.co.uk"
+    ]
+  },
+  {
+    "outlet_id": "technews180",
+    "editorial_url": "https://technews180.com/artificial-intelligence/why-the-future-of-ai-may-depend-less-on-models-and-more-on-who-owns-the-data/",
+    "paid_example_url": "https://technews180.com/mobility/envirotech-vehicles-closes-azio-ai-merger/",
+    "paid_patterns": [
+      "^/contributions/"
+    ],
+    "domains": [
+      "technews180.com"
+    ]
+  },
+  {
+    "outlet_id": "techround",
+    "editorial_url": "https://techround.co.uk/news/why-is-apple-suing-openai/",
+    "paid_example_url": "",
+    "paid_patterns": [
+      "^/elevator-pitch/"
+    ],
+    "domains": [
+      "techround.co.uk"
+    ]
+  },
+  {
+    "outlet_id": "techstartups",
+    "editorial_url": "https://techstartups.com/2026/07/14/ex-spacex-engineers-raise-115-million-for-construction-startup-terrafirma-to-build-infrastructure-on-mars/",
+    "paid_example_url": "https://techstartups.com/2025/04/22/blockchain-infrastructure-startup-arch-labs-raises-13m-from-pantera-to-bring-native-smart-contracts-to-bitcoin/",
+    "paid_patterns": [],
+    "domains": [
+      "techstartups.com"
+    ]
+  },
+  {
+    "outlet_id": "techwalla",
+    "editorial_url": "https://www.techwalla.com/13779549/fujifilm-x-half-price-cut-what-the-200-drop-really-means",
+    "paid_example_url": "",
+    "paid_patterns": [],
+    "domains": [
+      "www.techwalla.com"
+    ]
+  },
+  {
+    "outlet_id": "business_desk",
+    "editorial_url": "https://www.thebusinessdesk.com/northwest/news/2175787-boohoo-upgrades-profit-forecast-and-aims-to-wipe-out-debt-earlier-than-expected/",
+    "paid_example_url": "https://www.thebusinessdesk.com/your-news/award-winning-yorkshire-developer-welcomes-base-rate-cut/",
+    "paid_patterns": [
+      "/business-profiles/",
+      "/staff-profiles/",
+      "/your-news/",
+      "/supplements/"
+    ],
+    "domains": [
+      "www.thebusinessdesk.com"
+    ]
+  },
+  {
+    "outlet_id": "close",
+    "editorial_url": "https://theclose.com/news-road-to-housing-act/",
+    "paid_example_url": "",
+    "paid_patterns": [],
+    "domains": [
+      "theclose.com"
+    ]
+  },
+  {
+    "outlet_id": "last_watchdog",
+    "editorial_url": "https://www.lastwatchdog.com/fireside-chat-deepfakes-exploit-human-emotion-making-employee-reflex-training-essential/",
+    "paid_example_url": "https://www.lastwatchdog.com/news-alert-openmatter-joins-hol-initiative-to-shape-trust-standards-for-autonomous-ai/",
+    "paid_patterns": [
+      "/news-alert-",
+      "/new-alert-"
+    ],
+    "domains": [
+      "www.lastwatchdog.com"
+    ]
+  },
+  {
+    "outlet_id": "nest",
+    "editorial_url": "https://www.thenest.com/content/tenth-anniversary-traditional-gift-ideas",
+    "paid_example_url": "",
+    "paid_patterns": [],
+    "domains": [
+      "www.thenest.com",
+      "woman.thenest.com",
+      "budgeting.thenest.com",
+      "pets.thenest.com"
+    ]
+  },
+  {
+    "outlet_id": "neuron",
+    "editorial_url": "https://www.theneuron.ai/news/meta-patents-a-wearable-that-knows-how-you-feel/",
+    "paid_example_url": "https://www.theneuron.ai/sponsored/sovereign-ai-explained-what-enterprises-need-to-know/",
+    "paid_patterns": [
+      "^/sponsored/",
+      "^/press-release/"
+    ],
+    "domains": [
+      "www.theneuron.ai"
+    ]
+  },
+  {
+    "outlet_id": "neuron_daily",
+    "editorial_url": "https://www.theneurondaily.com/p/cerebras-to-ipo-at-33b-take-on-nvidia",
+    "paid_example_url": "",
+    "paid_patterns": [],
+    "domains": [
+      "www.theneurondaily.com"
+    ]
+  },
+  {
+    "outlet_id": "restaurant_hq",
+    "editorial_url": "https://www.therestauranthq.com/restaurants/restaurant-automation-vs-hospitality/",
+    "paid_example_url": "",
+    "paid_patterns": [],
+    "domains": [
+      "www.therestauranthq.com"
+    ]
+  },
+  {
+    "outlet_id": "security_ledger",
+    "editorial_url": "https://securityledger.com/2026/07/residential-proxy-risks-understanding-googles-latest-action-against-2-million-strong-netnut/",
+    "paid_example_url": "https://securityledger.com/2020/02/spotlight-podcast-the-demise-of-the-password-may-be-closer-than-you-think-sponsored-by-lastpass/",
+    "paid_patterns": [
+      "sponsored-by"
+    ],
+    "domains": [
+      "securityledger.com"
+    ]
+  },
+  {
+    "outlet_id": "therichest",
+    "editorial_url": "https://www.therichest.com/ariana-grande-drops-out-of-american-horror-story-season-13/",
+    "paid_example_url": "",
+    "paid_patterns": [],
+    "domains": [
+      "www.therichest.com"
+    ]
+  },
+  {
+    "outlet_id": "thesportster",
+    "editorial_url": "https://www.thesportster.com/wwe-oba-femi-reason-gave-up-title-shot-brock-lesnar-stupid/",
+    "paid_example_url": "",
+    "paid_patterns": [],
+    "domains": [
+      "www.thesportster.com"
+    ]
+  },
+  {
+    "outlet_id": "walletinvestor",
+    "editorial_url": "https://walletinvestor.com/news/crypto-news/bitcoin-holds-near-63000-as-etf-outflows-and-a-strategy-buying-pause-offset-cpi-relief/",
+    "paid_example_url": "https://walletinvestor.com/magazine/sponsored/hyrotrader-review-best-crypto-prop-trading-firm/",
+    "paid_patterns": [
+      "/magazine/pr/",
+      "/magazine/sponsored/"
+    ],
+    "domains": [
+      "walletinvestor.com"
+    ]
+  }
+]

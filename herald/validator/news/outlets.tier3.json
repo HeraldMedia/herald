@@ -1,0 +1,1428 @@
+{
+  "version_id": 1,
+  "outlets": [
+    {
+      "outlet_id": "advfn_uk",
+      "tier": 3,
+      "domains": [
+        "uk.advfn.com"
+      ],
+      "section_patterns": [],
+      "fetch": "direct",
+      "paid_patterns": [
+        "/newspaper/advfnnews/",
+        "/newspaper/advertorial",
+        "/newspaper/(etoro|iqoption|activtrades|capitalcom|windsorbrokers|torfx)/"
+      ],
+      "paid_markers": [
+        "Advertorial (WordPress category; rendered as CSS class \"category-Advertorial\" on the article wrapper div; dedicated taxonomy archive at /newspaper/advertorial lists only advfnnews-byline articles) \u2014 verified present on advfnnews articles, absent on azeez-mustapha and advfnnewsbulletin (legit house market-wire) articles",
+        "By ADVFN News (generic house byline used only for /newspaper/advfnnews/ advertorial pieces; never seen on bylined analyst or house market-bulletin content)"
+      ]
+    },
+    {
+      "outlet_id": "analytics_insight",
+      "tier": 3,
+      "domains": [
+        "www.analyticsinsight.net"
+      ],
+      "section_patterns": [],
+      "fetch": "direct",
+      "paid_patterns": [
+        "^/press-release/",
+        "^/brand-stories/"
+      ],
+      "paid_markers": [
+        "Press Release (articleSection = \"Press Release\", section nav item at /press-release, Quintype collection 'press-release' total-count=1192, live-verified)",
+        "Brand Stories (articleSection = \"Brand Stories\", Quintype collection 'brand-stories' total-count=21, live-verified)",
+        "\"Sponsored\" tag chip on the story page linking to /topic/sponsored (also mirrored at /sponsored) \u2014 confirmed via /api/v1/stories?tag=Sponsored and the sponsored collection (664 items) that these stories are NOT URL-path-isolated: they live under the ordinary /cryptocurrency-analytics-insight/ prefix alongside ~59k legitimate crypto articles, so no path regex can capture this vector without collateral damage",
+        "Generic house byline \"IndustryTrends\" (confirmed on sampled Sponsored-tagged crypto pieces) or \"Market Trends\"-style author slug in place of a named staff journalist, also not URL-isolated (e.g. an IndustryTrends byline article was found live under /artificial-intelligence/, the normal editorial prefix)",
+        "Disclaimer boilerplate: \"Opinions expressed herein are those of the authors and not necessarily those of Analytics Insight\" (used on both editorial and paid crypto pieces, so NOT itself a reliable paid signal)"
+      ]
+    },
+    {
+      "outlet_id": "bdaily",
+      "tier": 3,
+      "domains": [
+        "bdaily.co.uk",
+        "www.bdaily.co.uk"
+      ],
+      "section_patterns": [
+        "^/articles/\\d{4}/\\d{2}/\\d{2}/"
+      ],
+      "fetch": "direct",
+      "paid_patterns": [],
+      "paid_markers": [
+        "Partner Article",
+        "Published by ... Partner (Byline__member_type--member)",
+        "Bdaily Premium member",
+        "Columnist"
+      ]
+    },
+    {
+      "outlet_id": "binance_square",
+      "tier": 3,
+      "domains": [
+        "www.binance.com"
+      ],
+      "section_patterns": [
+        "/square/post/\\d+"
+      ],
+      "fetch": "proxy",
+      "paid_patterns": [],
+      "paid_markers": [
+        "#Sponsored",
+        "#sponsored",
+        "#Ad",
+        "#PartnerContent",
+        "Partner Content",
+        "paid collaboration with @",
+        "This is a paid collaboration",
+        "CreatorPad campaign"
+      ]
+    },
+    {
+      "outlet_id": "bizfluent",
+      "tier": 3,
+      "domains": [
+        "bizfluent.com"
+      ],
+      "section_patterns": [],
+      "fetch": "direct",
+      "paid_patterns": [],
+      "paid_markers": [
+        "Advertiser Disclosure"
+      ]
+    },
+    {
+      "outlet_id": "business_desk",
+      "tier": 3,
+      "domains": [
+        "www.thebusinessdesk.com"
+      ],
+      "section_patterns": [
+        "/news/\\d+-"
+      ],
+      "fetch": "direct",
+      "paid_patterns": [
+        "/business-profiles/",
+        "/staff-profiles/",
+        "/your-news/",
+        "/supplements/"
+      ],
+      "paid_markers": [
+        "rel=\"category tag\">Viewpoint<"
+      ]
+    },
+    {
+      "outlet_id": "business_live",
+      "tier": 3,
+      "domains": [
+        "www.business-live.co.uk"
+      ],
+      "section_patterns": [],
+      "fetch": "direct",
+      "paid_patterns": [
+        "/special-features/",
+        "/affiliates/"
+      ],
+      "paid_markers": [
+        "Advertising feature from",
+        "Commercial Content Writer"
+      ]
+    },
+    {
+      "outlet_id": "business_of_law_digest",
+      "tier": 3,
+      "domains": [
+        "businessoflawdigest.com"
+      ],
+      "section_patterns": [],
+      "fetch": "proxy",
+      "paid_patterns": [
+        "^/sponsored-"
+      ],
+      "paid_markers": [
+        "Sponsored",
+        "Sponsored \u2013",
+        "Sponsored Content",
+        "Brought to you by BridgeTower Media",
+        "Contributor Content"
+      ]
+    },
+    {
+      "outlet_id": "ccn",
+      "tier": 3,
+      "domains": [
+        "www.ccn.com"
+      ],
+      "section_patterns": [],
+      "fetch": "direct",
+      "paid_patterns": [
+        "^/crypto-casinos/",
+        "^/crypto-sports-betting/",
+        "^/crypto-gambling/",
+        "^/crypto-investing/",
+        "^/all-deals/",
+        "^/press-releases/?$"
+      ],
+      "paid_markers": [
+        "JSON-LD NewsArticle.articleSection == [\"Press Releases\"] (array format, confirmed live) \u2014 the strongest/most reliable single signal",
+        "BreadcrumbList JSON-LD position-2 item name=\"Press Releases\" linking to https://www.ccn.com/press-releases/ (confirmed live, co-occurs with articleSection marker)",
+        "byline author name \"playnewswire\" (confirmed live in JSON-LD author.name on the paid_example_url) or \"Chainwire\" (author archive page /author/chainwire/ confirmed to exist, linked from the live /press-releases/ hub) \u2014 3rd-party wire distributor, not a named CCN staff writer",
+        "RESIDUAL RISK (not fully closed): byline \"CCN Staff\"/\"CCN Editorial\" appears on genuine Press-Releases articles AND was also found on a promotional-sounding flat-root article NOT tagged articleSection=\"Press Releases\" (tagged \"Blockchain News\" instead) \u2014 byline is not a reliable standalone signal in either direction; articleSection/breadcrumb is best-effort, not proven exhaustive"
+      ]
+    },
+    {
+      "outlet_id": "cio_insight",
+      "tier": 3,
+      "domains": [
+        "www.cioinsight.com"
+      ],
+      "section_patterns": [],
+      "fetch": "direct",
+      "paid_patterns": [
+        "^/a/"
+      ],
+      "paid_markers": [
+        "Sponsored By",
+        "The following is sponsored content. It may not reflect the views of our editorial staff."
+      ]
+    },
+    {
+      "outlet_id": "close",
+      "tier": 3,
+      "domains": [
+        "theclose.com"
+      ],
+      "section_patterns": [],
+      "fetch": "direct",
+      "paid_patterns": [],
+      "paid_markers": [
+        "Sponsored Content"
+      ]
+    },
+    {
+      "outlet_id": "codeguru",
+      "tier": 3,
+      "domains": [
+        "www.codeguru.com"
+      ],
+      "section_patterns": [],
+      "fetch": "proxy",
+      "paid_patterns": [
+        "/sponsored/"
+      ],
+      "paid_markers": [
+        "Sponsored (WordPress category titled \"Sponsored Archives\" at /sponsored/ -- title confirmed live via proxy fetch: 'Sponsored Archives | CodeGuru')",
+        "Native / custom advertorials (ad-product name TechnologyAdvice sells live on solutions.technologyadvice.com/advertise-on-codeguru: 'Native -- Share your thought leadership with custom advertorials')",
+        "TechnologyAdvice receives compensation... (generic sitewide affiliate-disclosure footer identical on editorial AND the /sponsored/ stub -- confirmed NOT a per-article paid label, do not use as a detection signal)"
+      ]
+    },
+    {
+      "outlet_id": "congress_net",
+      "tier": 3,
+      "domains": [
+        "congress.net"
+      ],
+      "section_patterns": [],
+      "fetch": "direct",
+      "paid_patterns": [],
+      "paid_markers": []
+    },
+    {
+      "outlet_id": "cpo_magazine",
+      "tier": 3,
+      "domains": [
+        "www.cpomagazine.com"
+      ],
+      "section_patterns": [],
+      "fetch": "proxy",
+      "paid_patterns": [
+        "^/press-releases/",
+        "^/author/cybernewswire/?$"
+      ],
+      "paid_markers": [
+        "Press Release",
+        "CyberNewswire",
+        "CyberNewswire is a specialized newswire service providing high-impact distribution for the cybersecurity industry."
+      ]
+    },
+    {
+      "outlet_id": "crypto_briefing",
+      "tier": 3,
+      "domains": [
+        "cryptobriefing.com"
+      ],
+      "section_patterns": [],
+      "fetch": "direct",
+      "paid_patterns": [],
+      "paid_markers": [
+        "\"categories\":[\"SPONSORED\"]",
+        "\"categories\":[\"PRESS RELEASE\"]",
+        "This is sponsored content. It does not represent Crypto Briefing's editorial views. For more information, see our <a href=\"https://cryptobriefing.com/editorial-policy/\""
+      ]
+    },
+    {
+      "outlet_id": "cyber_security_news",
+      "tier": 3,
+      "domains": [
+        "cybersecuritynews.com"
+      ],
+      "section_patterns": [],
+      "fetch": "direct",
+      "paid_patterns": [],
+      "paid_markers": [
+        "articleSection\":\"Press Release\" (JSON-LD)",
+        "Cybernewswire (byline)",
+        "Cyber Wire (byline)",
+        "A PR Newswire Syndication Platform for Cybersecurity Companies (author bio text)",
+        "CyberNewswire (wire-service dateline credit inside article body, e.g. \"Vancouver, Canada, ... CyberNewswire\")"
+      ]
+    },
+    {
+      "outlet_id": "cybersecurity_insiders",
+      "tier": 3,
+      "domains": [
+        "www.cybersecurity-insiders.com",
+        "cybersecurity-insiders.com"
+      ],
+      "section_patterns": [],
+      "fetch": "direct",
+      "paid_patterns": [
+        "^/portfolio/"
+      ],
+      "paid_markers": [
+        "Press Releases (category badge / JSON-LD articleSection)",
+        "Sponsor Research",
+        "SPONSOR RESEARCH",
+        "Download The Report (gated /portfolio/ vendor reports)",
+        "Thought Leadership Articles (CISO Impact marketing program)",
+        "Product Review (category)",
+        "Company News & Announcements (category)",
+        "Product Release (category)"
+      ]
+    },
+    {
+      "outlet_id": "dailycoin",
+      "tier": 3,
+      "domains": [
+        "dailycoin.com"
+      ],
+      "section_patterns": [],
+      "fetch": "direct",
+      "paid_patterns": [
+        "/press-releases/"
+      ],
+      "paid_markers": [
+        "This article contains sponsored content from an external source.",
+        "This article is a press release and was not written by DailyCoin.",
+        "byline/author \"Sponsored Content\" (links to /author/sponsored/)",
+        "byline/author \"Press Release\" (links to /author/press-release/)"
+      ]
+    },
+    {
+      "outlet_id": "datamation",
+      "tier": 3,
+      "domains": [
+        "www.datamation.com"
+      ],
+      "section_patterns": [],
+      "fetch": "direct",
+      "paid_patterns": [
+        "^/press-release/",
+        "^/white-papers/"
+      ],
+      "paid_markers": [
+        "Press Release (category ticker/tag shown on-page and in nav)",
+        "articleSection: [\"Press Release\"] in JSON-LD (paid_example verified live)",
+        "byline author \"TechnologyWire\" (generic wire byline, vs named staff writers like \"Emma Crockett\" on editorial posts)",
+        "articleSection: [\"White Papers\"] in JSON-LD on /white-papers/ posts (verified live, e.g. \"IBM Storage and SAP\", \"Xerox Remote Services Security White Paper\", \"CDW Server Virtualization Life Cycle Report\")",
+        "vendor-branded titles under /white-papers/ (Symantec, Citrix, Novell, Intel, CDW, IBM, Xerox named in title = sponsored/syndicated vendor whitepaper library, not staff journalism)"
+      ]
+    },
+    {
+      "outlet_id": "devops_com",
+      "tier": 3,
+      "domains": [
+        "devops.com"
+      ],
+      "section_patterns": [],
+      "fetch": "direct",
+      "paid_patterns": [
+        "^/category/sponsored-content",
+        "^/category/press-releases",
+        "^/category/techstrong-council"
+      ],
+      "paid_markers": [
+        "OWN <body class=\"...postid-NNNN...\"> or <article class=\"post-NNNN ...\"> (post ID must match the requested page) contains 'sponsored-content'",
+        "OWN body/article class contains 'techstrong-council'",
+        "OWN body/article class contains 'press-releases' or 'press-releases-2'",
+        "breadcrumb JSON-LD object whose \"@id\" == \"<requested article URL>#breadcrumb\": itemListElement[0].name in {'Sponsored Content','Techstrong Council','Press Releases','Latest News Releases'}"
+      ]
+    },
+    {
+      "outlet_id": "dualshockers",
+      "tier": 3,
+      "domains": [
+        "www.dualshockers.com",
+        "dualshockers.com"
+      ],
+      "section_patterns": [],
+      "fetch": "direct",
+      "paid_patterns": [],
+      "paid_markers": [
+        "Sponsored Content",
+        "Sponsored",
+        "In Partnership With",
+        "Presented By",
+        "Advertisement",
+        "Paid Content",
+        "Promoted"
+      ]
+    },
+    {
+      "outlet_id": "dzone",
+      "tier": 3,
+      "domains": [
+        "dzone.com"
+      ],
+      "section_patterns": [
+        "^/articles/"
+      ],
+      "fetch": "direct",
+      "paid_patterns": [
+        "^/trendreports/",
+        "^/refcardz/",
+        "^/guides/",
+        "^/whitepapers/"
+      ],
+      "paid_markers": [
+        "Sponsored Content (label historically used on flagged posts, not observed live on current pages)",
+        "\"brought to you in partnership with\" (used on legacy DZone Guides)",
+        "CSS hooks #ftl-article.branded-content / #ftl-article.sponsored present in every article's template JS (dormant on all samples checked)"
+      ]
+    },
+    {
+      "outlet_id": "ehow",
+      "tier": 3,
+      "domains": [
+        "www.ehow.com"
+      ],
+      "section_patterns": [
+        "^/\\d{6,9}/"
+      ],
+      "fetch": "direct",
+      "paid_patterns": [],
+      "paid_markers": [
+        "Sponsored By"
+      ]
+    },
+    {
+      "outlet_id": "esecurity_planet",
+      "tier": 3,
+      "domains": [
+        "www.esecurityplanet.com"
+      ],
+      "section_patterns": [],
+      "fetch": "direct",
+      "paid_patterns": [
+        "^/a/sponsored/",
+        "^/sponsored/",
+        "^/press-release/"
+      ],
+      "paid_markers": [
+        "Sponsored By",
+        "StudioA by TechnologyAdvice",
+        "Press Release",
+        "CyberNewsWire"
+      ]
+    },
+    {
+      "outlet_id": "eweek",
+      "tier": 3,
+      "domains": [
+        "eweek.com",
+        "www.eweek.com"
+      ],
+      "section_patterns": [],
+      "fetch": "direct",
+      "paid_patterns": [
+        "/sponsored/",
+        "/press-release/",
+        "/hubs/"
+      ],
+      "paid_markers": [
+        "The following is sponsored content. It may not reflect the views of our editorial staff.",
+        "This article was provided by TechnologyWire and does not represent the editorial content of eWeek.",
+        "Press Release",
+        "StudioA by TechnologyAdvice"
+      ]
+    },
+    {
+      "outlet_id": "fextralife",
+      "tier": 3,
+      "domains": [
+        "fextralife.com"
+      ],
+      "section_patterns": [],
+      "fetch": "direct",
+      "paid_patterns": [],
+      "paid_markers": [
+        "This is a sponsored post. Please note sponsored posts are only sponsoring coverage, our opinions on the game are our own and not affected by any business relationships with developers or publishers.",
+        "#sponsored",
+        "#ad",
+        "kindly sponsored this video"
+      ]
+    },
+    {
+      "outlet_id": "financefeeds",
+      "tier": 3,
+      "domains": [
+        "financefeeds.com"
+      ],
+      "section_patterns": [],
+      "fetch": "direct",
+      "paid_patterns": [],
+      "paid_markers": [
+        "Sponsored",
+        "Press Release",
+        "article:section=Press Release",
+        "article:section=Financewire",
+        "article:section=Chainwire",
+        "article:section=Presale Press Releases",
+        "article:section=Reviews",
+        "article:section=Tokenomics",
+        "article:section=ICO",
+        "article:tag=sponsored",
+        "JSON-LD articleSection matching the above values",
+        "byline/author page https://financefeeds.com/author/pressrelease/ (bio: 'Sponsored press releases and partner announcements published on FinanceFeeds. Third-party content, disclosed as sponsored, not editorial.')",
+        "byline/author page https://financefeeds.com/author/chainwire/",
+        "byline/author page https://financefeeds.com/author/financewire/",
+        "rel=\"sponsored\" (any attribute ordering/combination with nofollow/noopener) on outbound links within the article body",
+        "CAUTION -- article:section=DeFi Projects is NOT safe as a standalone marker: verified two genuine unsponsored editorial articles in this section (https://financefeeds.com/world-liberty-financial-burns-and-redistributes/ and https://financefeeds.com/meta-executive-denies-access-to-whatsapp-chats/), both bylined to the real staff account https://financefeeds.com/author/damilola-esebame-contributing-editor-for-defi/ with no sponsored tag. Only flag DeFi Projects posts as paid when article:tag=sponsored (or rel=sponsored) co-occurs.",
+        "REMOVED as unsupported -- article:section=News Wire: category has only 4 posts total (ever), most recent 2022-10-21 (dormant), none carry sponsored tag/rel=sponsored/PR byline; sampled posts are real staff-bylined trade journalism (author/nisayev/, author/noam-stiekema/ -- 323 posts)."
+      ]
+    },
+    {
+      "outlet_id": "finbold",
+      "tier": 3,
+      "domains": [
+        "finbold.com"
+      ],
+      "section_patterns": [],
+      "fetch": "direct",
+      "paid_patterns": [],
+      "paid_markers": [
+        "Press Releases are sponsored content and not a part of Finbold's editorial content.",
+        "The below article is Sponsored Content. Finbold does not verify any claims, statistics, or information contained in this article.",
+        "category badge/label \"Press Releases\"",
+        "category badge/label \"Sponsored\"",
+        "JSON-LD articleSection = \"Press Releases\" or \"Sponsored\"",
+        "byline author = \"Press Release\" or a wire/agency account (Chainwire, Financewire, PlayNewswire, Blockwave Media Group, Xenon Agency, Coinzilla, Twin Peaks Digital, WebPR, Outreach Marketing, GGZ Marketing, GOH Marketing, EAG Marketing, Cryptopr Agency, Clickout, Wupp Media, RCO)"
+      ]
+    },
+    {
+      "outlet_id": "finsmes",
+      "tier": 3,
+      "domains": [
+        "www.finsmes.com"
+      ],
+      "section_patterns": [
+        "^/\\d{4}/\\d{2}/[^/]+\\.html$"
+      ],
+      "fetch": "direct",
+      "paid_patterns": [
+        "-sp\\.html$",
+        "-sponsored-post\\.html$"
+      ],
+      "paid_markers": [
+        "Sponsored Post",
+        "sponsored-post"
+      ]
+    },
+    {
+      "outlet_id": "fit_small_business",
+      "tier": 3,
+      "domains": [
+        "fitsmallbusiness.com"
+      ],
+      "section_patterns": [],
+      "fetch": "proxy",
+      "paid_patterns": [],
+      "paid_markers": [
+        "StudioA by TechnologyAdvice \u2014 author byline / author-archive page at /author/studioa-by-technologyadvice/ (confirmed live: exactly 1 such non-person author out of 95 in author-sitemap-1.xml; Wayback snapshot 2025-10-15 shows exactly 2 posts under this byline, both flat-looking slugs with no URL path tell; no on-page 'Sponsored'/'Presented by' disclosure text could be recovered \u2014 both known example articles are Cloudflare-blocked live and have no Wayback snapshot of their own, only tracker-pixel redirects via reader-proxy)"
+      ]
+    },
+    {
+      "outlet_id": "football_fancast",
+      "tier": 3,
+      "domains": [
+        "www.footballfancast.com",
+        "footballfancast.com"
+      ],
+      "section_patterns": [],
+      "fetch": "direct",
+      "paid_patterns": [
+        "-sponsored(/|$|\\?)",
+        "/sponsored/",
+        "/sponsored-content/",
+        "/partner-content/",
+        "/promoted/",
+        "/advertorial/",
+        "/press-release/",
+        "/branded-content/",
+        "\\[sponsored\\]"
+      ],
+      "paid_markers": [
+        "Sponsored",
+        "[Sponsored]",
+        "In Partnership With",
+        "Advertising Feature",
+        "Paid Content",
+        "Branded Content",
+        "This is a sponsored post",
+        "does not reflect the editorial direction of"
+      ]
+    },
+    {
+      "outlet_id": "football_league_world",
+      "tier": 3,
+      "domains": [
+        "footballleagueworld.co.uk"
+      ],
+      "section_patterns": [],
+      "fetch": "direct",
+      "paid_patterns": [],
+      "paid_markers": []
+    },
+    {
+      "outlet_id": "gadget_hacks",
+      "tier": 3,
+      "domains": [
+        "www.gadgethacks.com",
+        "gadgethacks.com",
+        "android.gadgethacks.com",
+        "apple.gadgethacks.com",
+        "ios.gadgethacks.com",
+        "ipados.gadgethacks.com",
+        "macos.gadgethacks.com",
+        "watchos.gadgethacks.com",
+        "tvos.gadgethacks.com",
+        "airpods.gadgethacks.com",
+        "chromeos.gadgethacks.com",
+        "windows.gadgethacks.com",
+        "samsung.gadgethacks.com",
+        "pixel.gadgethacks.com",
+        "oneplus.gadgethacks.com",
+        "smartphones.gadgethacks.com",
+        "tablets.gadgethacks.com",
+        "cord-cutters.gadgethacks.com",
+        "roku.gadgethacks.com",
+        "fire.gadgethacks.com",
+        "internet.gadgethacks.com",
+        "digiwonk.gadgethacks.com",
+        "mods-n-hacks.gadgethacks.com",
+        "the-hookup.gadgethacks.com",
+        "tech-pr0n.gadgethacks.com",
+        "nexus5.gadgethacks.com",
+        "nexus7.gadgethacks.com",
+        "htc-one.gadgethacks.com",
+        "lg-g3.gadgethacks.com"
+      ],
+      "section_patterns": [],
+      "fetch": "direct",
+      "paid_patterns": [],
+      "paid_markers": [
+        "TechnologyWire"
+      ]
+    },
+    {
+      "outlet_id": "gamergen",
+      "tier": 3,
+      "domains": [
+        "www.gamergen.com",
+        "gamergen.com"
+      ],
+      "section_patterns": [],
+      "fetch": "direct",
+      "paid_patterns": [
+        "godeal24",
+        "keysoff",
+        "keysworlds",
+        "scdkey",
+        "licence.{0,40}(office|windows)|(office|windows).{0,40}licence"
+      ],
+      "paid_markers": [
+        "Publication sponsoris\u00e9e par GoDeal24",
+        "Publication sponsoris\u00e9e par KeysOff",
+        "Publication sponsoris\u00e9e par Keysworlds",
+        "Article sponsoris\u00e9 par VIP-scdkey"
+      ]
+    },
+    {
+      "outlet_id": "games_gg",
+      "tier": 3,
+      "domains": [
+        "games.gg",
+        "www.games.gg"
+      ],
+      "section_patterns": [
+        "/news/",
+        "/guides/",
+        "/review/"
+      ],
+      "fetch": "proxy",
+      "paid_patterns": [
+        "(?:^|/)campaign/"
+      ],
+      "paid_markers": [
+        "Press Release"
+      ]
+    },
+    {
+      "outlet_id": "gate_com",
+      "tier": 3,
+      "domains": [
+        "gate.com",
+        "www.gate.com"
+      ],
+      "section_patterns": [
+        "/news/detail/\\d+",
+        "/learn/articles/",
+        "/research/article/",
+        "/blog/\\d+/"
+      ],
+      "fetch": "proxy",
+      "paid_patterns": [
+        "/post/",
+        "/announcements/",
+        "/help/annlist/",
+        "/learn/ambassador",
+        "/launchpad/"
+      ],
+      "paid_markers": [
+        "It is provided for reference purposes only and does not represent any views of Gate",
+        "Startup Free Offering",
+        "Influencer Recruitment Posts"
+      ]
+    },
+    {
+      "outlet_id": "gbhackers",
+      "tier": 3,
+      "domains": [
+        "gbhackers.com"
+      ],
+      "section_patterns": [],
+      "fetch": "direct",
+      "paid_patterns": [],
+      "paid_markers": [
+        "Press Release (category name / breadcrumb / schema.org articleSection value; WP REST API category id=4165, count=260)",
+        "By CyberNewswire (byline shown as author name; author archive at /author/cyber-news-wire/)",
+        "Sponsored (legacy category; schema.org articleSection:[\"Sponsored\"]; WP REST API category id=4131, count=1)",
+        "\"Sponsored content\" listed as an offered service on the /advertise/ page"
+      ]
+    },
+    {
+      "outlet_id": "global_cybersecurity_network",
+      "tier": 3,
+      "domains": [
+        "globalcybersecuritynetwork.com"
+      ],
+      "section_patterns": [
+        "^/blog/(?!category/)"
+      ],
+      "fetch": "direct",
+      "paid_patterns": [
+        "^/news/(?!category/)",
+        "^/blog/category/press-release/",
+        "^/news/category/press-release/"
+      ],
+      "paid_markers": [
+        "Press release distributed by CyberNewswire.",
+        "CyberNewswire",
+        "CyberNewsWire",
+        "Press Releases (breadcrumb/category label)",
+        "publishing branded content (outlet's own /advertise/ page)"
+      ]
+    },
+    {
+      "outlet_id": "gurufocus",
+      "tier": 3,
+      "domains": [
+        "www.gurufocus.com"
+      ],
+      "section_patterns": [],
+      "fetch": "proxy",
+      "paid_patterns": [],
+      "paid_markers": [
+        "/PRNewswire/",
+        "/GlobeNewswire/",
+        "/Business Wire/",
+        "/Chainwire/",
+        "This press release features multimedia. View the full release here:",
+        "Issued on behalf of",
+        "News Commentary"
+      ]
+    },
+    {
+      "outlet_id": "hackernoon",
+      "tier": 3,
+      "domains": [
+        "hackernoon.com"
+      ],
+      "section_patterns": [],
+      "fetch": "direct",
+      "paid_patterns": [],
+      "paid_markers": [
+        "good-company (present in the ARTICLE'S OWN JSON tags array \u2014 verified live on 9/9 known paid/branded/PR-wire examples; must not be a page-wide substring search since a genuine editorial page can contain the string once from an unrelated recommended-article widget)",
+        "brand-as-author (tag)",
+        "hackernoon-sponsors / hackernoon-sponsor (tag)",
+        "rel=\"noopener noreferrer sponsored\" on outbound links inside the article body",
+        "\"boosted\":{\"paid\":true,...} field embedded in the page's Next.js JSON when a story is actively running a paid boost",
+        "byline (dc:creator / JSON-LD author.name) is a company/brand/agency name or a PR wire service (e.g. Chainwire, CyberNewswire, Blockchain Wire, Blockman PR and Marketing) rather than an individual person \u2014 note JSON-LD author.@type is unreliably set to \"Person\" even for brand bylines like \"ANY.RUN\" and \"Chainwire\", so only the name string is a usable signal, not @type"
+      ]
+    },
+    {
+      "outlet_id": "hackread",
+      "tier": 3,
+      "domains": [
+        "hackread.com"
+      ],
+      "section_patterns": [],
+      "fetch": "direct",
+      "paid_patterns": [],
+      "paid_markers": [
+        "Sponsored (category label / breadcrumb, HTML class=\"category-sponsored\" on the <article> element)",
+        "Press Release (category label / breadcrumb, HTML class=\"category-press-release\" on the <article> element)",
+        "JSON-LD NewsArticle \"articleSection\":\"Press Release\" -- verified appears exactly once per page, safe for substring/regex match",
+        "JSON-LD NewsArticle \"articleSection\":\"Sponsored, ...\" -- verified appears exactly once per page, safe for substring/regex match",
+        "JSON-LD NewsArticle \"author\":{\"name\":\"CyberNewswire\"} on wire press releases -- MUST be read from the article's own JSON-LD author object, NOT a raw HTML/href substring search: the string /author/cybernewswire/ also appears 5-11 times per page inside 'related articles' recommendation widgets on completely unrelated editorial pages (verified on all 5 editorial articles tested) -- a naive site-wide substring check would false-positive-reject honest miners' real news articles",
+        "JSON-LD NewsArticle \"author\":{\"name\":\"Owais Sultan\"} on sponsored posts -- same caution applies: /author/owais/ also leaked into a related-post widget on an editorial page in testing; use the JSON-LD author field only, never raw href search, and corroborate with articleSection since this byline also writes some non-sponsored content"
+      ]
+    },
+    {
+      "outlet_id": "hardcore_gamer",
+      "tier": 3,
+      "domains": [
+        "hardcoregamer.com"
+      ],
+      "section_patterns": [],
+      "fetch": "direct",
+      "paid_patterns": [],
+      "paid_markers": [
+        "\"primary_category\" JSON field (embedded in page's data blob) containing \"Sponsored\" \u2014 e.g. |News|Hardware|Sponsored|, |Sponsored|, |News|Sponsored|, |Sponsored|News| \u2014 verified present on 5/5 sampled sponsored articles (gigabyte-enters-ai-laptop-arena, logitech-g-studies-point-to-gamecations-other-trends-among-gamers, warhammer-40000-space-marine-2-displate-launch, hell-let-loose-vietnam-showcases-gameplay-details-in-new-trailer, solo-leveling-arise-overdrive-available-now-on-pc). This is the PRIMARY, most reliable marker \u2014 treat it as the main signal.",
+        "Listed on the live /promoted/ hub page at https://hardcoregamer.com/promoted/ (page <title>Promoted | Hardcore Gamer</title>, HTTP 200) \u2014 confirmed to list real sponsored article slugs as plain relative links.",
+        "On-page sponsor disclosure text, in VARIABLE wording \u2014 do not rely on one exact sentence. Only 1 of 5 sampled sponsored articles carried the full boilerplate: \"This is a sponsored post. The product choices and opinions expressed in this article are from the sponsor and do not reflect the editorial direction of Hardcore Gamer or its staff.\" The other 4 instead used different inline phrasing such as \"sponsored by <sponsor>\" or \"in partnership with sponsor <sponsor>\" and did NOT contain that exact sentence at all. If a validator greps only for that literal sentence it will miss ~80% of real sponsored content on this outlet."
+      ]
+    },
+    {
+      "outlet_id": "healthfully",
+      "tier": 3,
+      "domains": [
+        "healthfully.com"
+      ],
+      "section_patterns": [],
+      "fetch": "direct",
+      "paid_patterns": [],
+      "paid_markers": []
+    },
+    {
+      "outlet_id": "homesteady",
+      "tier": 3,
+      "domains": [
+        "homesteady.com"
+      ],
+      "section_patterns": [],
+      "fetch": "direct",
+      "paid_patterns": [],
+      "paid_markers": []
+    },
+    {
+      "outlet_id": "htmlgoodies",
+      "tier": 3,
+      "domains": [
+        "www.htmlgoodies.com"
+      ],
+      "section_patterns": [],
+      "fetch": "direct",
+      "paid_patterns": [
+        "(^|/)sponsored(/|$)"
+      ],
+      "paid_markers": [
+        "Sponsored (page title reads \"Sponsored Archives | HTML Goodies\" \u2014 a live WordPress category/taxonomy at /sponsored/, currently 0 published posts)",
+        "Advertiser Disclosure (site-wide footer text, confirmed verbatim: \"Some of the products that appear on this site are from companies from which TechnologyAdvice receives compensation...\")",
+        "Advertising Disclaimer (real tooltip mechanism confirmed in page JS: href=\"#advertising-disclaimer\" anchors trigger a div.advertising-disclaimer-tooltip with vendor-compensation text, attached to product-comparison/listicle blocks)"
+      ]
+    },
+    {
+      "outlet_id": "ibusiness_news",
+      "tier": 3,
+      "domains": [
+        "ibusiness.news"
+      ],
+      "section_patterns": [
+        "^/news/\\d{4}-\\d{2}-\\d{2}/"
+      ],
+      "fetch": "direct",
+      "paid_patterns": [],
+      "paid_markers": [
+        "rel=\"sponsored\""
+      ]
+    },
+    {
+      "outlet_id": "invezz",
+      "tier": 3,
+      "domains": [
+        "invezz.com",
+        "www.invezz.com"
+      ],
+      "section_patterns": [],
+      "fetch": "proxy",
+      "paid_patterns": [],
+      "paid_markers": [
+        "Sponsored",
+        "Press releases",
+        "This article is authored by a third party, and Invezz does not endorse or take responsibility for its content, accuracy, quality, advertisements, products, or materials. Readers should independently research and exercise due diligence before making decisions related to the mentioned company.",
+        "JSON-LD NewsArticle field articleSection containing \"Sponsored\" and/or \"Press releases\" (genuine editorial only has topical sections e.g. articleSection:[\"Stock market\"])",
+        "Author byline 'Invezz Team' or wire-service pseudo-bylines (e.g. 'pinionnewswire') instead of a named staff journalist, on paid pieces"
+      ]
+    },
+    {
+      "outlet_id": "it_security_guru",
+      "tier": 3,
+      "domains": [
+        "www.itsecurityguru.org",
+        "itsecurityguru.org"
+      ],
+      "section_patterns": [],
+      "fetch": "proxy",
+      "paid_patterns": [],
+      "paid_markers": [
+        "Press Releases (category badge/breadcrumb shown on-page and in JSON-LD articleSection, e.g. articleSection:[\"Featured\",\"Press Releases\"]) - reverified live 2026-07-14 on https://www.itsecurityguru.org/2026/07/07/forescout-recognised-by-nato-for-cybersecurity-capabilities-across-it-and-ot-environments/ (RSS categories: Industrial Internet of Things, News, Press Releases)",
+        "\"Disclosure:\" boilerplate appended to some unlabeled financial/stock-promotion pieces (e.g. \"This article discusses Jet.AI, Inc. (NASDAQ: JTAI)... does not constitute investment advice\" on the paid_example_url) - CAVEAT confirmed live: a sibling same-day, same-topic promotional piece (https://www.itsecurityguru.org/2026/07/07/george-murnanes-one-question-test-for-real-ai/, also profiling Jet.AI/AIIA) carries NO disclosure footer at all, so this marker alone has real false-negative risk and must not be relied on exclusively",
+        "NEW: on-page category badge reading exactly 'Uncategorized' with href .../category/uncategorized/ (HTML: <div class=\"jeg_meta_category\">...<a href=\".../category/uncategorized/\">Uncategorized</a>) i.e. the article was published with NO substantive WordPress category. Verified as the sole category on all 3 undisclosed promotional/content-marketing pieces found (the two Jet.AI/AIIA stock-promo profiles above, plus a third previously-unflagged piece: 'The industries being reimagined by AI', 2026-07-02, https://www.itsecurityguru.org/2026/07/02/the-industries-being-reimagined-by-ai/, an off-topic AI listicle with undisclosed backlinks to small vendors XFactorAi/Sourceful/RiverflowAI). By contrast, 0 of 17 other sampled RSS items (genuine reporting + Press Releases) were solely 'Uncategorized' - all carried a substantive category (News, Featured, Insight, Press Releases, Cloud Security, etc). Not a guaranteed rule, but the strongest single discriminating page-level signal found and it was missing from the original proposal."
+      ]
+    },
+    {
+      "outlet_id": "just_ai_news",
+      "tier": 3,
+      "domains": [
+        "justainews.com"
+      ],
+      "section_patterns": [],
+      "fetch": "direct",
+      "paid_patterns": [
+        "^/sponsored-articles/?$",
+        "^/tech-press-release-publication/?$",
+        "^/write-for-us/?$",
+        "^/tag/press-releases/?$",
+        "^/tag/partnerships/?$"
+      ],
+      "paid_markers": [
+        "Sponsored (per outlet's own sponsored-articles program page copy: 'we schedule the piece, add the Sponsored label' -- confirmed by live fetch of that page; NOT found rendered on any live article body in this audit either)",
+        "Press Releases (WordPress tag, confirmed via WP REST API to have exactly 2 posts site-wide as of 2026-07-14: /companies/why-openai-pushed-back-chatgpt-adult-mode/ and /ai-compliance/ondato-launches-aml-ranger/; renders as a clickable tag chip in the article footer and in article:tag meta, but is NOT part of the article's URL path and does not reliably identify paid placements)"
+      ]
+    },
+    {
+      "outlet_id": "last_watchdog",
+      "tier": 3,
+      "domains": [
+        "www.lastwatchdog.com"
+      ],
+      "section_patterns": [],
+      "fetch": "direct",
+      "paid_patterns": [
+        "/news-alert-",
+        "/new-alert-"
+      ],
+      "paid_markers": [
+        "News alert:",
+        "New alert:",
+        "CyberNewswire",
+        "press release syndication service",
+        "Editor\u2019s note: This press release was provided by"
+      ]
+    },
+    {
+      "outlet_id": "latest_hacking_news",
+      "tier": 3,
+      "domains": [
+        "latesthackingnews.com"
+      ],
+      "section_patterns": [],
+      "fetch": "direct",
+      "paid_patterns": [],
+      "paid_markers": [
+        "by CyberNewswire",
+        "written by CyberNewswire",
+        "dateline format: \"<City>, <Country>, <date>, CyberNewswire\"",
+        "category: External News of Computer"
+      ]
+    },
+    {
+      "outlet_id": "law_for_families",
+      "tier": 3,
+      "domains": [
+        "www.lawforfamilies.com"
+      ],
+      "section_patterns": [
+        "\\.html$"
+      ],
+      "fetch": "direct",
+      "paid_patterns": [],
+      "paid_markers": [
+        "Advertiser Disclosure",
+        "Sponsored (content-recommendation widget label, not article-level)"
+      ]
+    },
+    {
+      "outlet_id": "law_news_day",
+      "tier": 3,
+      "domains": [
+        "lawnewsday.com"
+      ],
+      "section_patterns": [],
+      "fetch": "direct",
+      "paid_patterns": [
+        "^/press-release/"
+      ],
+      "paid_markers": [
+        "Press Release",
+        "article:section=\"Press Release\" (meta tag)",
+        "This article was originally published at:"
+      ]
+    },
+    {
+      "outlet_id": "lawyer_herald",
+      "tier": 3,
+      "domains": [
+        "www.lawyerherald.com"
+      ],
+      "section_patterns": [],
+      "fetch": "direct",
+      "paid_patterns": [
+        "^/sponsored(?:/|$)"
+      ],
+      "paid_markers": []
+    },
+    {
+      "outlet_id": "legal_beagle",
+      "tier": 3,
+      "domains": [
+        "legalbeagle.com"
+      ],
+      "section_patterns": [
+        "\\.html$"
+      ],
+      "fetch": "direct",
+      "paid_patterns": [],
+      "paid_markers": [
+        "Sponsored"
+      ]
+    },
+    {
+      "outlet_id": "linux_today",
+      "tier": 3,
+      "domains": [
+        "www.linuxtoday.com",
+        "linuxtoday.com"
+      ],
+      "section_patterns": [],
+      "fetch": "direct",
+      "paid_patterns": [
+        "/sponsored/"
+      ],
+      "paid_markers": [
+        "Sponsored",
+        "Sponsored Archives"
+      ]
+    },
+    {
+      "outlet_id": "london_insider",
+      "tier": 3,
+      "domains": [
+        "londoninsider.co.uk"
+      ],
+      "section_patterns": [],
+      "fetch": "direct",
+      "paid_patterns": [
+        "^/advertise/?$",
+        "^/submit-.*guest-posts?/?$",
+        "^/submit-crypto-blockchain-press-releases/?$",
+        "^/crypto-press-release-(distribution|cointelegraph)/?$",
+        "/category/(chainwire|announcement|press-releases)/?"
+      ],
+      "paid_markers": [
+        "byline \"by chainwire\" (author archive /author/chainwire/, JSON-LD author.name==\"chainwire\", sameAs https://chainwire.org/) \u2014 verified present verbatim in paid_example_url's fetched HTML/JSON-LD",
+        "wire dateline as article's opening line / og:description, e.g. \"Castries, Saint Lucia, 2nd June 2025, Chainwire\" \u2014 verified present in paid_example_url",
+        "boilerplate PR structure: \"About <Company>\" section + \"Contact\" section + \"Disclaimer:\" paragraph at the end of the article body \u2014 verified \"Disclaimer:\" paragraph present in paid_example_url",
+        "author archive /author/contributor/ hosting uncredited promotional crypto pieces (token launches, exchange PR, meme-coin comparisons)",
+        "outbound links carrying utm_medium=chainwire or utm_source=PR query params",
+        "'Press Releases', 'Sponsored Articles', 'Guest Posts' listed as purchasable ad products on /advertise/ \u2014 verified current (page text confirmed live, footer dated \"London Insider \u00a9 2026\")",
+        "article <article> tag CSS class containing \"category-chainwire\" (only visible in fetched HTML, not the URL)"
+      ]
+    },
+    {
+      "outlet_id": "mexc",
+      "tier": 3,
+      "domains": [
+        "blog.mexc.com"
+      ],
+      "section_patterns": [],
+      "fetch": "direct",
+      "paid_patterns": [
+        "/mexc-creators/",
+        "/press-release/"
+      ],
+      "paid_markers": [
+        "MEXC Creators",
+        "Press Release",
+        "\"platform for third-party content creation\" (self-description on /mexc-creators/ landing page)"
+      ]
+    },
+    {
+      "outlet_id": "myfxbook",
+      "tier": 3,
+      "domains": [
+        "www.myfxbook.com"
+      ],
+      "section_patterns": [
+        "^/news/[^/?]+/\\d+/?$"
+      ],
+      "fetch": "proxy",
+      "paid_patterns": [
+        "^/press-release/",
+        "^/broker-news/"
+      ],
+      "paid_markers": [
+        "Press Release",
+        "\"pageLoc\":\"Press Release Inner Page\" (meta, not visible to readers)",
+        "Legacy alias: pre-rename /broker-news/ URLs carry pageLoc=\"Brokers News Inner Page\" and nav/breadcrumb label \"Broker News\" \u2014 same vendor-announcement program, renamed to \"Press Release\" sometime between Sep 2024 and Nov 2025 (confirmed by a live 301 redirect from /broker-news to /press-release captured 2025-11-11)"
+      ]
+    },
+    {
+      "outlet_id": "nest",
+      "tier": 3,
+      "domains": [
+        "www.thenest.com",
+        "woman.thenest.com",
+        "budgeting.thenest.com",
+        "pets.thenest.com"
+      ],
+      "section_patterns": [],
+      "fetch": "direct",
+      "paid_patterns": [],
+      "paid_markers": []
+    },
+    {
+      "outlet_id": "neuron",
+      "tier": 3,
+      "domains": [
+        "www.theneuron.ai"
+      ],
+      "section_patterns": [],
+      "fetch": "direct",
+      "paid_patterns": [
+        "^/sponsored/",
+        "^/press-release/"
+      ],
+      "paid_markers": [
+        "Sponsored By",
+        "The following is sponsored content. It may not reflect the views of our editorial staff.",
+        "Sponsored",
+        "Press Release"
+      ]
+    },
+    {
+      "outlet_id": "neuron_daily",
+      "tier": 3,
+      "domains": [
+        "www.theneurondaily.com"
+      ],
+      "section_patterns": [
+        "^/p/"
+      ],
+      "fetch": "direct",
+      "paid_patterns": [],
+      "paid_markers": [
+        "FROM OUR PARTNERS",
+        "sponsored",
+        "MADE POSSIBLE BY OUR PARTNER"
+      ]
+    },
+    {
+      "outlet_id": "nextbigfuture",
+      "tier": 3,
+      "domains": [
+        "www.nextbigfuture.com"
+      ],
+      "section_patterns": [],
+      "fetch": "direct",
+      "paid_patterns": [],
+      "paid_markers": [
+        "meta property=\"article:tag\" content=\"Press Release\"",
+        "meta property=\"article:tag\" content=\"Sponsored\" / articleSection containing \"Sponsored\"",
+        "JSON-LD Person/author name = \"cybernewswire\" (sameAs https://cybernewswire.com) -- verified currently active, 286 posts total, most recent within days of 2026-07-14",
+        "JSON-LD Person/author name = \"chainwire\" (sameAs chainwire.org, crypto PR wire) -- verified legacy program, 141 posts, 2023-2024 vintage",
+        "JSON-LD Person/author name = \"cyberwire\" (sameAs https://cyber-wire.org; DISTINCT from cybernewswire -- separate WP user id 172 vs 175) -- NEWLY FOUND, missed by the original proposal; cybersecurity PR wire, 15 posts, 2023-04 to 2024-04 vintage; its posts do also carry article:tag=\"Press Release\" so marker 1 partially covers it, but the author-name check should still list it for defense-in-depth",
+        "JSON-LD Person/author name = \"TechnologyWire\" -- NEWLY FOUND, CRITICAL MISS by the original proposal; currently active wire, 3 posts, most recent dated 2026-07-07 (7 days before verification date 2026-07-14); verified all 3 of its live articles carry NO \"Press Release\"/\"Sponsored\" article:tag and NO \"Sponsored\" in articleSection -- JSON-LD author.name is the ONLY marker that catches this program, and it was absent from the original paid_markers list entirely",
+        "byline \"cybernewswire\", \"chainwire\", \"cyberwire\", or \"TechnologyWire\" shown under the headline instead of a staff writer name (e.g. Brian Wang)"
+      ]
+    },
+    {
+      "outlet_id": "opencritic",
+      "tier": 3,
+      "domains": [
+        "opencritic.com"
+      ],
+      "section_patterns": [
+        "^/news/\\d+/"
+      ],
+      "fetch": "direct",
+      "paid_patterns": [],
+      "paid_markers": []
+    },
+    {
+      "outlet_id": "restaurant_hq",
+      "tier": 3,
+      "domains": [
+        "www.therestauranthq.com"
+      ],
+      "section_patterns": [],
+      "fetch": "direct",
+      "paid_patterns": [],
+      "paid_markers": [
+        "Advertiser Disclosure"
+      ]
+    },
+    {
+      "outlet_id": "rtinsights",
+      "tier": 3,
+      "domains": [
+        "www.rtinsights.com"
+      ],
+      "section_patterns": [],
+      "fetch": "direct",
+      "paid_patterns": [
+        "^/a/",
+        "^/hubs/",
+        "^/sponsor/"
+      ],
+      "paid_markers": [
+        "Sponsored By",
+        "The following is sponsored content. It may not reflect the views of our editorial staff.",
+        "Sponsored (breadcrumb/tag label)",
+        "rel=\"sponsored nofollow\" on outbound/internal links within these articles",
+        "JSON-LD Article.articleSection array containing \"Sponsored\" or \"Press Release\" (WordPress category taxonomy, present in raw static HTML) -- required NEW marker: catches legacy native/sponsored articles and wire-service press releases published at ordinary root-level URLs that carry NO visible on-page disclosure banner and NO distinguishing URL prefix; confirmed present on e.g. /closing-the-latency-gap-real-time-decision-making-at-the-point-of-data-creation/ (articleSection includes \"Sponsored\") and /minimus-appoints-tech-dealmaker-yael-nardi-as-chief-business-officer-to-drive-hyper-growth/ (articleSection=[\"Press Release\"], author=\"TechnologyWire\"), and confirmed ABSENT on 4 sampled genuine editorial articles"
+      ]
+    },
+    {
+      "outlet_id": "security_express",
+      "tier": 3,
+      "domains": [
+        "securityexpress.info"
+      ],
+      "section_patterns": [],
+      "fetch": "direct",
+      "paid_patterns": [
+        "/category/press-release/?",
+        "^/(raccoonline-publishes-2026-research-on-vpn-risks-facing-journalists-and-activists|raccoonline-releases-comparative-report-on-wireguard-openvpn-and-vless|lyrie-ai-joins-first-batch-of-anthropics-cyber-verification-program|credshields-leads-owasp-smart-contract-top-10-2026-as-governance-and-access-failures-drive-onchain-risk|2026-study-from-panorays-85-of-cisos-cant-see-third-party-threats-amid-increasing-supply-chain-attacks|aembit-named-to-rising-in-cyber-2025-list-of-top-cybersecurity-startups|criminal-ip-to-showcase-advanced-threat-intelligence-at-rsac-2025)/?$"
+      ],
+      "paid_markers": [
+        "Press Release (category label / JSON-LD articleSection value shown on the post)",
+        "byline / JSON-LD author.name == \"cybernewswire\" (a cybersecurity press-release distribution wire; genuine staff bylines on this outlet look like \"Hieu Phan Trong\", \"Do Son\")",
+        "cross-check via REST API: https://securityexpress.info/wp-json/wp/v2/posts?categories=1002 lists the current authoritative set of paid post IDs/slugs (category id 1002 = 'press-release', confirmed via /wp-json/wp/v2/categories?slug=press-release)"
+      ]
+    },
+    {
+      "outlet_id": "security_ledger",
+      "tier": 3,
+      "domains": [
+        "securityledger.com"
+      ],
+      "section_patterns": [],
+      "fetch": "direct",
+      "paid_patterns": [
+        "sponsored-by"
+      ],
+      "paid_markers": [
+        "Disclosure sentence inside sponsored Spotlight Podcast posts, e.g. \"Disclosure: This podcast was sponsored by \u2026\" or \"Disclosure: This Spotlight Podcast was sponsored by \u2026\" (wording varies by post; verified on both the 2020 LastPass example and an independently-found 2024 DirectDefense example) \u2014 the single most reliable paid marker on this outlet, required for any brand-category signal below to count as paid rather than just topical coverage",
+        "WordPress category/JSON-LD label \"Press Release\" (article HTML: class=\"... category-press-release\"; JSON-LD articleSection array contains \"Press Release\", e.g. [\"Companies\",\"Press Release\"]) \u2014 verified on 4 additional live cybernewswire posts beyond the original 4, zero false positives on the 2 genuine staff-written (Paul Roberts) articles checked, which never carry this class/label",
+        "Byline \"by cybernewswire\", author meta content=\"cybernewswire\", and href=\"/author/cybernewswire/\" \u2014 wire-service syndication byline, not a Security Ledger staff/contributor byline; corroborated by RSS <dc:creator> field (live check: 9 of the 10 most recent /feed/ items are dc:creator=cybernewswire, only 1 is dc:creator=Paul Roberts \u2014 dc:creator is a clean already-parsed equivalent of the byline check, usable straight from the RSS feed without fetching the article body)",
+        "CORRECTED \u2014 brand-named WordPress category alone (e.g. category-lastpass, category-directdefense) is NOT a reliable standalone paid marker: live-verified that the proposal's own editorial_article_url (genuine Paul-Roberts-bylined news story about Google's enforcement action against NetNut) carries category-netnut despite being ordinary editorial coverage of that company, not sponsorship by it. A brand-named category must co-occur with the explicit \"Disclosure: \u2026 sponsored by\" sentence (marker #1) before it counts as evidence of paid placement; the original entry's category-netnut example was a false-positive-prone example and has been removed."
+      ]
+    },
+    {
+      "outlet_id": "security_senses",
+      "tier": 3,
+      "domains": [
+        "securitysenses.com",
+        "www.securitysenses.com"
+      ],
+      "section_patterns": [
+        "^/posts/"
+      ],
+      "fetch": "direct",
+      "paid_patterns": [],
+      "paid_markers": [
+        "Featured Post",
+        "Sponsored Post"
+      ]
+    },
+    {
+      "outlet_id": "securityonline",
+      "tier": 3,
+      "domains": [
+        "securityonline.info"
+      ],
+      "section_patterns": [],
+      "fetch": "direct",
+      "paid_patterns": [],
+      "paid_markers": [
+        "Press Release",
+        "articleSection\":[\"Press Release\"] (JSON-LD NewsArticle)",
+        "breadcrumb link to /category/press-release/",
+        "author byline \"cybernewswire\" (wire-service PR distributor)"
+      ]
+    },
+    {
+      "outlet_id": "smallbusiness_co_uk",
+      "tier": 3,
+      "domains": [
+        "smallbusiness.co.uk"
+      ],
+      "section_patterns": [],
+      "fetch": "direct",
+      "paid_patterns": [
+        "^/partner-content/?$",
+        "^/author/partnercontent/?",
+        "^/author/advertisementfeature/?"
+      ],
+      "paid_markers": [
+        "Partner Content (byline/JSON-LD author.name: \"Partner Content\")",
+        "Advertisement Feature (byline/JSON-LD author.name: \"Advertisement Feature\"; author archive /author/advertisementfeature/) \u2014 MISSED by original proposal",
+        "category-partner-content \u2014 present on the <article>/hentry element's class attribute (NOT the <body> tag as originally claimed; verified <body class=...> literally on both editorial and paid pages)",
+        "category-smart-energy-gb \u2014 same correction: on the <article>/hentry class, not <body>"
+      ]
+    },
+    {
+      "outlet_id": "technews180",
+      "tier": 3,
+      "domains": [
+        "technews180.com"
+      ],
+      "section_patterns": [],
+      "fetch": "direct",
+      "paid_patterns": [
+        "^/contributions/"
+      ],
+      "paid_markers": [
+        "\"Press release\" tag on paid PR-rewrite articles (rel=tag, shown as \"More about: ... | Press release\" in article footer, links to /tag/press-release/) \u2014 verified live on the mobility example",
+        "\"you're purchasing placement and distribution, not editorial endorsement\" \u2014 verified verbatim on /tech-sponsored-articles/ (Tech Sponsored Articles program; no dedicated URL path, published into whatever category matches the sponsor's topic)",
+        "Editorial Service ($99) / Paid Service (\u20ac99) guaranteed PR rewrite within 2 business days \u2014 verified verbatim on /submit-your-tech-press-release/; live example carries verbatim \"Forward-Looking Statements\" / \"Private Securities Litigation Reform Act of 1995\" wire-PR boilerplate (confirmed present in HTML) and author \"Tech News 180 Team\"",
+        "/contributions/ URL-prefixed posts = externally-authored Contributor Community guest content, confirmed via genuine named non-staff byline (e.g. \"Neil Hodgson-Coyle\") distinct from the generic \"Tech News 180 Team\" byline used for staff/PR content \u2014 NOTE: this bucket is UNPAID per the site's own text (/contributor-community/ and /write-for-us/ both state submissions are free; paid placement is explicitly routed elsewhere to a separate \"Sponsored Content & Brand Boosting\" contact), so it should be treated as non-independent contributed content, not literally \"paid\""
+      ]
+    },
+    {
+      "outlet_id": "techround",
+      "tier": 3,
+      "domains": [
+        "techround.co.uk"
+      ],
+      "section_patterns": [],
+      "fetch": "direct",
+      "paid_patterns": [
+        "^/elevator-pitch/"
+      ],
+      "paid_markers": []
+    },
+    {
+      "outlet_id": "techstartups",
+      "tier": 3,
+      "domains": [
+        "techstartups.com"
+      ],
+      "section_patterns": [
+        "^/\\d{4}/\\d{2}/\\d{2}/[^/]+/?$"
+      ],
+      "fetch": "direct",
+      "paid_patterns": [],
+      "paid_markers": [
+        "Sponsored",
+        "Press Release",
+        "Guest Post",
+        "Crypto Press Releases",
+        "CyberNewswire"
+      ]
+    },
+    {
+      "outlet_id": "techwalla",
+      "tier": 3,
+      "domains": [
+        "www.techwalla.com"
+      ],
+      "section_patterns": [],
+      "fetch": "direct",
+      "paid_patterns": [],
+      "paid_markers": []
+    },
+    {
+      "outlet_id": "therichest",
+      "tier": 3,
+      "domains": [
+        "www.therichest.com"
+      ],
+      "section_patterns": [],
+      "fetch": "direct",
+      "paid_patterns": [],
+      "paid_markers": [
+        "Sponsored Content",
+        "Sponsored",
+        "Promoted",
+        "In Partnership With",
+        "Advertorial"
+      ]
+    },
+    {
+      "outlet_id": "thesportster",
+      "tier": 3,
+      "domains": [
+        "www.thesportster.com"
+      ],
+      "section_patterns": [],
+      "fetch": "direct",
+      "paid_patterns": [],
+      "paid_markers": [
+        "Sponsored",
+        "Sponsored post",
+        "In Partnership With",
+        "Presented By",
+        "VALNET_GLOBAL_INTENT = \"Sponsored\"",
+        "VALNET_GLOBAL_CONTENTTYPE = \"Partnership\""
+      ]
+    },
+    {
+      "outlet_id": "walletinvestor",
+      "tier": 3,
+      "domains": [
+        "walletinvestor.com"
+      ],
+      "section_patterns": [],
+      "fetch": "direct",
+      "paid_patterns": [
+        "/magazine/pr/",
+        "/magazine/sponsored/"
+      ],
+      "paid_markers": [
+        "Sponsored (visible category badge text \"Sponsored\" linking to /category/magazine/sponsored/, on /magazine/sponsored/ articles). CORRECTION: the proposal's claim of body class \"category-sponsored\" is wrong \u2014 verified live that the <body> tag class list (wp-singular post-template-default single single-post postid-NNNNN single-format-standard wp-theme-fox wp-child-theme-walletinvestor style--tagcloud-1 style--blockquote-overlap the-fox) does NOT contain it. The class \"category-sponsored\" actually appears on an inner <div class=\"... hentry category-sponsored tag-business\" itemscope itemtype=\"https://schema.org/CreativeWork\"> content wrapper, not the body tag. Use the wrapper-div class, not body class, if implementing this marker.",
+        "Press Release (nav menu item + \"Submit A Press Release\" link to advertise.walletinvestor.com, category label on /magazine/pr/ articles) \u2014 confirmed live on homepage nav and on a sampled /magazine/pr/ article.",
+        "Byline \"Chainwire\" (author bio: \"a specialized newswire service providing high-impact distribution for the blockchain and crypto industry\") \u2014 confirmed live: /magazine/pr/afx-surpasses-1-1-billion-in-total-trading-volume-highlighting-capital-efficiency-in-on-chain-derivatives/ is bylined /author/chainwire/.",
+        "Byline \"FinanceWire\" (identical wire-service bio template)",
+        "Byline \"PressRelease\" (generic wire account)",
+        "Byline \"playnewswire\" (igaming/betting-focused wire account)",
+        "NEW \u2014 Byline \"naomibarati\" (the site's own advertise/press-release contact: her Telegram handle \"naomibarati_walletinvestor\" and pressrelease@walletinvestor.com are listed live on advertise.walletinvestor.com). She bylines undisclosed brand-promotional content OUTSIDE /magazine/pr/ and /magazine/sponsored/ \u2014 e.g. live-fetched https://walletinvestor.com/news/crypto-news/what-is-cryptocurrency-and-how-can-you-use-it-on-1win/ (200 OK) repeats the iGaming brand \"1win\" 42 times in body text with zero disclosure, sitting in the SAME /news/crypto-news/ path prefix as confirmed-genuine staff articles (incl. the entry's own editorial_article_url and a Nora Bennett byline article). Crawling her /author/naomibarati/ archive turned up further brand-adjacent \"best X\"/\"top X\"/\"X review\" pieces spread across /news/ai-news/, /news/betting-news/, /news/casino-news/, /news/crypto-news/, /news/economics-news/ plus /magazine/pr/. No path-only regex can separate her paid pieces from genuine editorial in those same sections without false-positive risk, so treat this as a byline-check requirement, not a URL pattern.",
+        "REJECTED CANDIDATE MARKER (tested, do not use): rel=\"sponsored\" on outbound links looked promising but is a sitewide boilerplate affiliate CTA button (refpa04636.pro tracking link) that appears identically on genuine editorial (the bitcoin and Goldman Sachs articles) AND on the Chainwire PR article \u2014 it is not an article-level paid signal on this site."
+      ]
+    }
+  ]
+}
