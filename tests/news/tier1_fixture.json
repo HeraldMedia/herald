@@ -644,22 +644,6 @@
     ]
   },
   {
-    "outlet_id": "sunday_times",
-    "editorial_url": "https://www.thetimes.com/uk/crime/article/counterterrorism-police-leading-investigation-ann-widdecombe-death-zphd83jhv",
-    "paid_example_url": "https://www.thetimes.com/static/travel-deals-hotels-cruises-times-holidays/",
-    "paid_patterns": [
-      "^/static/",
-      "^/best-law-firms/",
-      "^/best-places-to-work/"
-    ],
-    "domains": [
-      "www.thetimes.com",
-      "thetimes.com",
-      "www.thetimes.co.uk",
-      "thetimes.co.uk"
-    ]
-  },
-  {
     "outlet_id": "sydney_morning_herald",
     "editorial_url": "https://www.smh.com.au/national/professor-richard-scolyer-remembered-as-a-national-treasure-20260713-p60eyh.html",
     "paid_example_url": "https://www.smh.com.au/goodfood/recipes/golden-bubbling-goodness-30-ways-cheese-and-butter-make-everything-better-20260701-p60bny.html",

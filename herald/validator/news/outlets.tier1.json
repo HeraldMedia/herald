@@ -1062,34 +1062,6 @@
       ]
     },
     {
-      "outlet_id": "sunday_times",
-      "tier": 1,
-      "domains": [
-        "www.thetimes.com",
-        "thetimes.com",
-        "www.thetimes.co.uk",
-        "thetimes.co.uk"
-      ],
-      "section_patterns": [
-        "/article/"
-      ],
-      "fetch": "proxy",
-      "paid_patterns": [
-        "^/static/",
-        "^/best-law-firms/",
-        "^/best-places-to-work/"
-      ],
-      "paid_markers": [
-        "Sponsored",
-        "PROMOTED CONTENT",
-        "In partnership with",
-        "In co-operation with",
-        "Paid post",
-        "Advertisement feature",
-        "Brought to you by"
-      ]
-    },
-    {
       "outlet_id": "sydney_morning_herald",
       "tier": 1,
       "domains": [
