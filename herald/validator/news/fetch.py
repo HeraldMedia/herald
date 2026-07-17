@@ -58,6 +58,19 @@ def is_safe_fetch_url(url: str) -> bool:
 
 _HEADERS = {"User-Agent": "HeraldValidator/1.0 (+https://herald.network)"}
 _SKIP_TAGS = {"script", "style", "noscript"}
+_VOID_TAGS = {
+    "area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta",
+    "param", "source", "track", "wbr",
+}
+# Common publisher-neutral article-body container names.  Deliberately avoid a bare
+# ``content`` class: it is used for whole-page wrappers on many sites and would pull
+# navigation and sponsored-content directories back into the verifier's article scope.
+_ARTICLE_BODY_ATTR = re.compile(
+    r"(?:^|[\s_-])(?:article|story|post|entry)[_-]*(?:body|content)s?(?:$|[\s_-])|"
+    r"(?:^|[\s_-])(?:body|content)s?[_-]*(?:article|story|post|entry)(?:$|[\s_-])|"
+    r"(?:^|[\s_-])paywall[_-]*content(?:$|[\s_-])",
+    re.I,
+)
 _cache = {}  # (canonical_url, epoch) -> FetchResult
 _CACHE_MAX = 50000
 
@@ -98,13 +111,91 @@ def _extract_text(html: str) -> str:
     return " ".join(parser.parts)
 
 
+class _ScopedTextExtractor(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.candidates = {"article": [], "content": [], "main": []}
+        self._active = []
+        self._skip = 0
+
+    def handle_starttag(self, tag, attrs):
+        tag = tag.lower()
+        if tag in _SKIP_TAGS:
+            self._skip += 1
+
+        if tag not in _VOID_TAGS:
+            for scope in self._active:
+                scope[0] += 1
+
+        kind = None
+        if tag == "article":
+            kind = "article"
+        elif self._is_article_body(attrs):
+            kind = "content"
+        elif tag == "main":
+            kind = "main"
+        if kind is not None:
+            parts = []
+            self.candidates[kind].append(parts)
+            self._active.append([1, parts])
+
+    def handle_endtag(self, tag):
+        tag = tag.lower()
+        if tag not in _VOID_TAGS:
+            finished = []
+            for scope in self._active:
+                scope[0] -= 1
+                if scope[0] <= 0:
+                    finished.append(scope)
+            for scope in finished:
+                self._active.remove(scope)
+        if tag in _SKIP_TAGS and self._skip > 0:
+            self._skip -= 1
+
+    def handle_data(self, data):
+        if self._skip:
+            return
+        chunk = data.strip()
+        if not chunk:
+            return
+        for _depth, parts in self._active:
+            parts.append(chunk)
+
+    @staticmethod
+    def _is_article_body(attrs):
+        values = {name.lower(): (value or "") for name, value in attrs}
+        if "articlebody" in values.get("itemprop", "").lower().split():
+            return True
+        return any(_ARTICLE_BODY_ATTR.search(values.get(name, ""))
+                   for name in ("class", "id"))
+
+
+def _extract_article_text(html: str) -> str:
+    parser = _ScopedTextExtractor()
+    try:
+        parser.feed(html)
+    except Exception:
+        pass
+    # Prefer the most semantically precise substantial container.  Tiny/empty
+    # ``article`` wrappers (often a share widget or teaser) must not eclipse a real
+    # article-body container elsewhere on the page.
+    for kind in ("article", "content", "main"):
+        texts = [" ".join(parts) for parts in parser.candidates[kind]]
+        substantial = [text for text in texts if len(text) >= HERALD_MIN_BODY_BYTES]
+        if substantial:
+            return max(substantial, key=len)
+    return ""
+
+
 # Article-scoped meta is preferred over a bare datePublished (which a stray/unrelated JSON-LD
 # object elsewhere on the page could otherwise supply).
 _PUBLISHED_PATTERNS = [
-    re.compile(r'(?:article:published_time|og:published_time)["\']?\s+content=["\']([^"\']+)["\']', re.I),
+    re.compile(r'citation_online_date["\']?[^>]{0,200}?content=["\']([^"\']+)["\']', re.I),
+    re.compile(r'citation_date["\']?[^>]{0,200}?content=["\']([^"\']+)["\']', re.I),
+    re.compile(r'(?:article:published_time|og:published_time|parsely-pub-date|sailthru\.date|cXenseParse:recs:publishtime)["\']?[^>]{0,200}?content=["\']([^"\']+)["\']', re.I),
     # Bounded quantifiers: the two attrs sit in one <meta> tag, so a missing keyword can't
     # force a quadratic backtrack across a crafted body (ReDoS).
-    re.compile(r'content=["\']([^"\']{1,200})["\'][^>]{0,200}?(?:article:published_time|og:published_time)', re.I),
+    re.compile(r'content=["\']([^"\']{1,200})["\'][^>]{0,200}?(?:article:published_time|og:published_time|parsely-pub-date|sailthru\.date|cXenseParse:recs:publishtime)', re.I),
     re.compile(r'["\']datePublished["\']\s*:\s*["\']([^"\']+)["\']'),
 ]
 
@@ -114,7 +205,9 @@ def _parse_published_ts(html: str):
         m = pattern.search(html)
         if not m:
             continue
-        raw = m.group(1).strip().replace("Z", "+00:00")
+        raw = m.group(1).strip().rstrip(".,;").replace("Z", "+00:00")
+        if re.fullmatch(r"\d{4}/\d{1,2}/\d{1,2}", raw):
+            raw = raw.replace("/", "-")
         try:
             dt = datetime.fromisoformat(raw)
         except ValueError:
@@ -155,6 +248,7 @@ class FetchResult:
     text_hash: str
     body_len: int
     text: str = ""
+    article_text: str = None
     providers_live: int = 0
     published_ts: float = None
     author: str = None
@@ -188,29 +282,47 @@ def _http_get(url: str):
     raise ValueError("too many redirects")
 
 
-def _scrapingbee_get(url: str):
+def _scrapingbee_get(url: str, profile: str = "classic"):
+    params = {"url": url}
+    if profile == "classic":
+        params["render_js"] = "false"
+    elif profile == "js":
+        params["render_js"] = "true"
+    elif profile == "premium":
+        params.update(render_js="false", premium_proxy="true")
+    elif profile == "premium_js":
+        params.update(render_js="true", premium_proxy="true")
+    elif profile == "stealth":
+        params["stealth_proxy"] = "true"
+    else:
+        raise ValueError(f"unknown ScrapingBee profile: {profile}")
     r = httpx.get(
         HERALD_SCRAPINGBEE_BASE,
-        params={"api_key": SCRAPINGBEE_API_KEY, "url": url, "render_js": "false"},
-        timeout=30.0,
+        params=params,
+        headers={"Authorization": f"Bearer {SCRAPINGBEE_API_KEY}"},
+        timeout=45.0,
     )
     return r.status_code, url, r.content[:HERALD_MAX_BODY_BYTES]
 
 
-def _providers(proxy_only: bool = False):
-    # proxy_only routes a bot-walled outlet through the JS-rendering provider ONLY (its plain-HTTP
-    # fetch would just return the 403 challenge page).
+def _providers(proxy_only: bool = False, proxy_profile: str = "classic"):
+    # proxy_only routes a bot-walled outlet through its registry-selected ScrapingBee profile
+    # only (a plain-HTTP fetch would just return the challenge page).
     if proxy_only:
-        return [_scrapingbee_get] if SCRAPINGBEE_API_KEY else []
+        if not SCRAPINGBEE_API_KEY or proxy_profile not in {
+            "classic", "js", "premium", "premium_js", "stealth",
+        }:
+            return []
+        return [lambda url: _scrapingbee_get(url, profile=proxy_profile)]
     providers = [_http_get]
     if SCRAPINGBEE_API_KEY:
         providers.append(_scrapingbee_get)
     return providers
 
 
-def fetch(url: str, epoch=None, proxy_only: bool = False) -> FetchResult:
+def fetch(url: str, epoch=None, proxy_only: bool = False, proxy_profile: str = "classic") -> FetchResult:
     canon = canonicalize(url)
-    cache_key = (canon, epoch, proxy_only)
+    cache_key = (canon, epoch, proxy_only, proxy_profile)
     if epoch is not None and cache_key in _cache:
         return _cache[cache_key]
 
@@ -220,7 +332,7 @@ def fetch(url: str, epoch=None, proxy_only: bool = False) -> FetchResult:
             _cache_put(_cache, cache_key, result)
         return result
 
-    providers = _providers(proxy_only)
+    providers = _providers(proxy_only, proxy_profile)
     if not providers:
         # proxy_only outlet but no proxy provider configured: can't verify -> not live (fail closed).
         result = FetchResult(False, 0, canon, "", 0)
@@ -258,6 +370,7 @@ def fetch(url: str, epoch=None, proxy_only: bool = False) -> FetchResult:
         text_hash=hashlib.sha256(body).hexdigest(),
         body_len=len(body),
         text=_extract_text(html),
+        article_text=_extract_article_text(html) or None,
         providers_live=len(live),
         published_ts=_parse_published_ts(html),
         author=_parse_author(html),
@@ -273,8 +386,13 @@ def fetch_article(url: str, registry, epoch=None) -> FetchResult:
     registry entry says. Unknown outlet or strategy falls back to a plain direct fetch."""
     outlet = registry.lookup(url) if registry is not None else None
     strategy = (outlet.fetch if outlet else "direct") or "direct"
+    if strategy == "disabled":
+        canon = canonicalize(url)
+        return FetchResult(False, 0, canon, "", 0)
     if strategy == "proxy":
         return fetch(url, epoch, proxy_only=True)
+    if strategy.startswith("proxy:"):
+        return fetch(url, epoch, proxy_only=True, proxy_profile=strategy[6:])
     if strategy.startswith("api:"):
         from .adapters import api_fetch
         return api_fetch(strategy[4:], url, epoch)

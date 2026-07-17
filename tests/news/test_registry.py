@@ -37,6 +37,7 @@ def test_section_pattern_gates_path(reg):
 
 def test_version_id_exposed(reg):
     assert reg.version_id == 1
+    assert reg.content_hash == content_hash(OUTLETS)
 
 
 def test_outlet_id_for_url(reg):
@@ -84,3 +85,53 @@ def test_load_registry_checks_onchain_anchor(tmp_path, monkeypatch):
     assert load_registry(anchor_value=good).version_id == OUTLETS["version_id"]
     with pytest.raises(ValueError):
         load_registry(anchor_value="HRLDREG|1|deadbeef|10")
+
+
+def test_required_onchain_anchor_fails_closed_when_missing(tmp_path, monkeypatch):
+    path = tmp_path / "outlets.json"
+    path.write_text(json.dumps(OUTLETS))
+    monkeypatch.setenv("HERALD_REGISTRY_PATH", str(path))
+    with pytest.raises(ValueError, match="anchor required"):
+        load_registry(require_anchor=True)
+
+
+def test_future_anchor_keeps_previous_signed_edition_until_effective_block(tmp_path, monkeypatch):
+    priv, pub = generate_keypair()
+    current = {**OUTLETS, "signature": sign(OUTLETS, priv)}
+    future_unsigned = {**OUTLETS, "version_id": 2}
+    future = {**future_unsigned, "signature": sign(future_unsigned, priv)}
+    path = tmp_path / "outlets.json"
+    path.write_text(json.dumps(current))
+    monkeypatch.setenv("HERALD_REGISTRY_PATH", str(path))
+    monkeypatch.setenv("HERALD_REGISTRY_PUBKEY", pub)
+    anchor = encode_anchor(2, content_hash(future), effective_block=100)
+
+    assert load_registry(anchor, require_anchor=True, current_block=99).version_id == 1
+    with pytest.raises(ValueError, match="anchor mismatch"):
+        load_registry(anchor, require_anchor=True, current_block=100)
+
+
+def test_remote_registry_is_verified_before_cache(tmp_path, monkeypatch):
+    priv, pub = generate_keypair()
+    signed = {**OUTLETS, "signature": sign(OUTLETS, priv)}
+    anchor = encode_anchor(1, content_hash(signed), effective_block=10)
+    source = tmp_path / "fallback.json"
+    source.write_text(json.dumps({"version_id": 0, "outlets": []}))
+    cache = tmp_path / "verified.json"
+
+    class Response:
+        def raise_for_status(self):
+            return None
+        def json(self):
+            return signed
+
+    import httpx
+    monkeypatch.setattr(httpx, "get", lambda *args, **kwargs: Response())
+    monkeypatch.setenv("HERALD_REGISTRY_ENDPOINT", "https://backend.example")
+    monkeypatch.setenv("HERALD_REGISTRY_PATH", str(source))
+    monkeypatch.setenv("HERALD_REGISTRY_CACHE_PATH", str(cache))
+    monkeypatch.setenv("HERALD_REGISTRY_PUBKEY", pub)
+
+    loaded = load_registry(anchor_value=anchor, require_anchor=True)
+    assert loaded.version_id == 1
+    assert json.loads(cache.read_text())["signature"] == signed["signature"]

@@ -20,6 +20,15 @@ def test_any_param_change_changes_fingerprint():
 def test_live_params_cover_the_consensus_surface():
     p = consensus_params()
     for key in ("epoch_len", "vest_epoch_len", "vest_epochs", "base_payout", "tier_mult",
-                "no_search_floor", "total_daily_usd", "attr_mult", "attr_text_threshold",
-                "slash_mult", "use_llm_judge", "quorum_threshold", "providers", "briefs_pubkey"):
+                "no_search_floor", "emission_mode", "attr_mult", "attr_text_threshold",
+                "miner_bond_required", "slash_mult", "use_llm_judge", "llm_provider",
+                "llm_provider_ready",
+                "quorum_threshold", "providers", "search_top_n", "min_body_bytes",
+                "max_body_bytes", "briefs_pubkey", "briefs_max_age",
+                "require_signed_briefs", "registry_pubkey", "require_signed_registry",
+                "registry_authority_hotkey"):
         assert key in p, key
+
+    assert p["emission_mode"] == "participant_normalized_v1"
+    assert "total_daily_usd" not in p
+    assert "burn_uid" not in p

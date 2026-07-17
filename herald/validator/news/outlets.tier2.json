@@ -1,5 +1,5 @@
 {
-  "version_id": 1,
+  "version_id": 2,
   "outlets": [
     {
       "outlet_id": "american_banker",
@@ -102,7 +102,6 @@
       ],
       "paid_markers": [
         "Advertorial",
-        "Sponsored",
         "Press Release",
         "Advertorial is the universal author name for all the sponsored content provided by BeInCrypto partners",
         "created by third parties for promotional purposes",
@@ -206,7 +205,7 @@
       "section_patterns": [
         "^/content/"
       ],
-      "fetch": "proxy",
+      "fetch": "proxy:premium",
       "paid_patterns": [
         "suppl",
         "/rapid-response",
@@ -275,7 +274,7 @@
       "section_patterns": [
         "^/article/"
       ],
-      "fetch": "proxy",
+      "fetch": "proxy:stealth",
       "paid_patterns": [
         "partnercontent",
         "^/insight/"
@@ -839,7 +838,7 @@
       "section_patterns": [
         "^/sections/"
       ],
-      "fetch": "proxy",
+      "fetch": "proxy:premium",
       "paid_patterns": [
         "^/sections/etf-industry-perspective(?:/|$)",
         "^/sections/etf-report-sponsored-content(?:/|$)"
@@ -1012,7 +1011,7 @@
       "section_patterns": [
         "/article/.+\\.php"
       ],
-      "fetch": "proxy",
+      "fetch": "proxy:js",
       "paid_patterns": [
         "/press-releases/",
         "/hearstmagazines/",
@@ -1063,7 +1062,7 @@
       "section_patterns": [
         "^/content/"
       ],
-      "fetch": "proxy",
+      "fetch": "proxy:stealth",
       "paid_patterns": [
         "^/content/advertorial/",
         "^/content/insights/"
@@ -1256,7 +1255,7 @@
       "section_patterns": [
         "/journals/[a-z0-9]+/article/"
       ],
-      "fetch": "proxy",
+      "fetch": "proxy:premium_js",
       "paid_patterns": [
         "/webinars",
         "/for-advertisers",

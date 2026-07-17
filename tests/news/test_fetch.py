@@ -1,5 +1,7 @@
 from types import SimpleNamespace
 
+import pytest
+
 from herald.validator.news import fetch as fetchmod
 from herald.validator.news.fetch import FetchResult, fetch, fetch_article
 from herald.validator.news.registry import OutletRegistry
@@ -23,15 +25,38 @@ def test_scrapingbee_base_is_configurable(monkeypatch):
     monkeypatch.setattr(fetchmod, "HERALD_SCRAPINGBEE_BASE", "http://localhost:9100/scrapingbee/api/v1")
     monkeypatch.setattr(fetchmod, "SCRAPINGBEE_API_KEY", "sim")
 
-    def fake_get(base, params=None, timeout=None):
-        captured.update(base=base, url=params.get("url"))
+    def fake_get(base, params=None, headers=None, timeout=None):
+        captured.update(base=base, params=params, headers=headers)
         return SimpleNamespace(status_code=200, content=b"x" * 600)
 
     monkeypatch.setattr(fetchmod.httpx, "get", fake_get)
     status, _, _ = fetchmod._scrapingbee_get("http://localhost:9100/reuters/slug")
     assert status == 200
     assert captured["base"] == "http://localhost:9100/scrapingbee/api/v1"
-    assert captured["url"] == "http://localhost:9100/reuters/slug"
+    assert captured["params"]["url"] == "http://localhost:9100/reuters/slug"
+    assert "api_key" not in captured["params"]
+    assert captured["headers"] == {"Authorization": "Bearer sim"}
+
+
+@pytest.mark.parametrize(("profile", "expected"), [
+    ("classic", {"render_js": "false"}),
+    ("js", {"render_js": "true"}),
+    ("premium", {"render_js": "false", "premium_proxy": "true"}),
+    ("premium_js", {"render_js": "true", "premium_proxy": "true"}),
+    ("stealth", {"stealth_proxy": "true"}),
+])
+def test_scrapingbee_fetch_profiles(monkeypatch, profile, expected):
+    captured = {}
+    monkeypatch.setattr(fetchmod, "SCRAPINGBEE_API_KEY", "sim")
+
+    def fake_get(_base, params=None, headers=None, timeout=None):
+        captured.update(params=params, headers=headers)
+        return SimpleNamespace(status_code=200, content=b"x" * 600)
+
+    monkeypatch.setattr(fetchmod.httpx, "get", fake_get)
+    fetchmod._scrapingbee_get("https://example.com/story", profile=profile)
+    assert captured["params"] == {"url": "https://example.com/story", **expected}
+    assert captured["headers"] == {"Authorization": "Bearer sim"}
 
 
 def _stub(monkeypatch, status, body):
@@ -41,6 +66,8 @@ def _stub(monkeypatch, status, body):
 _REG = OutletRegistry.from_dict({"version_id": 1, "outlets": [
     {"outlet_id": "guardian", "tier": 1, "domains": ["theguardian.com"]},                    # direct
     {"outlet_id": "reuters", "tier": 1, "domains": ["reuters.com"], "fetch": "proxy"},
+    {"outlet_id": "marketwatch", "tier": 1, "domains": ["marketwatch.com"], "fetch": "proxy:premium"},
+    {"outlet_id": "disabled", "tier": 1, "domains": ["disabled.example"], "fetch": "disabled"},
     {"outlet_id": "nytimes", "tier": 1, "domains": ["nytimes.com"], "fetch": "api:nyt"},
 ]})
 
@@ -61,6 +88,27 @@ def test_fetch_article_proxy_without_provider_fails_closed(monkeypatch):
     # and the plain-HTTP provider must NOT be used to "rescue" a bot-walled outlet.
     monkeypatch.setattr(fetchmod, "_http_get", lambda url: (200, url, b"news " * 200))
     assert fetch_article("https://reuters.com/a", _REG).ok is False
+
+
+def test_fetch_article_passes_signed_proxy_profile(monkeypatch):
+    fetchmod._cache.clear()
+    captured = {}
+    monkeypatch.setattr(fetchmod, "SCRAPINGBEE_API_KEY", "sim")
+
+    def fake_proxy(url, profile="classic"):
+        captured.update(url=url, profile=profile)
+        return 200, url, b"news " * 200
+
+    monkeypatch.setattr(fetchmod, "_scrapingbee_get", fake_proxy)
+    fr = fetch_article("https://marketwatch.com/story/a", _REG)
+    assert fr.ok is True
+    assert captured == {"url": "https://marketwatch.com/story/a", "profile": "premium"}
+
+
+def test_fetch_article_disabled_strategy_fails_closed(monkeypatch):
+    fetchmod._cache.clear()
+    monkeypatch.setattr(fetchmod, "_http_get", lambda _url: (_ for _ in ()).throw(AssertionError))
+    assert fetch_article("https://disabled.example/a", _REG).ok is False
 
 
 def test_fetch_article_api_delegates_to_adapter(monkeypatch):
@@ -105,6 +153,38 @@ def test_extracts_visible_text_skips_scripts(monkeypatch):
     assert "var a=1" not in r.text
 
 
+def test_extracts_article_scoped_text_without_footer_disclosures(monkeypatch):
+    html = (b"<html><body><article><h1>Markets update</h1><p>" + b"Editorial reporting. " * 40 + b"</p></article>"
+            b"<footer>Sponsored content directory</footer></body></html>" + b"x" * 600)
+    monkeypatch.setattr(fetchmod, "_http_get", lambda url: (200, url, html))
+    r = fetch("https://x/article")
+    assert "Editorial reporting" in r.article_text
+    assert "Sponsored content directory" not in r.article_text
+    assert "Sponsored content directory" in r.text
+
+
+def test_article_scope_prefers_content_container_over_broad_main(monkeypatch):
+    html = (b"<html><body><main><nav>Sponsored Featured Resources</nav>"
+            b'<div class="article-contents"><h1>Security report</h1><p>'
+            + b"Independent editorial reporting. " * 40
+            + b"</p></div><aside>Press releases</aside></main></body></html>")
+    monkeypatch.setattr(fetchmod, "_http_get", lambda url: (200, url, html))
+    r = fetch("https://x/article-body")
+    assert "Independent editorial reporting" in r.article_text
+    assert "Sponsored Featured Resources" not in r.article_text
+    assert "Press releases" not in r.article_text
+
+
+def test_tiny_article_wrapper_does_not_eclipse_real_article_body(monkeypatch):
+    html = (b'<html><body><article>Share</article><div itemprop="articleBody text">'
+            + b"Substantial independent reporting. " * 40
+            + b"</div></body></html>")
+    monkeypatch.setattr(fetchmod, "_http_get", lambda url: (200, url, html))
+    r = fetch("https://x/tiny-article-wrapper")
+    assert "Substantial independent reporting" in r.article_text
+    assert "Share" not in r.article_text
+
+
 def test_parses_published_ts(monkeypatch):
     from datetime import datetime, timezone
     html = b'<script>{"datePublished":"2026-01-05T00:00:00+00:00"}</script>' + b"x" * 600
@@ -136,6 +216,28 @@ def test_published_meta_tag_either_attribute_order(monkeypatch):
     fetchmod._cache.clear()
     monkeypatch.setattr(fetchmod, "_http_get", lambda url: (200, url, b))
     assert fetch("https://x/b").published_ts == expect
+
+
+def test_published_ts_tolerates_trailing_punctuation_and_cxense_meta(monkeypatch):
+    from datetime import datetime, timezone
+    expect = datetime(2026, 7, 1, 17, 32, 48, tzinfo=timezone.utc).timestamp()
+    jsonld = b'<script>{"datePublished":"2026-07-01T13:32:48-0400."}</script>' + b"x" * 600
+    monkeypatch.setattr(fetchmod, "_http_get", lambda url: (200, url, jsonld))
+    assert fetch("https://x/jsonld").published_ts == expect
+
+    fetchmod._cache.clear()
+    meta = b'<meta name="cXenseParse:recs:publishtime" content="2026-07-01T17:32:48">' + b"x" * 600
+    monkeypatch.setattr(fetchmod, "_http_get", lambda url: (200, url, meta))
+    assert fetch("https://x/cxense").published_ts == expect
+
+
+def test_published_ts_parses_lancet_citation_online_date(monkeypatch):
+    from datetime import datetime, timezone
+    html = (b'<meta name="citation_date" content="2026/07/04">'
+            b'<meta name="citation_online_date" content="2026/06/17">' + b"x" * 600)
+    monkeypatch.setattr(fetchmod, "_http_get", lambda url: (200, url, html))
+    expect = datetime(2026, 6, 17, tzinfo=timezone.utc).timestamp()
+    assert fetch("https://x/lancet").published_ts == expect
 
 
 def test_published_ts_no_redos_on_pathological_body():
@@ -198,6 +300,7 @@ def test_provider_body_selection_prefers_dated_page(monkeypatch):
     walled = b"Accept cookies to continue " * 40
     real = b'<script>{"datePublished":"2026-01-05T00:00:00+00:00"}</script>' + b"Real article body " * 40
     monkeypatch.setattr(fetchmod, "_providers",
-                        lambda proxy_only=False: [lambda u: (200, u, walled), lambda u: (200, u, real)])
+                        lambda proxy_only=False, proxy_profile="classic":
+                        [lambda u: (200, u, walled), lambda u: (200, u, real)])
     r = fetch("https://x/a")
     assert r.published_ts is not None and "Real article body" in r.text

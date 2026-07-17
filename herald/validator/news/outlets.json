@@ -1,5 +1,5 @@
 {
-  "version_id": 1,
+  "version_id": 2,
   "outlets": [
     {
       "outlet_id": "abc_news",
@@ -357,7 +357,7 @@
         "www.telegraph.co.uk"
       ],
       "section_patterns": [],
-      "fetch": "proxy",
+      "fetch": "proxy:js",
       "paid_patterns": [
         "^/spark(-development)?/",
         "^/sponsored/",
@@ -777,7 +777,7 @@
         "^/livecoverage/",
         "^/data-news/"
       ],
-      "fetch": "proxy",
+      "fetch": "proxy:premium",
       "paid_patterns": [
         "^/insurance-services/",
         "^/financial-guides/",
@@ -958,7 +958,7 @@
         "www.reuters.com"
       ],
       "section_patterns": [],
-      "fetch": "proxy",
+      "fetch": "disabled",
       "paid_patterns": [
         "^/press-releases?/",
         "^/plus/",
@@ -991,7 +991,7 @@
       "section_patterns": [
         "^/story/"
       ],
-      "fetch": "proxy",
+      "fetch": "proxy:stealth",
       "paid_patterns": [
         "^/sponsored(?:/|-|$)",
         "^/paid-content(?:/|-|$)",
@@ -1046,7 +1046,7 @@
       "section_patterns": [
         "/[0-9]{6,}/"
       ],
-      "fetch": "proxy",
+      "fetch": "proxy:js",
       "paid_patterns": [
         "^/sun-selects/",
         "^/shopping/",
@@ -1115,7 +1115,7 @@
       "section_patterns": [
         "/article/"
       ],
-      "fetch": "proxy",
+      "fetch": "proxy:premium",
       "paid_patterns": [
         "/static/",
         "/money-mentor"
@@ -1193,7 +1193,7 @@
         "wsj.com"
       ],
       "section_patterns": [],
-      "fetch": "proxy",
+      "fetch": "proxy:premium",
       "paid_patterns": [
         "^/ad/",
         "^/(cio|cfo|cmo|ceo|riskandcompliance|sustainable-business)(/|$)",
@@ -1387,7 +1387,6 @@
       ],
       "paid_markers": [
         "Advertorial",
-        "Sponsored",
         "Press Release",
         "Advertorial is the universal author name for all the sponsored content provided by BeInCrypto partners",
         "created by third parties for promotional purposes",
@@ -1491,7 +1490,7 @@
       "section_patterns": [
         "^/content/"
       ],
-      "fetch": "proxy",
+      "fetch": "proxy:premium",
       "paid_patterns": [
         "suppl",
         "/rapid-response",
@@ -1560,7 +1559,7 @@
       "section_patterns": [
         "^/article/"
       ],
-      "fetch": "proxy",
+      "fetch": "proxy:stealth",
       "paid_patterns": [
         "partnercontent",
         "^/insight/"
@@ -2124,7 +2123,7 @@
       "section_patterns": [
         "^/sections/"
       ],
-      "fetch": "proxy",
+      "fetch": "proxy:premium",
       "paid_patterns": [
         "^/sections/etf-industry-perspective(?:/|$)",
         "^/sections/etf-report-sponsored-content(?:/|$)"
@@ -2297,7 +2296,7 @@
       "section_patterns": [
         "/article/.+\\.php"
       ],
-      "fetch": "proxy",
+      "fetch": "proxy:js",
       "paid_patterns": [
         "/press-releases/",
         "/hearstmagazines/",
@@ -2348,7 +2347,7 @@
       "section_patterns": [
         "^/content/"
       ],
-      "fetch": "proxy",
+      "fetch": "proxy:stealth",
       "paid_patterns": [
         "^/content/advertorial/",
         "^/content/insights/"
@@ -2541,7 +2540,7 @@
       "section_patterns": [
         "/journals/[a-z0-9]+/article/"
       ],
-      "fetch": "proxy",
+      "fetch": "proxy:premium_js",
       "paid_patterns": [
         "/webinars",
         "/for-advertisers",
@@ -3473,7 +3472,7 @@
       "section_patterns": [
         "/square/post/\\d+"
       ],
-      "fetch": "proxy",
+      "fetch": "proxy:stealth",
       "paid_patterns": [],
       "paid_markers": [
         "#Sponsored",

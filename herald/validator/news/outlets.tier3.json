@@ -1,5 +1,5 @@
 {
-  "version_id": 1,
+  "version_id": 2,
   "outlets": [
     {
       "outlet_id": "advfn_uk",
@@ -67,7 +67,7 @@
       "section_patterns": [
         "/square/post/\\d+"
       ],
-      "fetch": "proxy",
+      "fetch": "proxy:stealth",
       "paid_patterns": [],
       "paid_markers": [
         "#Sponsored",

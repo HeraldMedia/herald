@@ -19,6 +19,11 @@ def generate_keypair():
     return sk.private_bytes_raw().hex(), sk.public_key().public_bytes_raw().hex()
 
 
+def public_key_from_private(private_key_hex: str) -> str:
+    sk = Ed25519PrivateKey.from_private_bytes(bytes.fromhex(private_key_hex))
+    return sk.public_key().public_bytes_raw().hex()
+
+
 def sign(data: dict, private_key_hex: str) -> str:
     sk = Ed25519PrivateKey.from_private_bytes(bytes.fromhex(private_key_hex))
     return sk.sign(canonical_bytes(data)).hex()

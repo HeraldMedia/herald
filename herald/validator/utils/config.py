@@ -3,6 +3,7 @@ import sys
 from dotenv import load_dotenv
 from pathlib import Path
 import bittensor as bt
+from herald import __version__
 
 env_path = Path(__file__).parents[1] / '.env'
 load_dotenv(dotenv_path=env_path)
@@ -26,8 +27,6 @@ CACHE_DIRS = {
 # Cache expiry times (in seconds)
 YOUTUBE_SEARCH_CACHE_EXPIRY = 12 * 60 * 60  # 12 hours
 OPENAI_CACHE_EXPIRY = 3 * 24 * 60 * 60  # 3 days
-
-__version__ = "2.6.1"
 
 # required
 HERALD_API_URL = os.getenv('HERALD_API_URL', 'https://herald-api.herald.network')
@@ -113,10 +112,6 @@ CREDENTIAL_BATCH_SIZE = 8
 
 DISCRETE_MODE = True
 
-# subnet treasury
-SUBNET_TREASURY_PERCENTAGE = 0
-SUBNET_TREASURY_UID = int(os.getenv('SUBNET_TREASURY_UID', '106'))
-
 # ── Herald (verified media placement) ──────────────────────────────────────
 # Commit-ordering granularity in blocks (~12s/block -> ~72 min). Attribution ordering ONLY.
 EPOCH_LEN = int(os.getenv('HERALD_EPOCH_LEN', '360'))
@@ -183,10 +178,14 @@ HERALD_ATTR_MAX_WINDOW_DAYS = int(os.getenv('HERALD_ATTR_MAX_WINDOW_DAYS', '7'))
 # validators agree. Below the anchor -> reject this pass (re-fetched next epoch).
 HERALD_SNAPSHOT_ANCHOR = float(os.getenv('HERALD_SNAPSHOT_ANCHOR', '0.5'))
 HERALD_MAX_ARTICLES_PER_MINER = int(os.getenv('HERALD_MAX_ARTICLES_PER_MINER', '200'))
+# Miner axon collection is network I/O, not a consensus rule. Retry failed/timeout responses in
+# the same forward pass so one transient query at an epoch boundary does not erase a miner's day.
+HERALD_CLAIM_QUERY_ATTEMPTS = int(os.getenv('HERALD_CLAIM_QUERY_ATTEMPTS', '3'))
+HERALD_CLAIM_QUERY_TIMEOUT = float(os.getenv('HERALD_CLAIM_QUERY_TIMEOUT', '12'))
+HERALD_CLAIM_QUERY_RETRY_DELAY = float(os.getenv('HERALD_CLAIM_QUERY_RETRY_DELAY', '1'))
 
-HERALD_MIN_ALPHA_STAKE_THRESHOLD = float(os.getenv('HERALD_MIN_ALPHA_STAKE_THRESHOLD', '0'))
-# A claim's committed bond must cover SLASH_MULTIPLIER x its expected reward, converted to
-# alpha via HERALD_BOND_ALPHA_PER_USD (set near 1/alpha_price after the pilot).
+# Legacy names retained for deployment compatibility. These values now stake-gate only dispute
+# filers; article claims do not require miner alpha stake or a per-claim bond.
 SLASH_MULTIPLIER = float(os.getenv('HERALD_SLASH_MULTIPLIER', '1.5'))
 HERALD_BOND_ALPHA_PER_USD = float(os.getenv('HERALD_BOND_ALPHA_PER_USD', '1.0'))
 
@@ -203,7 +202,7 @@ HERALD_VEST_GRACE_EPOCHS = int(os.getenv('HERALD_VEST_GRACE_EPOCHS', '30'))
 # A dispute (on-chain HRLDDIS commit) forces the pinned judge on a placement; the existing
 # persistence verdict decides it. Resolution runs the judge, so it is DISABLED unless
 # HERALD_REF_MODEL_ID is pinned identically across validators (a mixed fleet would diverge).
-# Share of a slashed miner's forfeited (otherwise-burned) vesting paid to the disputer's UID.
+# Share of a slashed miner's forfeited vesting paid to the disputer's UID.
 HERALD_DISPUTE_REWARD_FRACTION = float(os.getenv('HERALD_DISPUTE_REWARD_FRACTION', '0.5'))
 # Epochs a dispute stays open; a still-alive article at the window's close rejects it and slashes
 # the disputer. Kept >= HERALD_DEAD_CONFIRM_EPOCHS so an upheld dispute has time to confirm dead.
@@ -216,11 +215,6 @@ HERALD_DISPUTE_WINDOW_EPOCHS = int(os.getenv('HERALD_DISPUTE_WINDOW_EPOCHS', '4'
 HERALD_TREASURY_COLDKEY = os.getenv('HERALD_TREASURY_COLDKEY', '')
 # Max plausible gap between commit and publication; a far-future date is rejected as implausible.
 HERALD_MAX_PLACEMENT_DAYS = int(os.getenv('HERALD_MAX_PLACEMENT_DAYS', '90'))
-
-# Emissions track USD value: miners earn their share of total daily emissions
-# (valued in USD); the unclaimed remainder is burned to the burn UID.
-HERALD_TOTAL_DAILY_USD = float(os.getenv('HERALD_TOTAL_DAILY_USD', '1000'))
-SUBNET_BURN_UID = int(os.getenv('HERALD_BURN_UID', '0'))
 
 # Log out all non-sensitive config variables
 bt.logging.info(f"HERALD_BRIEFS_ENDPOINT: {HERALD_BRIEFS_ENDPOINT}")
@@ -256,5 +250,3 @@ bt.logging.info(f"VALIDATOR_STEPS_INTERVAL: {VALIDATOR_STEPS_INTERVAL}")
 bt.logging.info(f"MAX_ACCOUNTS_PER_SYNAPSE: {MAX_ACCOUNTS_PER_SYNAPSE}")
 bt.logging.info(f"CREDENTIAL_BATCH_SIZE: {CREDENTIAL_BATCH_SIZE}")
 bt.logging.info(f"DISCRETE_MODE: {DISCRETE_MODE}")
-bt.logging.info(f"SUBNET_TREASURY_PERCENTAGE: {SUBNET_TREASURY_PERCENTAGE}")
-bt.logging.info(f"SUBNET_TREASURY_UID: {SUBNET_TREASURY_UID}")

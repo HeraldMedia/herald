@@ -1,5 +1,5 @@
 {
-  "version_id": 1,
+  "version_id": 2,
   "outlets": [
     {
       "outlet_id": "abc_news",
@@ -357,7 +357,7 @@
         "www.telegraph.co.uk"
       ],
       "section_patterns": [],
-      "fetch": "proxy",
+      "fetch": "proxy:js",
       "paid_patterns": [
         "^/spark(-development)?/",
         "^/sponsored/",
@@ -777,7 +777,7 @@
         "^/livecoverage/",
         "^/data-news/"
       ],
-      "fetch": "proxy",
+      "fetch": "proxy:premium",
       "paid_patterns": [
         "^/insurance-services/",
         "^/financial-guides/",
@@ -958,7 +958,7 @@
         "www.reuters.com"
       ],
       "section_patterns": [],
-      "fetch": "proxy",
+      "fetch": "disabled",
       "paid_patterns": [
         "^/press-releases?/",
         "^/plus/",
@@ -991,7 +991,7 @@
       "section_patterns": [
         "^/story/"
       ],
-      "fetch": "proxy",
+      "fetch": "proxy:stealth",
       "paid_patterns": [
         "^/sponsored(?:/|-|$)",
         "^/paid-content(?:/|-|$)",
@@ -1046,7 +1046,7 @@
       "section_patterns": [
         "/[0-9]{6,}/"
       ],
-      "fetch": "proxy",
+      "fetch": "proxy:js",
       "paid_patterns": [
         "^/sun-selects/",
         "^/shopping/",
@@ -1115,7 +1115,7 @@
       "section_patterns": [
         "/article/"
       ],
-      "fetch": "proxy",
+      "fetch": "proxy:premium",
       "paid_patterns": [
         "/static/",
         "/money-mentor"
@@ -1193,7 +1193,7 @@
         "wsj.com"
       ],
       "section_patterns": [],
-      "fetch": "proxy",
+      "fetch": "proxy:premium",
       "paid_patterns": [
         "^/ad/",
         "^/(cio|cfo|cmo|ceo|riskandcompliance|sustainable-business)(/|$)",

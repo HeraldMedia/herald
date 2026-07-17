@@ -22,6 +22,10 @@ for fname in ("tier1_fixture.json", "tier2_fixture.json", "tier3_fixture.json"):
     _FIXTURE.update({f["outlet_id"]: f for f in json.load(open(_DIR / fname))})
 _OUTLETS = {o.outlet_id: o for o in _REGISTRY.outlets}
 _IDS = sorted(_OUTLETS)
+_FETCH_STRATEGIES = {
+    "direct", "proxy", "proxy:js", "proxy:premium", "proxy:premium_js",
+    "proxy:stealth", "disabled", "api:nyt",
+}
 
 # Generic synthetic "obviously editorial" paths, independent of any outlet's own fixture data.
 # A paid_pattern that matches ALL of these is a match-everything pattern (e.g. bare ".*") that
@@ -51,6 +55,11 @@ def test_registry_has_all_three_tiers():
     assert len(_REGISTRY.outlets) == len(_IDS) > 200
     tiers = {o.tier for o in _REGISTRY.outlets}
     assert tiers == {1, 2, 3}
+
+
+@pytest.mark.parametrize("oid", _IDS)
+def test_outlet_fetch_strategy_is_supported(oid):
+    assert _OUTLETS[oid].fetch in _FETCH_STRATEGIES
 
 
 @pytest.mark.parametrize("oid", _IDS)
@@ -147,3 +156,17 @@ def test_sponsored_example_is_caught_when_url_detectable(oid):
         assert is_paid(ex, "", None, outlet=o)[0] is True, f"{oid}: on-domain sponsored URL not caught"
     else:
         pytest.skip(f"{oid}: sponsored example is editorial-shaped (marker-detected)")
+
+
+def test_beincrypto_ad_slot_label_does_not_reject_editorial_article():
+    # BeInCrypto renders standalone "Sponsored" ad-slot labels between paragraphs on
+    # ordinary staff reporting.  Its paid articles remain unambiguous via the Advertorial
+    # byline and explicit promotional disclaimer.
+    outlet = _OUTLETS["beincrypto"]
+    editorial = "Written and edited by a staff journalist. Sponsored Why markets changed today."
+    assert is_paid(_FIXTURE["beincrypto"]["editorial_url"], editorial,
+                   None, outlet=outlet)[0] is False
+    partner = ("Advertorial created by third parties for promotional purposes and "
+               "should not be regarded as financial advice")
+    assert is_paid(_FIXTURE["beincrypto"]["paid_example_url"], partner,
+                   None, outlet=outlet)[0] is True
