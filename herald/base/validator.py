@@ -1,4 +1,7 @@
 import copy
+import hashlib
+import json
+import os
 import numpy as np
 import asyncio
 import argparse
@@ -41,6 +44,12 @@ class BaseValidatorNeuron(BaseNeuron):
         # Set up initial scoring weights for validation
         bt.logging.info("Building validation weights.")
         self.scores = np.zeros(self.metagraph.n, dtype=np.float32)
+
+        # Restore before the initial sync: sync() always saves state, so loading afterward would
+        # overwrite a valid checkpoint with zero scores on every restart.
+        state_path = self.config.neuron.full_path + "/state.npz"
+        if os.path.exists(state_path):
+            self.load_state()
 
         # Init sync with the network. Updates the metagraph.
         self.sync()
@@ -204,6 +213,33 @@ class BaseValidatorNeuron(BaseNeuron):
             self.is_running = False
             bt.logging.debug("Stopped")
 
+    def _has_pending_weight_commit(self) -> bool:
+        block = int(self.block)
+        cached = getattr(self, "_pending_weight_commit_cache", None)
+        if cached is not None and cached[0] == block:
+            return cached[1]
+
+        hotkey = self.wallet.hotkey.ss58_address
+        commits = self.subtensor.get_timelocked_weight_commits(self.config.netuid)
+        pending = any(commit[0] == hotkey for commit in commits)
+        self._pending_weight_commit_cache = (block, pending)
+        return pending
+
+    def should_set_weights(self) -> bool:
+        if not super().should_set_weights():
+            return False
+        try:
+            commit_reveal = self.subtensor.commit_reveal_enabled(self.config.netuid)
+            if commit_reveal and self._has_pending_weight_commit():
+                bt.logging.info(
+                    "Weight commitment pending automatic reveal; skipping resubmission"
+                )
+                return False
+        except Exception as e:
+            bt.logging.warning(f"Unable to check pending weight commitments: {e}")
+            return False
+        return True
+
     def set_weights(self):
         """
         Sets the validator weights to the metagraph hotkeys based on the scores it has received from the miners. The weights determine the trust and incentive level the validator assigns to miner nodes on the network.
@@ -220,9 +256,13 @@ class BaseValidatorNeuron(BaseNeuron):
         # Compute the norm of the scores
         norm = np.linalg.norm(self.scores, ord=1, axis=0, keepdims=True)
 
-        # Check if the norm is zero or contains NaN values
-        if np.any(norm == 0) or np.isnan(norm).any():
-            norm = np.ones_like(norm)  # Avoid division by zero or NaN
+        if np.any(norm == 0):
+            bt.logging.info("No rewarded miners in the current epoch; skipping weight submission")
+            return False
+
+        # Check if the norm contains NaN values
+        if np.isnan(norm).any():
+            norm = np.ones_like(norm)
 
         # Compute raw_weights safely
         raw_weights = self.scores / norm
@@ -252,21 +292,36 @@ class BaseValidatorNeuron(BaseNeuron):
         )
         bt.logging.debug("uint_weights", uint_weights)
         bt.logging.debug("uint_uids", uint_uids)
+        submitted_vector = [[int(uid), int(weight)] for uid, weight in zip(uint_uids, uint_weights)]
+        self._last_submitted_weight_vector = submitted_vector
+        self._last_submitted_weight_vector_hash = hashlib.sha256(
+            json.dumps(submitted_vector, separators=(",", ":")).encode()
+        ).hexdigest()
 
         # Set the weights on chain via our subtensor connection.
+        commit_reveal = self.subtensor.commit_reveal_enabled(self.config.netuid)
         result, msg = self.subtensor.set_weights(
             wallet=self.wallet,
             netuid=self.config.netuid,
             uids=uint_uids,
             weights=uint_weights,
             wait_for_finalization=False,
-            wait_for_inclusion=False,
+            wait_for_inclusion=True,
+            wait_for_revealed_execution=False,
             version_key=self.spec_version,
         )
         if result is True:
-            bt.logging.info("set_weights on chain successfully!")
+            self._pending_weight_commit_cache = None
+            if commit_reveal:
+                bt.logging.info(
+                    "Weight commitment included on chain; pending automatic reveal"
+                )
+            else:
+                bt.logging.info("set_weights on chain successfully!")
+            return True
         else:
             bt.logging.error("set_weights failed", msg)
+            return False
 
     def resync_metagraph(self):
         """Resyncs the metagraph and updates the hotkeys and moving averages based on the new metagraph."""
@@ -276,7 +331,7 @@ class BaseValidatorNeuron(BaseNeuron):
         previous_metagraph = copy.deepcopy(self.metagraph)
 
         # Sync the metagraph.
-        self.metagraph.sync(subtensor=self.subtensor)
+        self.sync_core_metagraph()
 
         # Check if the metagraph axon info has changed.
         if previous_metagraph.axons == self.metagraph.axons:
@@ -359,14 +414,32 @@ class BaseValidatorNeuron(BaseNeuron):
             step=self.step,
             scores=self.scores,
             hotkeys=self.hotkeys,
+            spec_version=self.spec_version,
         )
 
     def load_state(self):
         """Loads the state of the validator from a file."""
         bt.logging.info("Loading validator state.")
 
-        # Load the state of the validator from file.
-        state = np.load(self.config.neuron.full_path + "/state.npz")
-        self.step = state["step"]
-        self.scores = state["scores"]
-        self.hotkeys = state["hotkeys"]
+        state = np.load(self.config.neuron.full_path + "/state.npz", allow_pickle=False)
+        loaded_scores = np.asarray(state["scores"], dtype=np.float32)
+        loaded_hotkeys = [str(h) for h in state["hotkeys"].tolist()]
+        current_hotkeys = list(self.metagraph.hotkeys)
+        saved_spec = int(state["spec_version"]) if "spec_version" in state.files else None
+        compatible = saved_spec == self.spec_version
+
+        scores = np.zeros(self.metagraph.n, dtype=np.float32)
+        if compatible:
+            count = min(len(scores), len(loaded_scores), len(loaded_hotkeys))
+            scores[:count] = loaded_scores[:count]
+            for uid in range(count):
+                if loaded_hotkeys[uid] != current_hotkeys[uid]:
+                    scores[uid] = 0.0
+        else:
+            bt.logging.warning(
+                f"Discarding score checkpoint from spec {saved_spec}; current spec is {self.spec_version}"
+            )
+
+        self.step = int(state["step"]) if compatible else 0
+        self.scores = scores
+        self.hotkeys = current_hotkeys

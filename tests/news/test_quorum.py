@@ -8,7 +8,7 @@ from herald.validator.news.search import in_index
 
 def test_fetch_quorum_two_agree(monkeypatch):
     p = lambda u: (200, u, b"x" * 1000)
-    monkeypatch.setattr(fetchmod, "_providers", lambda proxy_only=False: [p, p])
+    monkeypatch.setattr(fetchmod, "_providers", lambda proxy_only=False, proxy_profile="classic": [p, p])
     monkeypatch.setattr(fetchmod, "HERALD_QUORUM_THRESHOLD", 2)
     r = fetch("https://x/a")
     assert r.ok and r.providers_live == 2
@@ -17,7 +17,7 @@ def test_fetch_quorum_two_agree(monkeypatch):
 def test_fetch_quorum_not_met(monkeypatch):
     live = lambda u: (200, u, b"x" * 1000)
     dead = lambda u: (404, u, b"")
-    monkeypatch.setattr(fetchmod, "_providers", lambda proxy_only=False: [live, dead])
+    monkeypatch.setattr(fetchmod, "_providers", lambda proxy_only=False, proxy_profile="classic": [live, dead])
     monkeypatch.setattr(fetchmod, "HERALD_QUORUM_THRESHOLD", 2)
     assert fetch("https://x/a").ok is False  # only 1 of 2 live, need 2
 
@@ -25,7 +25,7 @@ def test_fetch_quorum_not_met(monkeypatch):
 def test_fetch_quorum_threshold_one_tolerates_one_failure(monkeypatch):
     live = lambda u: (200, u, b"x" * 1000)
     dead = lambda u: (404, u, b"")
-    monkeypatch.setattr(fetchmod, "_providers", lambda proxy_only=False: [live, dead])
+    monkeypatch.setattr(fetchmod, "_providers", lambda proxy_only=False, proxy_profile="classic": [live, dead])
     monkeypatch.setattr(fetchmod, "HERALD_QUORUM_THRESHOLD", 1)
     assert fetch("https://x/a").ok is True
 
@@ -37,7 +37,7 @@ def test_fetch_epoch_cache(monkeypatch):
         calls.append(u)
         return (200, u, b"x" * 1000)
 
-    monkeypatch.setattr(fetchmod, "_providers", lambda proxy_only=False: [p])
+    monkeypatch.setattr(fetchmod, "_providers", lambda proxy_only=False, proxy_profile="classic": [p])
     fetch("https://x/a", epoch=5)
     fetch("https://x/a", epoch=5)
     assert len(calls) == 1            # second call served from cache
@@ -77,7 +77,7 @@ def test_search_epoch_cache(monkeypatch):
 
 def test_fetch_cache_is_bounded(monkeypatch):
     monkeypatch.setattr(fetchmod, "_CACHE_MAX", 3)
-    monkeypatch.setattr(fetchmod, "_providers", lambda proxy_only=False: [lambda u: (200, u, b"x" * 1000)])
+    monkeypatch.setattr(fetchmod, "_providers", lambda proxy_only=False, proxy_profile="classic": [lambda u: (200, u, b"x" * 1000)])
     for i in range(10):
         fetch(f"https://x/{i}", epoch=1)
     assert len(fetchmod._cache) <= 3

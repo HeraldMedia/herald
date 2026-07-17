@@ -1,3 +1,4 @@
+import asyncio
 import os
 import time
 
@@ -9,6 +10,9 @@ from herald.validator.utils.briefs import get_briefs
 from herald.validator.utils.consensus import consensus_fingerprint
 from herald.validator.utils.config import (
     HERALD_BOND_ALPHA_PER_USD,
+    HERALD_CLAIM_QUERY_ATTEMPTS,
+    HERALD_CLAIM_QUERY_RETRY_DELAY,
+    HERALD_CLAIM_QUERY_TIMEOUT,
     HERALD_DEAD_CONFIRM_EPOCHS,
     HERALD_DISPUTE_REWARD_FRACTION,
     HERALD_DISPUTE_WINDOW_EPOCHS,
@@ -16,12 +20,10 @@ from herald.validator.utils.config import (
     HERALD_MAX_ARTICLES_PER_MINER,
     HERALD_MAX_PLACEMENT_DAYS,
     HERALD_REF_MODEL_ID,
-    HERALD_TOTAL_DAILY_USD,
     HERALD_USE_LLM_JUDGE,
     HERALD_VEST_GRACE_EPOCHS,
     SLASH_COOLDOWN_EPOCHS,
     SLASH_MULTIPLIER,
-    SUBNET_BURN_UID,
     VALIDATOR_STEPS_INTERVAL,
     VALIDATOR_WAIT,
     VEST_EPOCH_LEN,
@@ -35,7 +37,7 @@ from .judge import judge
 from .real_news import is_paid
 from .reconcile import fetch_board_results, merge_board_claims
 from .registry import load_registry
-from .publish import publish_results
+from .publish import build_epoch_snapshot, build_result_items, publish_results, publish_snapshot
 from .reward import winning_articles
 from .search import in_index
 from .state import HeraldState
@@ -57,43 +59,84 @@ def _persistence_status(entry, briefs_by_id, epoch, judge_fn, registry=None) -> 
     to paid content, so a transient outage never slashes an honest miner.
     """
     if entry.brief_id not in briefs_by_id:
-        return "hold"  # brief closed/defunded: withhold pay (its emissions burn), don't slash
+        return "hold"  # brief closed/defunded: withhold its installment, don't slash
     fr = fetch_article(entry.url, registry, epoch)
     if fr.status in (404, 410):
         return "dead"
     if not fr.ok:
         return "hold"  # status 0/451/5xx or thin body — geo-block/no-connect: can't confirm live
-    if is_paid(entry.url, fr.text, judge_fn)[0]:
+    outlet = registry.lookup(entry.url) if registry is not None else None
+    paid_text = getattr(fr, "article_text", None) or fr.text
+    if is_paid(entry.url, paid_text, judge_fn, outlet=outlet)[0]:
         return "dead"  # swapped to paid/sponsored content — slashable
     return "alive"
 
 
 async def collect_claims(self, uids):
-    # One concurrent dendrite call over all axons (bittensor gathers them), so a few slow or
-    # stalling miners can't serialize into a 12s-per-uid delay that blows the scoring window.
+    """Collect reveals concurrently, retrying only axons with transient failures.
+
+    A validator scores once per evaluation epoch.  Treating a single timeout as an honest empty
+    response can therefore erase a miner's whole installment.  Bounded concurrent retries keep
+    the window short while successful miners are never queried twice.  Non-serving axons are not
+    attempted; their advertised state already says there is no endpoint to query.
+    """
     claims_by_uid = {uid: [] for uid in uids}
-    queryable, axons = [], []
+    pending = []
     for uid in uids:
         try:
-            axons.append(self.metagraph.axons[uid])
-            queryable.append(uid)
+            axon = self.metagraph.axons[uid]
         except (KeyError, IndexError):
-            continue  # uid without an axon (e.g. the burn uid): no claims to pull
-    if not axons:
+            continue  # uid without an axon: no claims to pull
+        if getattr(axon, "is_serving", True) is False:
+            continue
+        pending.append((uid, axon))
+    if not pending:
         return claims_by_uid
-    try:
-        responses = await self.dendrite(
-            axons=axons, synapse=ClaimSynapse(), deserialize=False, timeout=12,
-        )
-    except Exception as e:
-        bt.logging.warning(f"Claim query failed: {e}")
-        return claims_by_uid
-    for uid, response in zip(queryable, responses or []):
+
+    attempts = max(1, HERALD_CLAIM_QUERY_ATTEMPTS)
+    for attempt in range(1, attempts + 1):
+        queryable = [uid for uid, _axon in pending]
+        axons = [axon for _uid, axon in pending]
         try:
-            claims = list(response.claims or []) if response is not None else []
-        except Exception:
-            claims = []
-        claims_by_uid[uid] = claims[:HERALD_MAX_ARTICLES_PER_MINER]
+            responses = list(await self.dendrite(
+                axons=axons, synapse=ClaimSynapse(), deserialize=False,
+                timeout=max(1.0, HERALD_CLAIM_QUERY_TIMEOUT),
+            ) or [])
+        except Exception as e:
+            bt.logging.warning(
+                f"Claim query attempt {attempt}/{attempts} failed for UIDs "
+                f"{queryable}: {e}"
+            )
+            responses = []
+
+        retry = []
+        for index, (uid, axon) in enumerate(pending):
+            response = responses[index] if index < len(responses) else None
+            dendrite = getattr(response, "dendrite", None) if response is not None else None
+            status = getattr(dendrite, "status_code", None)
+            # Unit/in-process transports may omit dendrite metadata.  A real response with claims
+            # and no status remains compatible; explicit non-200 statuses are transient failures.
+            if response is None or status not in (None, 200, "200"):
+                retry.append((uid, axon))
+                continue
+            try:
+                claims = list(response.claims or [])
+            except Exception:
+                retry.append((uid, axon))
+                continue
+            claims_by_uid[uid] = claims[:HERALD_MAX_ARTICLES_PER_MINER]
+
+        pending = retry
+        if not pending:
+            break
+        if attempt < attempts and HERALD_CLAIM_QUERY_RETRY_DELAY > 0:
+            await asyncio.sleep(HERALD_CLAIM_QUERY_RETRY_DELAY)
+
+    if pending:
+        bt.logging.warning(
+            f"Claim query exhausted {attempts} attempt(s) for UIDs "
+            f"{[uid for uid, _axon in pending]}; treating them as empty this epoch"
+        )
     return claims_by_uid
 
 
@@ -121,6 +164,9 @@ async def forward(self):
         state = _state(self)
         commit_index, vesting, slash = state.commit_index, state.vesting, state.slash
         block = self.subtensor.get_current_block()
+        network = getattr(self.subtensor, "network", None) or getattr(
+            getattr(self.config, "subtensor", None), "network", "unknown"
+        )
         epoch = max(0, block - HERALD_EPOCH_LAG) // VEST_EPOCH_LEN
         if state.last_scored_epoch >= epoch:
             time.sleep(VALIDATOR_WAIT)  # already scored this epoch; don't re-zero weights
@@ -132,7 +178,37 @@ async def forward(self):
             now = None
         briefs = get_briefs(now=now)
         if not briefs:
-            bt.logging.info("No active briefs; skipping scoring")
+            # An explicit, successfully verified empty feed means there is no authorized work to
+            # pay. Clear historical scores; the weight writer skips an empty participant vector.
+            uids = [int(u) for u in get_all_uids(self)]
+            weights = compute_weights({}, uids)
+            self.scores[...] = 0
+            self.update_scores(weights, uids)
+            state.last_scored_epoch = epoch
+            results_endpoint = os.getenv("HERALD_RESULTS_ENDPOINT")
+            if results_endpoint:
+                commitments_with_block = get_commitments_with_block(self.subtensor, self.config.netuid)
+                commit_index.observe(commitments_with_block)
+                commitments = {hk: v for hk, (v, _b) in commitments_with_block.items()}
+                authority = os.getenv("HERALD_REGISTRY_AUTHORITY_HOTKEY")
+                registry = (load_registry(
+                    commitments.get(authority), require_anchor=True, current_block=block,
+                    network=str(network), netuid=self.config.netuid,
+                )
+                            if authority else load_registry())
+                hotkey_by_uid = {uid: self.metagraph.hotkeys[uid] for uid in uids}
+                publish_snapshot(results_endpoint, build_epoch_snapshot(
+                    vesting, [], state.pool_spent, {}, weights, uids, hotkey_by_uid,
+                    network=network, netuid=self.config.netuid,
+                    validator_hotkey=self.wallet.hotkey.ss58_address,
+                    validator_uid=self.uid, chain_block=block, epoch=epoch,
+                    registry_version=registry.version_id, registry_hash=registry.content_hash,
+                    consensus=_CONSENSUS_FP,
+                ), self.wallet.hotkey)
+            path = _state_path(self)
+            if path:
+                state.save(path)
+            bt.logging.info("No active briefs; no miners rewarded this epoch")
             time.sleep(VALIDATOR_WAIT)
             return
         commitments_with_block = get_commitments_with_block(self.subtensor, self.config.netuid)
@@ -140,9 +216,12 @@ async def forward(self):
         commitments = {hk: v for hk, (v, _b) in commitments_with_block.items()}
 
         authority = os.getenv("HERALD_REGISTRY_AUTHORITY_HOTKEY")
-        anchor_value = commitments.get(authority) if authority else None
-        registry = load_registry(anchor_value)
-
+        if authority:
+            registry = load_registry(commitments.get(authority), require_anchor=True,
+                                     current_block=block, network=str(network),
+                                     netuid=self.config.netuid)
+        else:
+            registry = load_registry()
         # int(): bittensor 10.x get_all_uids returns an int64 ndarray; keep native ints so they
         # stay JSON-serializable through vesting -> persisted state (and read cleanly in logs).
         uids = [int(u) for u in get_all_uids(self)]
@@ -169,7 +248,7 @@ async def forward(self):
 
         winners = winning_articles(
             claims_by_uid, commitments, commit_index,
-            hotkey_by_uid, alpha_stake_by_uid, briefs, registry,
+            hotkey_by_uid, briefs, registry,
             fetch_fn=lambda u: fetch_article(u, registry, epoch),
             search_fn=lambda u: in_index(u, epoch),
             judge_fn=judge_fn,
@@ -193,8 +272,23 @@ async def forward(self):
         winners = fresh_winners
 
         for w in winners:
-            vesting.start(w.article_id, w.uid, w.usd, w.url, w.hotkey, w.brief_id,
-                          w.commit_epoch, epoch)
+            outlet = registry.lookup(w.url)
+            reveal = {
+                "target_outlet_id": getattr(w.claim, "target_outlet_id", w.outlet_id),
+                "nonce": getattr(w.claim, "nonce", ""),
+                "bond_atto": getattr(w.claim, "bond_atto", 0),
+                "version_id": getattr(w.claim, "version_id", 0),
+                "pre_hash": getattr(w.claim, "pre_hash", None),
+                "evidence_text": getattr(w.claim, "evidence_text", None),
+                "evidence_author": getattr(w.claim, "evidence_author", None),
+                "evidence_window": getattr(w.claim, "evidence_window", None),
+                "snapshot_text": getattr(w.claim, "snapshot_text", None),
+            }
+            vesting.start(
+                w.article_id, w.uid, w.usd, w.url, w.hotkey, w.brief_id,
+                w.commit_epoch, epoch, outlet_id=w.outlet_id,
+                tier=getattr(outlet, "tier", 0), attribution=w.level, reveal=reveal,
+            )
 
         # Disputes: register on-chain HRLDDIS flags against active placements. Resolution runs the
         # pinned judge, so it stays OFF unless HERALD_REF_MODEL_ID is set identically on every
@@ -216,16 +310,20 @@ async def forward(self):
                 duid = uid_by_hotkey.get(hk)
                 if duid is None:
                     continue  # disputer not a registered UID: can't reward/slash it via weights
-                min_bond_alpha = vesting.entry(article_id).total_usd * HERALD_BOND_ALPHA_PER_USD * SLASH_MULTIPLIER
-                if alpha_stake_by_uid.get(duid, 0.0) < min_bond_alpha:
-                    continue  # under-bonded: ignore (spam/grief deterrent)
+                min_dispute_alpha = (
+                    vesting.entry(article_id).total_usd
+                    * HERALD_BOND_ALPHA_PER_USD
+                    * SLASH_MULTIPLIER
+                )
+                if alpha_stake_by_uid.get(duid, 0.0) < min_dispute_alpha:
+                    continue  # under-staked dispute filer: ignore (spam/grief deterrent)
                 disputes.open(article_id, hk, blk // VEST_EPOCH_LEN)
         elif any(parse_dispute(v) is not None for v in commitments.values()):
             bt.logging.warning("Dispute commits present but HERALD_REF_MODEL_ID unset; disputes disabled")
 
         # Pass 1: release installments and apply clawbacks/slashes for the whole cycle.
         pending = []
-        disputer_rewards = {}  # uid -> usd, funded from forfeited vesting that would otherwise burn
+        disputer_rewards = {}  # uid -> USD value funded from forfeited vesting
         max_age = vesting.vest_epochs + HERALD_VEST_GRACE_EPOCHS
         for article_id in list(vesting.active_article_ids()):
             entry = vesting.entry(article_id)
@@ -260,47 +358,41 @@ async def forward(self):
             key = (entry.uid, entry.brief_id)
             usd_by_uid_brief[key] = usd_by_uid_brief.get(key, 0.0) + installment
 
-        usd_by_uid = apply_reward_pools(usd_by_uid_brief, briefs, HERALD_TOTAL_DAILY_USD, state.pool_spent)
-        # Recycle forfeited USD (else burned) to whistleblowers, capped to the budget headroom so a
-        # dispute reward only ever consumes what would have burned, never dilutes placement pay.
+        usd_by_uid = apply_reward_pools(usd_by_uid_brief, briefs, state.pool_spent)
         payable = {duid: amt for duid, amt in disputer_rewards.items()
                    if not slash.is_slashed(hotkey_by_uid.get(duid, ""), epoch)}
-        reward_total = sum(payable.values())
-        if reward_total > 0:
-            headroom = max(0.0, HERALD_TOTAL_DAILY_USD - sum(usd_by_uid.values()))
-            dscale = min(1.0, headroom / reward_total) if HERALD_TOTAL_DAILY_USD > 0 else 1.0
-            for duid, amt in payable.items():
-                usd_by_uid[duid] = usd_by_uid.get(duid, 0.0) + amt * dscale
-        if SUBNET_BURN_UID not in uids:
-            bt.logging.warning(f"Burn UID {SUBNET_BURN_UID} not in metagraph; remainder will not burn")
-        weights = compute_weights(usd_by_uid, uids, HERALD_TOTAL_DAILY_USD, SUBNET_BURN_UID)
+        for duid, amt in payable.items():
+            usd_by_uid[duid] = usd_by_uid.get(duid, 0.0) + amt
+        weights = compute_weights(usd_by_uid, uids)
+        # Each evaluation epoch is a complete daily allocation. Clear the previous vector before
+        # update_scores so its EMA cannot leak yesterday's participants into today's ratios.
+        self.scores[...] = 0
         self.update_scores(weights, uids)
         state.last_scored_epoch = epoch  # only mark scored after success, so a failure retries
 
         if results_endpoint:
-            publish_results(results_endpoint, [{
-                "article_id": w.article_id, "hotkey": w.hotkey, "brief_id": w.brief_id,
-                "outlet_id": w.outlet_id, "url": w.url, "usd": w.usd,
-                "status": vesting.entry(w.article_id).status,
-                "attribution": w.level,
-                "consensus": _CONSENSUS_FP,
-                # vesting coordinates, so a joining validator can bootstrap its ledger
-                "commit_epoch": w.commit_epoch,
-                "start_epoch": vesting.entry(w.article_id).start_epoch,
-                # the full reveal, so other validators can re-verify a claim they weren't served
-                # (safe post-claim: the article is public and the commitment already matched)
-                "reveal": {
-                    "target_outlet_id": getattr(w.claim, "target_outlet_id", w.outlet_id),
-                    "nonce": getattr(w.claim, "nonce", ""),
-                    "bond_atto": getattr(w.claim, "bond_atto", 0),
-                    "version_id": getattr(w.claim, "version_id", 0),
-                    "pre_hash": getattr(w.claim, "pre_hash", None),
-                    "evidence_text": getattr(w.claim, "evidence_text", None),
-                    "evidence_author": getattr(w.claim, "evidence_author", None),
-                    "evidence_window": getattr(w.claim, "evidence_window", None),
-                    "snapshot_text": getattr(w.claim, "snapshot_text", None),
-                },
-            } for w in winners])
+            publish_results(results_endpoint, build_result_items(
+                vesting,
+                network=network,
+                netuid=self.config.netuid,
+                validator_hotkey=self.wallet.hotkey.ss58_address,
+                validator_uid=self.uid,
+                chain_block=block,
+                registry_version=registry.version_id,
+                consensus=_CONSENSUS_FP,
+            ))
+            publish_snapshot(results_endpoint, build_epoch_snapshot(
+                vesting, briefs, state.pool_spent, usd_by_uid, weights, uids, hotkey_by_uid,
+                network=network,
+                netuid=self.config.netuid,
+                validator_hotkey=self.wallet.hotkey.ss58_address,
+                validator_uid=self.uid,
+                chain_block=block,
+                epoch=epoch,
+                registry_version=registry.version_id,
+                registry_hash=registry.content_hash,
+                consensus=_CONSENSUS_FP,
+            ), self.wallet.hotkey)
 
         path = _state_path(self)
         if path:

@@ -4,9 +4,11 @@ import wandb
 import threading
 import bittensor as bt
 import random
+import numpy as np
 
 from herald.base.validator import BaseValidatorNeuron
-from herald.validator.news.forward import forward
+from herald.validator.news.forward import _state, _state_path, forward
+from herald.validator.news.publish import publish_weight_receipt
 from herald.validator.utils.config import __version__, WANDB_PROJECT
 from herald.utils.cloudwatch_logging import get_cloudwatch_handler
 from core.auto_update import run_auto_update
@@ -25,7 +27,7 @@ class Validator(BaseValidatorNeuron):
 
         try:
             cw_handler = get_cloudwatch_handler(
-                log_group="/herald/youtube-validator",
+                log_group="/herald/validator",
                 stream_name=f"validator-uid-{self.uid}",
             )
             if cw_handler:
@@ -47,9 +49,6 @@ class Validator(BaseValidatorNeuron):
             except Exception as e:
                 bt.logging.error(f"Failed to initialize wandb run: {e}")
 
-        bt.logging.info("load_state()")
-        self.load_state()
-
     async def forward(self):
         """
         Validator forward pass. Consists of:
@@ -61,6 +60,56 @@ class Validator(BaseValidatorNeuron):
         """
         return await forward(self)
 
+    def should_set_weights(self) -> bool:
+        if not super().should_set_weights():
+            return False
+
+        state = _state(self)
+        if state.last_weight_epoch >= state.last_scored_epoch:
+            bt.logging.info(
+                f"Herald epoch {state.last_scored_epoch} was already submitted; "
+                "waiting for the next daily evaluation"
+            )
+            return False
+
+        scores = np.asarray(self.scores)
+        if not np.any(np.isfinite(scores) & (scores > 0)):
+            bt.logging.info(
+                f"Herald epoch {state.last_scored_epoch} has no rewarded miners; "
+                "skipping weight submission"
+            )
+            return False
+        return True
+
+    def set_weights(self) -> bool:
+        submitted = super().set_weights()
+        if submitted is not True:
+            return False
+
+        state = _state(self)
+        state.last_weight_epoch = state.last_scored_epoch
+        path = _state_path(self)
+        if path:
+            state.save(path)
+        endpoint = os.getenv("HERALD_RESULTS_ENDPOINT")
+        if endpoint and getattr(self, "_last_submitted_weight_vector_hash", None):
+            network = getattr(self.subtensor, "network", None) or getattr(
+                getattr(self.config, "subtensor", None), "network", "unknown"
+            )
+            try:
+                pending = bool(self.subtensor.commit_reveal_enabled(self.config.netuid))
+            except Exception:
+                pending = True
+            publish_weight_receipt(endpoint, {
+                "schema_version": 1, "network": str(network),
+                "netuid": int(self.config.netuid), "epoch": int(state.last_scored_epoch),
+                "chain_block": int(self.block),
+                "validator_hotkey": self.wallet.hotkey.ss58_address,
+                "vector_hash": self._last_submitted_weight_vector_hash,
+                "status": "pending_reveal" if pending else "revealed",
+            }, self.wallet.hotkey)
+        return True
+
 def auto_update_loop(config):
     while True:
         if not config.neuron.disable_auto_update:
@@ -69,12 +118,11 @@ def auto_update_loop(config):
         time.sleep(sleep_time)
 
 if __name__ == "__main__":
+    validator = Validator()
+    update_thread = threading.Thread(target=auto_update_loop, args=(validator.config,), daemon=True)
+    update_thread.start()
 
-    # Start the auto-update loop in a separate thread
-    with Validator() as validator:
-        update_thread = threading.Thread(target=auto_update_loop, args=(validator.config,), daemon=True)
-        update_thread.start()
-
-        while True:
-            bt.logging.info(f"Validator running | uid {validator.uid} | {time.time()}")
-            time.sleep(30)
+    # Keep validation on the supervised process's main thread. Startup failures
+    # must terminate the process so PM2/systemd can restart it instead of
+    # reporting a sleeping wrapper whose worker thread has already stopped.
+    validator.run()

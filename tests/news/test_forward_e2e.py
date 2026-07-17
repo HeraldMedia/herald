@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 from types import SimpleNamespace
 
+import numpy as np
 import pytest
 
 from herald.commit import commit_hash, encode
@@ -16,7 +17,7 @@ BRIEFS = [{"id": "b1", "kind": "standing"}]
 def make_claim(outlet, url, hotkey):
     return SimpleNamespace(
         brief_id="b1", target_outlet_id=outlet, article_url=url,
-        claimer_hotkey=hotkey, nonce="n", bond_atto=10**21, version_id=1,
+        claimer_hotkey=hotkey, nonce="n", bond_atto=0, version_id=1,
     )
 
 
@@ -43,7 +44,10 @@ def make_self(claim_by_uid, commitments, block=1000, monkeypatch=None):
 
     self = SimpleNamespace(
         step=0,
-        config=SimpleNamespace(netuid=69),
+        config=SimpleNamespace(
+            netuid=69,
+            neuron=SimpleNamespace(moving_average_alpha=0.6),
+        ),
         block_state=block_state,
         subtensor=SimpleNamespace(
             get_current_block=lambda: block_state["v"],
@@ -55,8 +59,17 @@ def make_self(claim_by_uid, commitments, block=1000, monkeypatch=None):
             alpha_stake={1: 5000.0, 2: 5000.0},
         ),
         dendrite=fake_dendrite,
-        update_scores=lambda rewards, uids: captured.update(rewards=rewards, uids=uids),
+        scores=np.zeros(3, dtype=np.float32),
     )
+
+    def update_scores(rewards, uids):
+        scattered = np.zeros_like(self.scores)
+        scattered[np.asarray(uids)] = rewards
+        alpha = self.config.neuron.moving_average_alpha
+        self.scores = alpha * scattered + (1 - alpha) * self.scores
+        captured.update(rewards=rewards, uids=uids)
+
+    self.update_scores = update_scores
     return self, captured
 
 
@@ -73,7 +86,6 @@ def _setup(monkeypatch):
     monkeypatch.setattr(fwd, "get_all_uids", lambda self: [1, 2])
     monkeypatch.setattr(fwd.time, "sleep", lambda *_: None)
     monkeypatch.setattr(statemod, "VEST_EPOCHS", 2)
-    monkeypatch.setattr(fwd, "HERALD_TOTAL_DAILY_USD", 0.0)  # no burn; miners split proportionally
     monkeypatch.setattr(fwd, "HERALD_DEAD_CONFIRM_EPOCHS", 1)  # single confirmed-dead slashes (tests)
     # Freshness gate fails closed on a missing date; a dateless body here stands for a normal
     # live article, so default it to a date inside the window after the 2026-01-01 commit. The
@@ -89,7 +101,7 @@ def _setup(monkeypatch):
 async def test_forward_vests_first_installment(monkeypatch):
     monkeypatch.setattr(fetchmod, "_http_get", lambda url: (200, url, b"news " * 200))
     c1 = make_claim("guardian", "https://www.theguardian.com/a", "hkA")   # tier 1 -> 500
-    c2 = make_claim("techcrunch", "https://techcrunch.com/b", "hkB")  # tier 2 -> 250
+    c2 = make_claim("techcrunch", "https://techcrunch.com/b", "hkB")  # tier 2 -> 300
     self, captured = make_self({1: c1, 2: c2}, {"hkA": onchain(c1), "hkB": onchain(c2)}, monkeypatch=monkeypatch)
 
     await fwd.forward(self)
@@ -101,9 +113,8 @@ async def test_forward_vests_first_installment(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_forward_burns_remainder_to_uid0(monkeypatch):
+async def test_forward_single_miner_receives_all_weight_and_replaces_prior_scores(monkeypatch):
     monkeypatch.setattr(fwd, "get_all_uids", lambda self: [0, 1])
-    monkeypatch.setattr(fwd, "HERALD_TOTAL_DAILY_USD", 1000.0)
     monkeypatch.setattr(fetchmod, "_http_get", lambda url: (200, url, b"news " * 200))
 
     c1 = make_claim("guardian", "https://www.theguardian.com/a", "hkA")  # tier 1, 500 / 2 = 250
@@ -116,29 +127,79 @@ async def test_forward_burns_remainder_to_uid0(monkeypatch):
     captured = {}
     self = SimpleNamespace(
         step=0,
-        config=SimpleNamespace(netuid=69),
+        config=SimpleNamespace(
+            netuid=69,
+            neuron=SimpleNamespace(moving_average_alpha=0.6),
+        ),
         subtensor=SimpleNamespace(
             get_current_block=lambda: 1000,
             get_timestamp=lambda b: datetime(2026, 1, 1, tzinfo=timezone.utc),
         ),
         metagraph=SimpleNamespace(
-            hotkeys={0: "burn", 1: "hkA"}, axons={0: 0, 1: 1}, alpha_stake={0: 0.0, 1: 5000.0},
+            hotkeys={0: "reserve", 1: "hkA"}, axons={0: 0, 1: 1}, alpha_stake={0: 0.0, 1: 5000.0},
         ),
         dendrite=fake_dendrite,
-        update_scores=lambda rewards, uids: captured.update(rewards=rewards, uids=uids),
+        scores=np.array([0.8, 0.2], dtype=np.float32),
     )
+
+    def update_scores(rewards, uids):
+        scattered = np.zeros_like(self.scores)
+        scattered[np.asarray(uids)] = rewards
+        alpha = self.config.neuron.moving_average_alpha
+        self.scores = alpha * scattered + (1 - alpha) * self.scores
+        captured.update(rewards=rewards, uids=uids)
+
+    self.update_scores = update_scores
 
     await fwd.forward(self)
     w = dict(zip(captured["uids"], captured["rewards"]))
-    assert w[1] == pytest.approx(0.25)   # 250 of 1000 daily
-    assert w[0] == pytest.approx(0.75)   # remainder burned
+    assert w[1] == pytest.approx(1.0)
+    assert w[0] == 0.0
+    assert self.scores[0] == 0.0
+    assert self.scores[1] > 0.0
+
+
+@pytest.mark.asyncio
+async def test_empty_trusted_brief_feed_clears_scores(monkeypatch):
+    monkeypatch.setattr(fwd, "get_briefs", lambda now=None: [])
+    monkeypatch.setattr(fwd, "get_all_uids", lambda self: [0, 1])
+
+    captured = {}
+    scores = np.array([0.25, 0.75], dtype=np.float32)
+    self = SimpleNamespace(
+        step=0,
+        config=SimpleNamespace(netuid=69, neuron=SimpleNamespace(moving_average_alpha=0.6)),
+        subtensor=SimpleNamespace(
+            get_current_block=lambda: 1000,
+            get_timestamp=lambda b: datetime(2026, 1, 1, tzinfo=timezone.utc),
+        ),
+        metagraph=SimpleNamespace(
+            hotkeys={0: "reserve", 1: "hkA"}, axons={0: 0, 1: 1}, alpha_stake={0: 0.0, 1: 5000.0},
+        ),
+        scores=scores,
+    )
+
+    def update_scores(rewards, uids):
+        scattered = np.zeros_like(self.scores)
+        scattered[np.asarray(uids)] = rewards
+        alpha = self.config.neuron.moving_average_alpha
+        self.scores = alpha * scattered + (1 - alpha) * self.scores
+        captured.update(rewards=rewards, uids=uids)
+
+    self.update_scores = update_scores
+
+    await fwd.forward(self)
+
+    weights = dict(zip(captured["uids"], captured["rewards"]))
+    assert weights == {0: pytest.approx(0.0), 1: pytest.approx(0.0)}
+    assert self.scores.tolist() == [0.0, 0.0]
+    assert self.herald_state.last_scored_epoch >= 0
 
 
 @pytest.mark.asyncio
 async def test_forward_caps_client_brief_at_reward_pool(monkeypatch):
     monkeypatch.setattr(fwd, "get_briefs", lambda now=None: [{"id": "b1", "kind": "client", "reward_pool": 100.0}])
     monkeypatch.setattr(fwd, "get_all_uids", lambda self: [0, 1])
-    monkeypatch.setattr(fwd, "HERALD_TOTAL_DAILY_USD", 1000.0)
     monkeypatch.setattr(fetchmod, "_http_get", lambda url: (200, url, b"news " * 200))
 
     c1 = make_claim("guardian", "https://www.theguardian.com/a", "hkA")  # tier1 500/2=250 installment
@@ -151,23 +212,31 @@ async def test_forward_caps_client_brief_at_reward_pool(monkeypatch):
     captured = {}
     self = SimpleNamespace(
         step=0,
-        config=SimpleNamespace(netuid=69),
+        config=SimpleNamespace(
+            netuid=69,
+            neuron=SimpleNamespace(moving_average_alpha=0.6),
+        ),
         subtensor=SimpleNamespace(
             get_current_block=lambda: 1000,
             get_timestamp=lambda b: datetime(2026, 1, 1, tzinfo=timezone.utc),
         ),
         metagraph=SimpleNamespace(
-            hotkeys={0: "burn", 1: "hkA"}, axons={0: 0, 1: 1}, alpha_stake={0: 0.0, 1: 5000.0},
+            hotkeys={0: "reserve", 1: "hkA"}, axons={0: 0, 1: 1}, alpha_stake={0: 0.0, 1: 5000.0},
         ),
         dendrite=fake_dendrite,
-        update_scores=lambda rewards, uids: captured.update(rewards=rewards, uids=uids),
+        scores=np.zeros(2, dtype=np.float32),
     )
+
+    def update_scores(rewards, uids):
+        captured.update(rewards=rewards, uids=uids)
+
+    self.update_scores = update_scores
 
     await fwd.forward(self)
     w = dict(zip(captured["uids"], captured["rewards"]))
-    # reward_pool 100 caps the 250 installment -> weight 0.1, rest burns
-    assert w[1] == pytest.approx(0.1)
-    assert w[0] == pytest.approx(0.9)
+    # The pool caps payable USD to 100, but the only rewarded miner still receives 100%.
+    assert w[1] == pytest.approx(1.0)
+    assert w[0] == 0.0
 
 
 @pytest.mark.asyncio
@@ -297,6 +366,28 @@ def test_persistence_pays_live_article_despite_offtopic_or_deindexed_fetch(monke
         raise AssertionError("persistence must not re-check the search index")
     monkeypatch.setattr(fwd, "in_index", _boom)
     assert fwd._persistence_status(entry, briefs_by_id, epoch=5, judge_fn=None) == "alive"
+
+
+def test_persistence_detects_outlet_specific_paid_content_swap(monkeypatch):
+    from herald.validator.news.registry import OutletRegistry
+
+    entry = SimpleNamespace(url="https://example.com/story", brief_id="b1")
+    registry = OutletRegistry.from_dict({
+        "version_id": 1,
+        "outlets": [{
+            "outlet_id": "example",
+            "tier": 1,
+            "domains": ["example.com"],
+            "paid_markers": ["Commercial Feature"],
+        }],
+    })
+    monkeypatch.setattr(fwd, "fetch_article", lambda url, registry=None, epoch=None: SimpleNamespace(
+        status=200, ok=True, text="Commercial Feature for Example Corp",
+    ))
+
+    assert fwd._persistence_status(
+        entry, {"b1": {"id": "b1"}}, epoch=5, judge_fn=None, registry=registry,
+    ) == "dead"
 
 
 @pytest.mark.asyncio
