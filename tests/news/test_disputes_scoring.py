@@ -33,7 +33,7 @@ def test_dispute_upheld_rewards_disputer_and_slashes_miner():
     assert ves.status("art1") == "CLAWBACK"
     assert sl.is_slashed("hkMiner", 2)
     assert dis.to_dict()["art1"]["status"] == "upheld"
-    assert rewards == {7: (500.0 / 30) * 29 * FRACTION}  # half the forfeited (otherwise-burned) USD
+    assert rewards == {7: (500.0 / 30) * 29 * FRACTION}  # half the forfeited USD
     assert inst == 0.0
 
 

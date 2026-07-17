@@ -6,7 +6,6 @@ from typing import Any, Callable, Dict
 from herald.commit import matches as commitment_matches
 from herald.evidence import clean_evidence, evidence_hash
 from herald.validator.utils.config import HERALD_ATTR_MULT, HERALD_SNAPSHOT_ANCHOR
-from .bonds import min_bond_atto
 from .fetch import fetch as default_fetch
 from .real_news import is_paid
 from .scoring import article_usd
@@ -86,10 +85,6 @@ def evaluate_article(
     evidence["outlet_id"] = outlet.outlet_id
     evidence["tier"] = outlet.tier
 
-    expected_usd = article_usd(outlet.tier, True)
-    if claim.bond_atto < min_bond_atto(expected_usd):
-        return _reject(claim, "bond_too_small", evidence)
-
     fr = fetch_fn(claim.article_url)
     evidence["http_status"] = fr.status
     evidence["text_hash"] = fr.text_hash
@@ -125,12 +120,14 @@ def evaluate_article(
         content_text = fr.text
         topic_input = content_text
 
-    paid, paid_reason = is_paid(claim.article_url, content_text, judge_fn, outlet=outlet)
+    verifier_text = getattr(fr, "article_text", None) or fr.text
+    paid_text = content_text if snapshot or body_kind == "excerpt" else verifier_text
+    paid, paid_reason = is_paid(claim.article_url, paid_text, judge_fn, outlet=outlet)
     if not paid and body_kind == "full" and snapshot:
         # The miner won't include paid markers in its own snapshot — our full fetch stays the
         # detector. (In excerpt mode we have no full body; the /paidpost/-style URL path check in
         # is_paid still applies, and premium outlets disclose sponsored content on the path.)
-        paid, paid_reason = is_paid(claim.article_url, fr.text, judge_fn, outlet=outlet)
+        paid, paid_reason = is_paid(claim.article_url, verifier_text, judge_fn, outlet=outlet)
     evidence["paid"] = paid
     if paid:
         evidence["paid_reason"] = paid_reason

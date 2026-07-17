@@ -17,7 +17,6 @@ os.environ.update(
     HERALD_EPOCH_LEN="360",
     HERALD_EPOCH_LAG="10",
     HERALD_DEAD_CONFIRM_EPOCHS="1",  # one confirmed-dead epoch slashes (keeps the demo short)
-    HERALD_TOTAL_DAILY_USD="1000",   # show the burn of the unclaimed remainder
     HERALD_SNAPSHOT_ANCHOR="0.5",
     HERALD_BRIEFS_MAX_AGE="900",
 )
@@ -27,6 +26,7 @@ from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
 import bittensor as bt
+import numpy as np
 
 from herald.miner.claim_store import ClaimStore
 from herald.miner.commit import submit_commitment
@@ -71,7 +71,7 @@ class FakeChain:
         self.block = COMMIT_BLOCK
         self._commits = {}  # hotkey -> (onchain_value, block)
 
-    def commit(self, wallet, netuid, value):
+    def set_commitment(self, wallet, netuid, value):
         self._commits[wallet.hotkey.ss58_address] = (value, self.block)
 
     def get_current_block(self):
@@ -159,8 +159,12 @@ INDEXED = {canonicalize(u) for u in (URL_A, URL_B, URL_C)}
 fetchmod._http_get = fake_http_get
 fetchmod.is_safe_fetch_url = lambda url: True          # offline: skip DNS/SSRF resolution
 searchmod._serpapi_search = lambda q, n: [q] if q in INDEXED else []
-fwd.get_all_uids = lambda self: [0, 1, 2, 3]           # burn + 3 miners
+fwd.get_all_uids = lambda self: [0, 1, 2, 3]           # reserve UID + 3 miners
 fwd.get_commitments_with_block = lambda subtensor, netuid: chain.with_block()
+# The seed registry routes NYT through its real publisher API. That API is part of the same
+# external-web seam as the article fetch, so the offline simulation routes every strategy through
+# the deterministic fake pages above.
+fwd.fetch_article = lambda url, registry=None, epoch=None: fetchmod.fetch(url, epoch=epoch)
 fwd.time.sleep = lambda *_: None
 
 
@@ -197,14 +201,16 @@ def make_validator(state, stores_by_uid):
 
     captured = {}
     v = SimpleNamespace(
-        step=0, config=SimpleNamespace(netuid=69),
+        step=0,
+        config=SimpleNamespace(netuid=69, neuron=SimpleNamespace(moving_average_alpha=0.6)),
         subtensor=chain,
         metagraph=SimpleNamespace(
-            hotkeys={0: "burn", 1: "hkA", 2: "hkB", 3: "hkC"},
+            hotkeys={0: "reserve", 1: "hkA", 2: "hkB", 3: "hkC"},
             axons={0: 0, 1: 1, 2: 2, 3: 3},
             alpha_stake={0: 0.0, 1: 5000.0, 2: 5000.0, 3: 5000.0},
         ),
         dendrite=dendrite,
+        scores=np.zeros(4, dtype=np.float32),
         update_scores=lambda w, uids: captured.update(w=dict(zip(uids, w))),
     )
     v.herald_state = state
@@ -267,13 +273,13 @@ store_A, store_B, store_C = (os.path.join(tmp, f"claims_{x}.json") for x in "ABC
 
 oc_A = submit_commitment(chain, wallet("hkA"), 69, ClaimStore(store_A),
                          brief_id="b_news", target_outlet_id="nytimes",
-                         bond_atto=10**21, version_id=1, evidence={"text": DRAFT_A})
+                         bond_atto=0, version_id=1, evidence={"text": DRAFT_A})
 oc_B = submit_commitment(chain, wallet("hkB"), 69, ClaimStore(store_B),
                          brief_id="b_news", target_outlet_id="techcrunch",
-                         bond_atto=10**21, version_id=1, evidence=None)
+                         bond_atto=0, version_id=1, evidence=None)
 oc_C = submit_commitment(chain, wallet("hkC"), 69, ClaimStore(store_C),
                          brief_id="b_defi", target_outlet_id="coindesk",
-                         bond_atto=10**21, version_id=1, evidence=None)
+                         bond_atto=0, version_id=1, evidence=None)
 print(f"hkA → nytimes  (tier1, b_news)  TEXT-PROOF  commit={oc_A[:22]}…  block {chain.block}")
 print(f"hkB → techcrunch(tier2, b_news)  bare        commit={oc_B[:22]}…  block {chain.block}")
 print(f"hkC → coindesk (tier2, b_defi)  bare        commit={oc_C[:22]}…  block {chain.block}")
@@ -321,11 +327,11 @@ for label, web in (("V1", WEB_V1), ("V2", WEB_V2)):
     rC = oracle_line(label, claim_C, onchain_of("hkC"), briefs_by_id["b_defi"])
     print()
     # both validators must agree despite V2's mangled page (snapshot anchoring)
-    assert rA.passed and rA.usd == 500.0 and rA.evidence["attribution_level"] == 2
-    assert rB.passed and rB.usd == 75.0 and rB.evidence["attribution_level"] == 0   # 250 * 0.3
-    assert rC.passed and rC.usd == 75.0
+    assert rA.passed and rA.usd == 250.0 and rA.evidence["attribution_level"] == 2
+    assert rB.passed and rB.usd == 45.0 and rB.evidence["attribution_level"] == 0  # 250 * 0.6 * 0.3
+    assert rC.passed and rC.usd == 45.0
 print("→ V1 and V2 produced IDENTICAL verdicts. Snapshot anchoring beat the page variance.")
-print("→ tier1 text-proof = $500 · tier2 bare = $250×0.3 = $75  (evidence multiplier priced in)")
+print("→ tier1 text-proof = $250 · tier2 bare = $250×0.6×0.3 = $45  (tier and evidence priced in)")
 
 # =============================================================================
 hr("PHASE 5 — VALIDATOR forward(): full pipeline → weights (epoch 1)")
@@ -342,14 +348,14 @@ def run_epoch(state, block, web=WEB_V1):
 E1 = COMMIT_BLOCK + 2100
 w1 = run_epoch(state_v1, E1)
 def show(w):
-    for uid, name in [(1, "hkA t1 L2"), (2, "hkB t2 L0"), (3, "hkC t2 L0"), (0, "burn")]:
+    for uid, name in [(1, "hkA t1 L2"), (2, "hkB t2 L0"), (3, "hkC t2 L0"), (0, "reserve")]:
         print(f"   uid {uid} {name:<10} weight = {w.get(uid, 0.0):.4f}")
 show(w1)
-# installments over 3 epochs: A 500/3=166.7, B 75/3=25, C 75/3=25 ; denom = max(216.7,1000)=1000
-assert approx(w1[1], 166.667 / 1000) and approx(w1[2], 25 / 1000) and approx(w1[3], 25 / 1000)
-assert approx(w1[0], (1000 - 216.667) / 1000)
-print("→ A:B = 500:75 (tier×evidence), client brief b_defi drew from its $300 pool,")
-print("  and the unearned remainder ($783/1000) burned to uid 0.")
+# installments over 3 epochs: A 250/3, B 45/3, C 45/3; normalize their 250:45:45 values
+assert approx(w1[1], 25 / 34) and approx(w1[2], 9 / 68) and approx(w1[3], 9 / 68)
+assert w1[0] == 0.0
+print("→ A:B = 250:45 (tier×evidence), client brief b_defi drew from its $300 pool,")
+print("  and all rewarded miners were normalized to 100% of the weight vector.")
 
 # =============================================================================
 hr("PHASE 6 — MULTI-VALIDATOR: agreement on snapshot-covered fetch variance")
@@ -364,7 +370,7 @@ print("  Attribution stayed level-2 off the snapshot even though V2's live page 
 # ---------------------------------------------------------------------------
 hr("PHASE 6b — REGRESSION: liveness-only pay gate agrees on a topic-less live page")
 print("V2's live nytimes page now has EVERY brief keyword scrubbed out (topic-less).")
-print("The oracle grades A off the snapshot (A wins $500), and the per-epoch installment")
+print("The oracle grades A off the snapshot (A wins $250), and the per-epoch installment")
 print("gate now checks LIVENESS only — topic + search-index were verified at claim time —")
 print("so V2 pays A exactly like V1 instead of forking on its own live fetch.\n")
 state_v2b = HeraldState.fresh()
@@ -379,7 +385,7 @@ hr("PHASE 7 — VESTING: installment 2 releases next epoch (article still alive)
 E2 = E1 + VEST_LEN + 1
 w1b = run_epoch(state_v1, E2)
 show(w1b)
-assert approx(w1b[1], 166.667 / 1000) and approx(w1b[2], 25 / 1000)
+assert approx(w1b[1], 25 / 34) and approx(w1b[2], 9 / 68)
 print("→ same installments release again; vest tracks chain time (3 installments ≈ 3 days).")
 
 # =============================================================================
@@ -395,8 +401,8 @@ print(f"\n   hkB slashed at epoch {epoch3}: {slashed_B}")
 print(f"   hkB vesting status       : {statusB}")
 assert w1c[2] == 0.0                      # B earns nothing
 assert slashed_B is True                  # and is slashed
-assert approx(w1c[1], 166.667 / 1000)     # A keeps vesting (its 3rd/final installment)
-assert approx(w1c[3], 25 / 1000)          # C keeps vesting
+assert approx(w1c[1], 50 / 59)             # A keeps vesting (its 3rd/final installment)
+assert approx(w1c[3], 9 / 59)              # C keeps vesting
 print("→ hkB's dead article: unvested USD clawed back, hotkey slashed; A & C unaffected.")
 
 hr("RESULT")
@@ -405,7 +411,7 @@ print("  • operator created+funded+SIGNED briefs; a tampered feed was rejected
 print("  • miners committed (real pre_hash) BEFORE publishing, then claimed with snapshots")
 print("  • the oracle graded evidence (text-proof ×1.0 vs bare ×0.3) and tiers")
 print("  • two validators AGREED across ALL fetch variance (snapshot oracle + liveness-only pay)")
-print("  • rewards vested over epochs, the remainder burned, and a dead placement was slashed")
+print("  • rewards vested over epochs, participants normalized to 100%, and a dead placement was slashed")
 print("\nCross-validator determinism now covers BOTH stages:")
 print("  • scoring / attribution — graded on the claim snapshot            (phase 4 + 6)")
 print("  • per-epoch payment    — gated on liveness only; topic/index no longer re-forked (phase 6b)")

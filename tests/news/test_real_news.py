@@ -31,6 +31,30 @@ def test_per_outlet_paid_marker_in_text():
     assert paid is True and reason == "outlet_paid_marker"
 
 
+def test_short_paid_marker_is_scoped_to_disclosure_window():
+    outlet = Outlet(outlet_id="x", tier=1, domains=["x.com"],
+                    paid_markers=["In association with"])
+    late_prose = ("Independent reporting on market conditions. " * 25
+                  + "The survey was conducted in association with Econsultancy.")
+    assert is_paid("https://x.com/story", late_prose, None, outlet=outlet)[0] is False
+    assert is_paid("https://x.com/story", "In association with Acme. Report body.",
+                   None, outlet=outlet)[0] is True
+
+
+def test_long_paid_disclaimer_is_checked_anywhere_in_article():
+    marker = "The body of the text has not been edited in any way by our newsroom"
+    outlet = Outlet(outlet_id="x", tier=1, domains=["x.com"], paid_markers=[marker])
+    text = "Independent-looking copy. " * 100 + marker
+    assert is_paid("https://x.com/story", text, None, outlet=outlet)[0] is True
+
+
+def test_generic_paid_phrase_in_reported_prose_is_not_a_disclosure():
+    reported = ("A third of brands admit to deliberately not disclosing influencer "
+                "marketing as sponsored content as they believe doing so affects trust.")
+    assert is_paid("https://x.com/story", reported, None)[0] is False
+    assert is_paid("https://x.com/story", "Sponsored Content from Acme", None)[0] is True
+
+
 def test_no_outlet_falls_back_to_generic():
     # outlet=None keeps the original global behavior
     assert is_paid("https://x.com/press-release/acme", "", None)[0] is True

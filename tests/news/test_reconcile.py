@@ -3,7 +3,7 @@ from types import SimpleNamespace
 from herald.commit import commit_hash, encode
 from herald.protocol import ClaimRecord
 from herald.validator.news.commit_index import CommitIndex
-from herald.validator.news.reconcile import merge_board_claims
+from herald.validator.news.reconcile import fetch_board_results, merge_board_claims
 from herald.validator.news.registry import OutletRegistry
 from herald.validator.news.reward import score_claims
 from herald.validator.utils.config import HERALD_ATTR_MULT, HERALD_BASE_PAYOUT_USD
@@ -16,14 +16,14 @@ BRIEFS = [{"id": "b1", "kind": "standing"}]
 HK_BY_UID = {1: "hkA"}
 
 FIELDS = dict(brief_id="b1", target_outlet_id="nyt", claimer_hotkey="hkA",
-              nonce="n1", bond_atto=10**21, version_id=1)
+              nonce="n1", bond_atto=0, version_id=1)
 
 
 def board_row(**over):
     base = dict(
         article_id="www.nytimes.com/a", hotkey="hkA", brief_id="b1",
         url="https://www.nytimes.com/a", usd=150.0, status="VESTING",
-        reveal={"target_outlet_id": "nyt", "nonce": "n1", "bond_atto": 10**21, "version_id": 1},
+        reveal={"target_outlet_id": "nyt", "nonce": "n1", "bond_atto": 0, "version_id": 1},
     )
     base.update(over)
     return base
@@ -42,15 +42,15 @@ def test_withheld_claim_merged_and_pays_end_to_end():
     live = lambda u: SimpleNamespace(ok=True, status=200, text_hash="h", body_len=2000,
                                      final_url=u, text="A normal news report.")
     indexed = lambda u: SimpleNamespace(in_index=True, matched_url=u, num_results=5, query=u)
-    usd = score_claims(claims_by_uid, {"hkA": onchain}, idx, HK_BY_UID, {1: 5000.0},
-                       BRIEFS, REGISTRY, fetch_fn=live, search_fn=indexed)
+    usd = score_claims(claims_by_uid, {"hkA": onchain}, idx, HK_BY_UID, BRIEFS, REGISTRY,
+                       fetch_fn=live, search_fn=indexed)
     assert usd[1] == HERALD_BASE_PAYOUT_USD * HERALD_ATTR_MULT[0]
 
 
 def test_already_served_claim_not_duplicated():
     served = ClaimRecord(brief_id="b1", target_outlet_id="nyt",
                          article_url="https://www.nytimes.com/a?utm_source=x",  # same canonical id
-                         claimer_hotkey="hkA", nonce="n1", bond_atto=10**21, version_id=1)
+                         claimer_hotkey="hkA", nonce="n1", bond_atto=0, version_id=1)
     claims_by_uid = {1: [served]}
     assert merge_board_claims(claims_by_uid, [board_row()], HK_BY_UID) == 0
     assert len(claims_by_uid[1]) == 1
@@ -75,3 +75,26 @@ def test_per_miner_cap_respected():
     claims_by_uid = {1: []}
     assert merge_board_claims(claims_by_uid, rows, HK_BY_UID, max_per_miner=3) == 3
     assert len(claims_by_uid[1]) == 3
+
+
+def test_fetch_board_results_uses_private_feed_and_token(monkeypatch):
+    seen = {}
+
+    class Response:
+        status_code = 200
+
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return [board_row()]
+
+    def get(url, **kwargs):
+        seen.update(url=url, **kwargs)
+        return Response()
+
+    monkeypatch.setenv("HERALD_RESULTS_TOKEN", "validator-secret")
+    monkeypatch.setattr("httpx.get", get)
+    assert fetch_board_results("http://board") == [board_row()]
+    assert seen["url"] == "http://board/validator/results"
+    assert seen["headers"] == {"X-Results-Token": "validator-secret"}

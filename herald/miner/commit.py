@@ -20,3 +20,20 @@ def submit_commitment(
     # publish_metadata_extrinsic, hotkey-signed, writing Commitments.CommitmentOf).
     subtensor.set_commitment(wallet, netuid, onchain)
     return onchain
+
+
+def resubmit_commitment(
+    subtensor, wallet, netuid: int, store: ClaimStore, onchain: str,
+) -> str:
+    """Retry an exact locally recorded commitment without creating a new nonce.
+
+    A record is written before the first chain submission so its reveal can survive a
+    transient RPC/extrinsic failure.  Only the hotkey that created that record may retry it.
+    """
+    record = store.get(onchain)
+    owner = record["claimer_hotkey"]
+    hotkey = wallet.hotkey.ss58_address
+    if owner != hotkey:
+        raise ValueError(f"commitment belongs to hotkey {owner}, not {hotkey}")
+    subtensor.set_commitment(wallet, netuid, onchain)
+    return onchain

@@ -5,7 +5,6 @@ from typing import Callable, Dict, List
 from herald.validator.utils.config import HERALD_ATTR_MULT, HERALD_ATTR_TEXT_THRESHOLD
 
 from .attribution import Candidate, resolve_attribution, winning_candidates
-from .bonds import bond_ok
 from .fetch import fetch as default_fetch
 from .oracle import evaluate_article
 from .textmatch import containment
@@ -41,7 +40,7 @@ def _demote_text_collisions(candidates: List[Candidate], texts: Dict[int, str]) 
 
 def _build_candidates(
     claims_by_uid, commitments, commit_index, hotkey_by_uid,
-    alpha_stake_by_uid, briefs, registry, fetch_fn, search_fn, judge_fn,
+    briefs, registry, fetch_fn, search_fn, judge_fn,
 ) -> List[Candidate]:
     briefs_by_id = {b["id"]: b for b in briefs}
     candidates: List[Candidate] = []
@@ -51,16 +50,12 @@ def _build_candidates(
         hotkey = hotkey_by_uid.get(uid, "")
         onchain = commitments.get(hotkey, "")
         relevant = [c for c in claims if c.brief_id in briefs_by_id]
-        bonded = bond_ok(
-            alpha_stake_by_uid.get(uid, 0.0),
-            sum(c.bond_atto for c in relevant),
-        )
         for claim in relevant:
             result = evaluate_article(
                 claim, onchain, registry, briefs_by_id[claim.brief_id],
                 fetch_fn, search_fn, judge_fn, serving_hotkey=hotkey,
             )
-            passed = result.passed and bonded
+            passed = result.passed
             commit_epoch = commit_index.commit_epoch(hotkey, onchain) if passed else None
             candidate = Candidate(
                 uid=uid,
@@ -88,7 +83,6 @@ def winning_articles(
     commitments: Dict[str, str],
     commit_index,
     hotkey_by_uid: Dict[int, str],
-    alpha_stake_by_uid: Dict[int, float],
     briefs: List[dict],
     registry,
     fetch_fn: Callable = default_fetch,
@@ -97,7 +91,7 @@ def winning_articles(
 ) -> List[Candidate]:
     return winning_candidates(_build_candidates(
         claims_by_uid, commitments, commit_index, hotkey_by_uid,
-        alpha_stake_by_uid, briefs, registry, fetch_fn, search_fn, judge_fn,
+        briefs, registry, fetch_fn, search_fn, judge_fn,
     ))
 
 
@@ -106,7 +100,6 @@ def score_claims(
     commitments: Dict[str, str],
     commit_index,
     hotkey_by_uid: Dict[int, str],
-    alpha_stake_by_uid: Dict[int, float],
     briefs: List[dict],
     registry,
     fetch_fn: Callable = default_fetch,
@@ -115,7 +108,7 @@ def score_claims(
 ) -> Dict[int, float]:
     candidates = _build_candidates(
         claims_by_uid, commitments, commit_index, hotkey_by_uid,
-        alpha_stake_by_uid, briefs, registry, fetch_fn, search_fn, judge_fn,
+        briefs, registry, fetch_fn, search_fn, judge_fn,
     )
     usd_by_uid = {uid: 0.0 for uid in claims_by_uid}
     usd_by_uid.update(resolve_attribution(candidates))

@@ -1,3 +1,5 @@
+import os
+
 from herald.commit import commit_hash, encode
 from herald.miner.claim_store import ClaimStore
 
@@ -27,6 +29,29 @@ def test_reload_from_disk(tmp_path):
     onchain = ClaimStore(path).add(**REC)
     ClaimStore(path).set_article_url(onchain, "https://www.nytimes.com/a")
     assert len(ClaimStore(path).active_claims()) == 1
+
+
+def test_active_claims_hot_reloads_external_changes(tmp_path):
+    path = str(tmp_path / "claims.json")
+    serving_store = ClaimStore(path)
+    cli_store = ClaimStore(path)
+
+    onchain = cli_store.add(**REC)
+    cli_store.set_article_url(onchain, "https://www.nytimes.com/hot-reload")
+
+    assert serving_store.active_claims()[0]["article_url"].endswith("/hot-reload")
+
+
+def test_active_claims_notices_removed_store(tmp_path):
+    path = str(tmp_path / "claims.json")
+    store = ClaimStore(path)
+    onchain = store.add(**REC)
+    store.set_article_url(onchain, "https://www.nytimes.com/a")
+    assert len(store.active_claims()) == 1
+
+    os.unlink(path)
+
+    assert store.active_claims() == []
 
 
 def test_unique_nonce_per_add(tmp_path):

@@ -1,6 +1,6 @@
 """Per-article vesting: release the reward in installments while the article stays valuable."""
 
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from typing import Dict, List, Tuple
 
 VESTING = "VESTING"
@@ -24,6 +24,10 @@ class VestEntry:
     start_epoch: int = 0
     dead_streak: int = 0
     last_dead_epoch: int = -1
+    outlet_id: str = ""
+    tier: int = 0
+    attribution: int = 0
+    reveal: dict = field(default_factory=dict)
 
 
 class VestingLedger:
@@ -34,7 +38,8 @@ class VestingLedger:
         }
 
     def start(self, article_id, uid, total_usd, url="", hotkey="", brief_id="",
-              commit_epoch=0, start_epoch=0):
+              commit_epoch=0, start_epoch=0, outlet_id="", tier=0, attribution=0,
+              reveal=None):
         existing = self._entries.get(article_id)
         if existing is not None:
             # earliest commit wins even if it reveals in a later cycle: reassign the payee
@@ -46,6 +51,10 @@ class VestingLedger:
                 existing.hotkey = hotkey
                 existing.commit_epoch = commit_epoch
                 existing.brief_id = brief_id
+                existing.outlet_id = outlet_id
+                existing.tier = int(tier or 0)
+                existing.attribution = int(attribution or 0)
+                existing.reveal = dict(reveal or {})
             return
         self._entries[article_id] = VestEntry(
             uid=uid,
@@ -58,6 +67,10 @@ class VestingLedger:
             brief_id=brief_id,
             commit_epoch=commit_epoch,
             start_epoch=start_epoch,
+            outlet_id=outlet_id,
+            tier=int(tier or 0),
+            attribution=int(attribution or 0),
+            reveal=dict(reveal or {}),
         )
 
     def release(self, article_id: str, epoch: int) -> float:

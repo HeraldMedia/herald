@@ -20,7 +20,7 @@ BRIEFS = [{"id": "b1", "kind": "standing"}]
 def claim(outlet, url, hotkey, **over):
     fields = dict(
         brief_id="b1", target_outlet_id=outlet, article_url=url,
-        claimer_hotkey=hotkey, nonce="n", bond_atto=10**21, version_id=1,
+        claimer_hotkey=hotkey, nonce="n", bond_atto=0, version_id=1,
     )
     fields.update(over)
     return SimpleNamespace(**fields)
@@ -58,7 +58,7 @@ def test_two_miners_distinct_outlets_both_paid():
     commitments = {"hkA": onchain(c1), "hkB": onchain(c2)}
     usd = score_claims(
         {1: [c1], 2: [c2]}, commitments, index_for(commitments),
-        {1: "hkA", 2: "hkB"}, {1: 5000.0, 2: 5000.0}, BRIEFS, REGISTRY, fetch_fn=live, search_fn=indexed)
+        {1: "hkA", 2: "hkB"}, BRIEFS, REGISTRY, fetch_fn=live, search_fn=indexed)
     assert usd[1] == HERALD_BASE_PAYOUT_USD * 1.0 * HERALD_ATTR_MULT[0]
     assert usd[2] == HERALD_BASE_PAYOUT_USD * 0.6 * HERALD_ATTR_MULT[0]
 
@@ -71,7 +71,7 @@ def test_same_url_earliest_commit_wins():
     idx.observe({"hkA": (onchain(c1), 100)})
     usd = score_claims(
         {1: [c1], 2: [c2]}, {"hkA": onchain(c1), "hkB": onchain(c2)}, idx,
-        {1: "hkA", 2: "hkB"}, {1: 5000.0, 2: 5000.0}, BRIEFS, REGISTRY, fetch_fn=live, search_fn=indexed)
+        {1: "hkA", 2: "hkB"}, BRIEFS, REGISTRY, fetch_fn=live, search_fn=indexed)
     assert usd[2] == HERALD_BASE_PAYOUT_USD * HERALD_ATTR_MULT[0] and usd[1] == 0.0
 
 
@@ -93,7 +93,7 @@ def test_text_proof_beats_earlier_bare_commit():
     idx.observe({"hkA": (onchain(c1), 100)})
     usd = score_claims(
         {1: [c1], 2: [c2]}, {"hkA": onchain(c1), "hkB": onchain(c2)}, idx,
-        {1: "hkA", 2: "hkB"}, {1: 5000.0, 2: 5000.0}, BRIEFS, REGISTRY,
+        {1: "hkA", 2: "hkB"}, BRIEFS, REGISTRY,
         fetch_fn=live_body("Intro. " + DRAFT), search_fn=indexed)
     assert usd[1] == HERALD_BASE_PAYOUT_USD * HERALD_ATTR_MULT[2] and usd[2] == 0.0
 
@@ -108,7 +108,7 @@ def test_shared_text_collision_demotes_both():
     idx.observe({"hkA": (onchain(c1), 100)})
     winners = winning_articles(
         {1: [c1], 2: [c2]}, {"hkA": onchain(c1), "hkB": onchain(c2)}, idx,
-        {1: "hkA", 2: "hkB"}, {1: 5000.0, 2: 5000.0}, BRIEFS, REGISTRY,
+        {1: "hkA", 2: "hkB"}, BRIEFS, REGISTRY,
         fetch_fn=live_body("Intro. " + DRAFT), search_fn=indexed)
     assert len(winners) == 1
     w = winners[0]
@@ -120,7 +120,7 @@ def test_bad_commitment_scores_zero():
     c1 = claim("nyt", "https://www.nytimes.com/a", "hkA")
     usd = score_claims(
         {1: [c1]}, {"hkA": "HRLD1|bad"}, index_for({"hkA": "HRLD1|bad"}),
-        {1: "hkA"}, {1: 5000.0}, BRIEFS, REGISTRY, fetch_fn=live, search_fn=indexed)
+        {1: "hkA"}, BRIEFS, REGISTRY, fetch_fn=live, search_fn=indexed)
     assert usd[1] == 0.0
 
 
@@ -128,13 +128,13 @@ def test_unknown_brief_skipped():
     c1 = claim("nyt", "https://www.nytimes.com/a", "hkA", brief_id="ghost")
     usd = score_claims(
         {1: [c1]}, {"hkA": onchain(c1)}, index_for({"hkA": onchain(c1)}),
-        {1: "hkA"}, {1: 5000.0}, BRIEFS, REGISTRY, fetch_fn=live, search_fn=indexed)
+        {1: "hkA"}, BRIEFS, REGISTRY, fetch_fn=live, search_fn=indexed)
     assert usd[1] == 0.0
 
 
-def test_unbacked_bond_not_paid():
-    c1 = claim("nyt", "https://www.nytimes.com/a", "hkA")  # big bond, tiny stake
+def test_claim_does_not_require_miner_alpha_stake():
+    c1 = claim("nyt", "https://www.nytimes.com/a", "hkA")
     usd = score_claims(
         {1: [c1]}, {"hkA": onchain(c1)}, index_for({"hkA": onchain(c1)}),
-        {1: "hkA"}, {1: 1.0}, BRIEFS, REGISTRY, fetch_fn=live, search_fn=indexed)
-    assert usd[1] == 0.0  # bond (1000 alpha) exceeds the 1-alpha stake
+        {1: "hkA"}, BRIEFS, REGISTRY, fetch_fn=live, search_fn=indexed)
+    assert usd[1] == HERALD_BASE_PAYOUT_USD * HERALD_ATTR_MULT[0]

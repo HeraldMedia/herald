@@ -103,10 +103,13 @@ def test_active_article_ids():
 
 def test_roundtrip():
     v = VestingLedger(vest_epochs=4)
-    v.start("art1", uid=1, total_usd=400.0, start_epoch=1)
+    v.start("art1", uid=1, total_usd=400.0, start_epoch=1,
+            outlet_id="guardian", tier=1, attribution=2, reveal={"nonce": "n"})
     v.release("art1", epoch=1)
     restored = VestingLedger.from_dict(v.to_dict())
     assert restored.entry("art1").remaining == 3 and restored.vest_epochs == 4
+    assert restored.entry("art1").outlet_id == "guardian"
+    assert restored.entry("art1").reveal == {"nonce": "n"}
 
 
 def test_expire_terminates_held_entry():

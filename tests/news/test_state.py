@@ -5,6 +5,7 @@ def test_fresh_state_is_empty():
     s = HeraldState.fresh()
     assert s.vesting.active_article_ids() == []
     assert s.slash.is_slashed("hkA", 0) is False
+    assert s.last_weight_epoch == -1
 
 
 def test_save_load_roundtrip(tmp_path):
@@ -13,12 +14,16 @@ def test_save_load_roundtrip(tmp_path):
     s.commit_index.observe({"hkA": ("v1", 100)})
     s.vesting.start("art1", uid=1, total_usd=400.0, url="https://x/a", hotkey="hkA")
     s.slash.slash("hkB", until_epoch=9)
+    s.last_scored_epoch = 12
+    s.last_weight_epoch = 12
     s.save(path)
 
     loaded = HeraldState.load(path)
     assert loaded.commit_index.first_seen_block("hkA", "v1") == 100
     assert loaded.vesting.entry("art1").remaining == loaded.vesting.vest_epochs
     assert loaded.slash.is_slashed("hkB", 5) is True
+    assert loaded.last_scored_epoch == 12
+    assert loaded.last_weight_epoch == 12
 
 
 def test_consensus_divisors_come_from_config_not_persisted_state():
@@ -35,6 +40,13 @@ def test_consensus_divisors_come_from_config_not_persisted_state():
     assert s.commit_index.epoch_len == EPOCH_LEN
     assert s.vesting.vest_epochs == VEST_EPOCHS
     assert s.commit_index.first_seen_block("hkX", "v") == 5  # persisted data still restored
+
+
+def test_legacy_state_defaults_to_no_submitted_weight_epoch():
+    data = HeraldState.fresh().to_dict()
+    data.pop("last_weight_epoch")
+
+    assert HeraldState.from_dict(data).last_weight_epoch == -1
 
 
 def test_load_missing_file_returns_fresh(tmp_path):

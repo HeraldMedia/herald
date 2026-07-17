@@ -22,7 +22,7 @@ def _json_np_safe(o):
 class HeraldState:
     def __init__(self, commit_index: CommitIndex, vesting: VestingLedger, slash: SlashLedger,
                  disputes: DisputeLedger = None, pool_spent: dict = None,
-                 last_scored_epoch: int = -1):
+                 last_scored_epoch: int = -1, last_weight_epoch: int = -1):
         self.commit_index = commit_index
         self.vesting = vesting
         self.slash = slash
@@ -31,8 +31,11 @@ class HeraldState:
         # over-paid across epochs. Standing briefs pay from emissions and never appear here.
         self.pool_spent = dict(pool_spent or {})
         # Persisted so a restart inside an already-scored epoch doesn't re-score it: the vesting
-        # ledger already released that epoch's installments, so a re-run would emit all-burn weights.
+        # ledger already released that epoch's installments, so a re-run would lose that day's vector.
         self.last_scored_epoch = last_scored_epoch
+        # Chain weight publication is independently checkpointed. Bittensor's short weight-update
+        # interval must not cause an unchanged Herald daily allocation to be submitted repeatedly.
+        self.last_weight_epoch = last_weight_epoch
 
     @classmethod
     def fresh(cls) -> "HeraldState":
@@ -46,6 +49,7 @@ class HeraldState:
             "disputes": self.disputes.to_dict(),
             "pool_spent": self.pool_spent,
             "last_scored_epoch": self.last_scored_epoch,
+            "last_weight_epoch": self.last_weight_epoch,
         }
 
     @classmethod
@@ -62,6 +66,7 @@ class HeraldState:
             DisputeLedger.from_dict(data.get("disputes", {})),
             data.get("pool_spent", {}),
             data.get("last_scored_epoch", -1),
+            data.get("last_weight_epoch", -1),
         )
 
     def save(self, path: str):

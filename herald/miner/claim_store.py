@@ -13,9 +13,15 @@ class ClaimStore:
     def __init__(self, path: str):
         self.path = path
         self._records = {}
-        if os.path.exists(path):
-            with open(path, "r", encoding="utf-8") as f:
-                self._records = json.load(f)
+        self._reload()
+
+    def _reload(self):
+        """Reload records written by another process, such as the miner CLI."""
+        if not os.path.exists(self.path):
+            self._records = {}
+            return
+        with open(self.path, "r", encoding="utf-8") as f:
+            self._records = json.load(f)
 
     def _save(self):
         os.makedirs(os.path.dirname(self.path) or ".", exist_ok=True)
@@ -86,4 +92,7 @@ class ClaimStore:
         return self._records.get(onchain)
 
     def active_claims(self) -> List[dict]:
+        # Commit/attach commands run in a separate CLI process. Reload here so a
+        # running miner serves newly attached (or removed) claims immediately.
+        self._reload()
         return [r for r in self._records.values() if r.get("article_url")]

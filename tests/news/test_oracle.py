@@ -18,7 +18,7 @@ def make_claim(**over):
     fields = dict(
         brief_id="b1", target_outlet_id="nyt",
         article_url="https://www.nytimes.com/2026/01/01/world/story",
-        claimer_hotkey="5Haaa", nonce="n1", bond_atto=10**21, version_id=1,
+        claimer_hotkey="5Haaa", nonce="n1", bond_atto=0, version_id=1,
     )
     fields.update(over)
     return SimpleNamespace(**fields)
@@ -71,11 +71,12 @@ DRAFT = ("Herald announced its public pilot today, saying earned coverage should
          "not promised, and that miners are paid only for oracle-verified articles.")
 
 
-def live_with(text=None, author=None, published=None):
+def live_with(text=None, author=None, published=None, article_text=None):
     ts = datetime.fromisoformat(published + "T12:00:00+00:00").timestamp() if published else None
     body = text or "A normal news report about world events."
     return lambda u: SimpleNamespace(ok=True, status=200, text_hash="h", body_len=2000,
-                                     final_url=u, text=body, author=author, published_ts=ts)
+                                     final_url=u, text=body, article_text=article_text,
+                                     author=author, published_ts=ts)
 
 
 def test_text_proof_pays_full():
@@ -183,10 +184,10 @@ def test_topic_mismatch_rejected():
     assert not r.passed and r.reason == "topic_mismatch"
 
 
-def test_bond_too_small_rejected():
-    c = make_claim(bond_atto=1000)  # far below the required ~750 alpha for a tier-1 $500 reward
+def test_zero_bond_is_eligible():
+    c = make_claim(bond_atto=0)
     r = evaluate_article(c, onchain_for(c), REGISTRY, BRIEF, fetch_fn=live, search_fn=indexed)
-    assert not r.passed and r.reason == "bond_too_small"
+    assert r.passed
 
 
 def test_stale_version_rejected():
@@ -231,6 +232,26 @@ def test_paid_marker_in_own_fetch_still_rejects_snapshot_claims():
     paid_page = SNAPSHOT + " Sponsored content by the client."
     r = evaluate_article(c, onchain_for(c), REGISTRY, BRIEF,
                          fetch_fn=live_with(text=paid_page), search_fn=indexed)
+    assert not r.passed and r.reason == "paid_not_real_news"
+
+
+def test_paid_marker_outside_article_does_not_reject_snapshot_claim():
+    c = make_claim(snapshot_text=SNAPSHOT)
+    full_page = SNAPSHOT + " Sponsored content directory in the site footer."
+    r = evaluate_article(
+        c, onchain_for(c), REGISTRY, BRIEF,
+        fetch_fn=live_with(text=full_page, article_text=SNAPSHOT), search_fn=indexed,
+    )
+    assert r.passed
+
+
+def test_paid_marker_inside_article_still_rejects_snapshot_claim():
+    c = make_claim(snapshot_text=SNAPSHOT)
+    article = SNAPSHOT + " Sponsored content by the client."
+    r = evaluate_article(
+        c, onchain_for(c), REGISTRY, BRIEF,
+        fetch_fn=live_with(text=article, article_text=article), search_fn=indexed,
+    )
     assert not r.passed and r.reason == "paid_not_real_news"
 
 

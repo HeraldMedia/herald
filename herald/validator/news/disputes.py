@@ -72,7 +72,7 @@ def settle_persistence(article_id, entry, status, epoch, *, vesting, slash, disp
 
       dead  -> after `dead_confirm` consecutive confirmed epochs: clawback + slash the miner; if the
                article was disputed, resolve UPHELD and pay the disputer `reward_fraction` of the
-               forfeited (otherwise-burned) vesting.
+               forfeited vesting.
       alive -> release one installment; if a dispute has been open past `window` epochs while the
                article stayed alive, resolve REJECTED and slash the disputer (grief penalty).
       hold  -> withhold pay, no clawback; the dispute stays open.

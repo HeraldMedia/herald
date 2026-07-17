@@ -2,12 +2,13 @@
 
 Claims are pulled per-validator over dendrite, so a miner can serve validator A and withhold from
 B, forcing their scores apart (and gaming the EMA). Winners published to the board carry the full
-reveal since the multi-validator hardening — this merges those reveals back into the local claim
+reveal in a token-protected validator feed — this merges those reveals back into the local claim
 set. The board is only a HINT channel: every merged claim is re-verified from scratch by the
 oracle (commitment vs the chain slot, evidence hash, fetch, registry), so a malicious board can
 at worst add claims that fail verification, or withhold — which is no worse than today.
 """
 
+import os
 from typing import Dict, List
 
 from herald.protocol import ClaimRecord
@@ -68,12 +69,17 @@ def merge_board_claims(claims_by_uid: Dict[int, list], rows: List[dict],
 
 
 def fetch_board_results(endpoint: str) -> List[dict]:
-    """Best-effort fetch of the board's public results. Failure -> [] (reconciliation is a hint,
-    never a blocker: the dendrite-pulled claims still score)."""
+    """Best-effort fetch of the token-protected full-reveal feed. Failure -> []."""
     import httpx
 
     try:
-        resp = httpx.get(f"{endpoint.rstrip('/')}/public/articles", timeout=10.0)
+        token = os.getenv("HERALD_RESULTS_TOKEN")
+        headers = {"X-Results-Token": token} if token else {}
+        resp = httpx.get(f"{endpoint.rstrip('/')}/validator/results", headers=headers,
+                         timeout=10.0)
+        # Compatibility with the legacy board, whose public result rows carried reveals.
+        if resp.status_code == 404:
+            resp = httpx.get(f"{endpoint.rstrip('/')}/public/articles", timeout=10.0)
         resp.raise_for_status()
         rows = resp.json()
         return rows if isinstance(rows, list) else []

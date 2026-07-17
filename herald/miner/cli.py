@@ -5,7 +5,7 @@ import argparse
 import bittensor as bt
 
 from herald.miner.claim_store import ClaimStore
-from herald.miner.commit import submit_commitment
+from herald.miner.commit import resubmit_commitment, submit_commitment
 from herald.validator.utils.briefs import get_briefs
 
 
@@ -42,7 +42,9 @@ def cmd_commit(args):
     onchain = submit_commitment(
         subtensor, wallet, args.netuid, ClaimStore(args.store),
         brief_id=args.brief, target_outlet_id=args.outlet,
-        bond_atto=args.bond, version_id=args.version,
+        # v2 commitments retain this field in their hash/wire shape. It is reserved at zero;
+        # subnet registration burn is the miner's participation cost.
+        bond_atto=0, version_id=args.version,
         evidence=evidence,
     )
     if evidence.get("text"):
@@ -80,6 +82,15 @@ def cmd_claim(args):
           + (" (with page snapshot)" if snapshot else ""))
 
 
+def cmd_resubmit(args):
+    wallet = bt.Wallet(name=args.wallet_name, hotkey=args.hotkey)
+    subtensor = bt.Subtensor(network=args.network)
+    onchain = resubmit_commitment(
+        subtensor, wallet, args.netuid, ClaimStore(args.store), args.commit,
+    )
+    print(f"resubmitted: {onchain}")
+
+
 def cmd_list(args):
     for onchain, rec in ClaimStore(args.store)._records.items():
         print(f"{onchain}\t{rec['brief_id']}\t{rec['target_outlet_id']}\t{rec['article_url']}")
@@ -113,7 +124,6 @@ def build_parser():
     c = sub.add_parser("commit")
     c.add_argument("--brief", required=True)
     c.add_argument("--outlet", required=True)
-    c.add_argument("--bond", type=int, default=0)
     c.add_argument("--version", type=int, default=1)
     c.add_argument("--netuid", type=int, default=69)
     c.add_argument("--network", default="finney")
@@ -128,6 +138,15 @@ def build_parser():
     c.add_argument("--window", default=None,
                    help="expected publish window START:END (YYYY-MM-DD), span <= 7 days")
     c.set_defaults(func=cmd_commit)
+
+    rs = sub.add_parser("resubmit")
+    rs.add_argument("--commit", required=True,
+                    help="exact locally stored HRLD commitment to retry")
+    rs.add_argument("--netuid", type=int, default=69)
+    rs.add_argument("--network", default="finney")
+    rs.add_argument("--wallet-name", dest="wallet_name", default="default")
+    rs.add_argument("--hotkey", default="default")
+    rs.set_defaults(func=cmd_resubmit)
 
     cl = sub.add_parser("claim")
     cl.add_argument("--commit", required=True)

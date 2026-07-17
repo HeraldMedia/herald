@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field, StringConstraints
 # fields can't balloon one response into hundreds of MB before the per-miner slice applies.
 MAX_CLAIMS_PER_RESPONSE = 1000
 MAX_MERKLE_DEPTH = 64
-MAX_BOND_ATTO = 10 ** 30  # far above any real alpha bond (atto); bounds big-int digit count
+MAX_BOND_ATTO = 10 ** 30  # legacy compatibility field; bound its big-int digit count
 MAX_VERSION_ID = 10 ** 9
 MAX_EVIDENCE_TEXT = 20_000  # mirrors herald.evidence.MAX_TEXT_CHARS
 MAX_SNAPSHOT_TEXT = 30_000  # extracted article text the miner snapshots at claim time
