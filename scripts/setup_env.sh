@@ -29,9 +29,12 @@ fi
 # Virtual Environment Setup #
 ############################
 
-# Load environment variables from .env file if it exists
-if [ -f "$PROJECT_ROOT/.env" ]; then
-  export $(grep -v '^#' "$PROJECT_ROOT/.env" | sed 's/ *= */=/g' | xargs)
+# Load trusted operator configuration, preserving quoted values and exporting it to child processes.
+ENV_FILE=${HERALD_ENV_FILE:-"$PROJECT_ROOT/.env"}
+if [ -f "$ENV_FILE" ]; then
+  set -a
+  source "$ENV_FILE"
+  set +a
 fi
 
 # Set default virtual environment path if not specified in .env
@@ -57,6 +60,6 @@ cd "$PROJECT_ROOT"
 # Install project dependencies
 pip install --upgrade pip
 pip install -r requirements.txt
-pip install -e .
+pip install --no-build-isolation -e .
 
 echo "Environment setup completed successfully."

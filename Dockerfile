@@ -1,5 +1,9 @@
 FROM python:3.11-slim
 
+ARG HERALD_VERSION=0.1.0
+LABEL org.opencontainers.image.title="Herald Subnet" \
+      org.opencontainers.image.version="$HERALD_VERSION"
+
 WORKDIR /app
 
 # System deps for bittensor (substrate-interface needs these)
@@ -12,9 +16,9 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Install the package
-COPY setup.py README.md .
+COPY pyproject.toml setup.py README.md ./
 COPY herald/ herald/
-RUN pip install --no-cache-dir -e .
+RUN pip install --no-cache-dir --no-build-isolation -e .
 
 # Source code (neurons, core)
 COPY neurons/ neurons/

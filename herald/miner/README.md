@@ -1,222 +1,134 @@
 # Herald Miner
 
-A YouTube token server which enables mining on the Herald subnet. Responds to validator requests with a temporary read access token for the YouTube APIs.
+Herald miners are PR operators and outlet owners, not compute workers. A miner commits to pursuing
+a funded brief at an approved outlet, gets a genuine editorial article published, attaches the
+article URL, and serves the reveal to validators on Bittensor netuid 69.
 
-> **Notice**  
-> Your YouTube channel is a valuable asset. Herald aims to create meaningful opportunities for creators but early-stage Bittensor subnets can be unpredictable environments. We encourage you to participate thoughtfully, as we will not take any responsibility for unexpected changes to your channel's performance.
+Paid posts, advertorials, press-release wires, contributor programs classified as non-editorial,
+and outlet-specific branded-content products are not eligible.
 
----
+## Requirements
 
-## 🎥 Content Requirements
+- Linux, Python 3.11 or 3.12
+- A registered subnet-69 miner hotkey; its chain registration burn is the participation cost
+- A public IP and open axon port
+- Reliable storage for `claims.json`; it contains commitment nonces and must remain private
 
-> **Don't register until you hit these!**  
-> **Note: Content requirements are likely to increase over time**
+Install the project and prepare configuration:
 
-1. **YouTube account**  
-   - 21+ days old
-   - ≥ 100 subscribers
-   - ≥ 10% average retention (over the last 90 days)
-   - ≥ 1000 minutes watched (over the last 90 days)
-   - **YouTube Partner Program (YPP) membership OR sufficient alpha stake** (see note below)
+```bash
+./scripts/setup_env.sh
+cp herald/miner/.env.example .env
+```
 
-2. **Videos**  
-   - Public  
-   - Auto-generated captions only  
-   - Matches at least one [content brief](http://dashboard.herald.network/briefs)  
-   - Published during the brief content window
+Set `WALLET_NAME`, `HOTKEY_NAME`, `NETUID=69`, and a routable `AXON_EXTERNAL_IP`. Keep automatic
+updates disabled so a process restart cannot unexpectedly change protocol behavior.
 
-**Tip:** Test your script against any brief in our [dashboard tool](http://dashboard.herald.network/).
+## Commit, publish, claim
 
-> **Note: YouTube Partner Program (YPP) Requirement**  
-> Channels must either:
-> - Be enrolled in the YouTube Partner Program (with CPM > 0 within last 90 days)
-> - **OR** have 1k alpha staked against your mining hotkey
-> 
-> This filter is in place as a barrier for low quality or exploitative miners. Minimum stake indicates investment in the long term success of the subnet.
-> If you connot personally meet the minimum stake threshold reach out to the subnet owner or another significant holder of Herald alpha token for sponsorship - acceptance may depend on the quality of your YouTube channel and content.
+List open briefs:
 
----
+```bash
+source ../venv_herald/bin/activate
+python -m herald.miner.cli briefs
+```
 
-## 💻 System Requirements
+Commit before the article exists:
 
-- **Operating System:** Linux (required)
-- **CPU:** 1 core
-- **RAM:** 2 GB
+```bash
+python -m herald.miner.cli commit \
+  --brief <BRIEF_ID> \
+  --outlet <OUTLET_ID> \
+  --version 1 \
+  --netuid 69 \
+  --network finney \
+  --wallet-name herald \
+  --hotkey miner \
+  --text-file draft.txt
+```
 
-Herald Miner is designed to run 24/7. For best results, use a reliable remote Linux server or VPS (such as AWS EC2, DigitalOcean, or Hetzner) to ensure continuous uptime. Avoid running on a laptop or desktop that may be powered off or disconnected.
+Attribution evidence affects both winner selection and payout:
 
----
+- `--text-file draft.txt` or `--quote ...`: level 2, full multiplier when the committed text is
+  found in the published article.
+- `--author ... --window YYYY-MM-DD:YYYY-MM-DD`: level 1 when the byline and tight publication
+  window match.
+- No evidence: level 0, reduced multiplier.
 
-## 🚀 Installation
+Evidence is hashed into the commitment and revealed only after publication. Do not use public
+brief copy as evidence. The compatibility `bond_atto` field is written as zero automatically;
+miners do not configure or escrow a Herald bond.
 
-1. **Clone repo**  
-   ```bash
-   git clone git@github.com:herald-network/herald.git
-   cd herald
-   ```
+Once the editorial article is live:
 
-2. **Setup environment & venv**  
-   ```bash
-   chmod +x scripts/setup_env.sh
-   ./scripts/setup_env.sh
-   ```  
-   This creates a Python virtual environment at `../venv_herald/` and installs dependencies.
+```bash
+python -m herald.miner.cli claim \
+  --commit <ONCHAIN_VALUE> \
+  --url https://approved-outlet.example/article
+```
 
----
+The CLI fetches and stores an extracted article snapshot. Validators anchor that snapshot against
+their own fetch so page variants do not change the content verdict. For a bot-walled article, pass
+`--snapshot-file`; use `--no-snapshot` only when you understand the reduced verifiability.
 
-## 🔑 Google Console Setup
+## Serve claims
 
-1. **Create a project**  
-   - Go to [Google Cloud Console](https://console.cloud.google.com/)  
-   - Click **Select a project → New Project**  
-   - Name it **herald-miner**, then **Create**.  
-   - After creation, open the **project selector** dropdown in the top bar and select **herald_miner**.
+Start the miner with PM2:
 
-2. **Enable APIs**  
-   - Open **APIs & Services → Library**  
-   - Search for **YouTube Data API v3** and **YouTube Analytics API**  
-   - Click **Enable** on each.
+```bash
+HERALD_MINER_ENV_FILE=/secure/config/miner.env ./scripts/run_miner.sh
+pm2 logs herald_miner
+```
 
-3. **Configure OAuth consent screen**  
-   - Go to **APIs & Services → OAuth consent screen**  
-   - Click **Get Started**.  
-   - App name: **herald-miner**  
-   - Support email: *your email*  
-   - Audience: **External**  
-   - Contact email: *your email*  
-   - Agree to Google's data policy and terms  
-   - Click **Create**.
+Or with Compose:
 
-4. **Create OAuth credentials**  
-   - Go to **Overview → Metrics → Create OAuth client**  
-   - Application type: **Web application**  
-   - Name it **herald-miner**  
-   - Under **Authorized redirect URIs**, add:  
-     ```
-     https://dashboard.herald.network/echo
-     ```  
-   - Click **Create**.  
-   - Download the JSON and save as  
-     ```
-     herald/miner/secrets/client_secret.json
-     ```
+```bash
+MINER_ENV_FILE=/secure/config/miner.env docker compose up -d --build miner
+docker compose logs -f miner
+```
 
-5. **Publish App**  
-   - Go to **Audience**.
-   - Click **Publish App**.
+Compose stores claims in the `miner_data` volume and wallet/runtime data in `miner_wallet`.
 
----
+The announced axon IP must be publicly routable. A loopback or container-private address will be
+rejected by the chain or unreachable by validators. Configure:
 
-## 🚀 Miner Registration
+```dotenv
+PORT=8091
+AXON_EXTERNAL_IP=<PUBLIC_IP>
+AXON_EXTERNAL_PORT=8091
+```
 
-1. **Activate the virtual environment**  
-   ```bash
-   source ../venv_herald/bin/activate
-   ```
+Open the public port in the host firewall and cloud security group.
 
-2. **Register Bittensor Wallet & Subnet**  
-   > **Run these from within the activated venv.**  
-   1. **Create wallets**  
-      ```bash
-      btcli wallet new_coldkey --wallet.name <WALLET_NAME>
-      btcli wallet new_hotkey  --wallet.name <WALLET_NAME> --wallet.hotkey <HOTKEY_NAME>
-      ```  
-   2. **Register on subnet**  
-      ```bash
-      btcli subnet register \
-        --netuid 93 \
-        --wallet.name <WALLET_NAME> \
-        --hotkey <HOTKEY_NAME>
-      ```
+## Claim-store safety
 
----
+The claim store is written atomically with mode `0600`, but the operator remains responsible for
+backup and filesystem permissions. Losing a nonce makes its on-chain commitment unrevealable.
 
-## 🚀 Run Miner
+Bittensor currently provides one commitment slot per hotkey. Do not overwrite an active placement
+commit with a new placement or dispute until validators have accepted the reveal and started its
+vesting entry.
 
-1. **Configure Environment**
-   ```bash
-   cp herald/miner/.env.example herald/miner/.env
-   ```
-   Edit `.env` with your wallet information:
-   - `WALLET_NAME`: Your Bittensor wallet name (coldkey)
-   - `HOTKEY_NAME`: Your Bittensor hotkey name
+To import dashboard-created reveals from the token-gated board:
 
-2. **Authenticate with YouTube**  
-   Run the authentication setup script:
-   ```bash
-   bash scripts/run_auth.sh
-   ```
-   This will:
-   - Set up your environment if needed
-   - Guide you through YouTube OAuth authentication  
-   - Work in all environments (headless, SSH, Docker, etc.)
-   - Provide a URL to copy/paste into any browser
+```bash
+python -m herald.miner.cli pull-reveals \
+  --url https://herald-api.example \
+  --token "$HERALD_REVEALS_TOKEN"
+```
 
-3. **Open port 8091**  
-   Ensure your firewall or cloud security group allows inbound on **8091**.
+Never expose the reveals token or claim-store contents to a public browser. They contain the
+nonces that open commitments.
 
-4. **Start miner**  
-   ```bash
-   bash scripts/run_miner.sh
-   ```
+## Why a claim may not pay
 
-5. **pm2 Launch & Health Check**  
-   The `run_miner.sh` script uses **pm2** to manage the miner process.  
-   - List running processes:  
-     ```bash
-     pm2 list
-     ```  
-   - View logs in real-time:  
-     ```bash
-     pm2 logs herald_miner
-     ```  
-   - Check detailed status:  
-     ```bash
-     pm2 show herald_miner
-     ```  
-   - If the miner isn't running, you can restart it:  
-     ```bash
-     pm2 restart herald_miner
-     ```
+- The article predates the commitment or lacks a verifiable publication timestamp.
+- The URL is outside the committed outlet or registry edition.
+- The article is paid, sponsored, advertorial, or no longer live.
+- The article does not match an open funded brief.
+- A stronger-evidence or earlier valid claimant won the article or outlet/brief slot.
+- The axon is unreachable or serving from a different hotkey.
+- The article's client reward pool is exhausted.
 
----
-
-## 🔧 Managing Permissions
-
-To view or revoke the permissions you've granted to your miner application, visit:
-[Google Account Connections](https://myaccount.google.com/connections?continue=https%3A%2F%2Fmyaccount.google.com%2Fdata-and-privacy)
-
-If you revoke access, you'll need to re-authenticate using `bash scripts/run_auth.sh`.
-
----
-
-## 🏢 Agency Operations (Multiple YouTube Accounts)
-
-You can run a single miner with **up to 5 YouTube accounts** to operate as an agency:
-
-- The `run_auth.sh` script only authenticates **one** account at a time
-- To add more accounts, place additional `.pkl` credential files in `herald/miner/secrets/`
-- All `.pkl` files in the secrets directory will be included in miner responses
-- Use our open-source [agency web template](https://github.com/herald-network/herald-agency) to accept credentials from other creators
-
-This allows you to aggregate multiple creators under a single mining UID while maintaining separate YouTube account credentials.
-
----
-
-## ℹ️ General Notes
-
-- **3-day emissions delay:** You'll begin receiving miner emissions **3 days** after the miner starts.  
-- **Video age limit:** Each video will be rewarded for its first 14 days of engagement as long as it is posted during the active brief window.
-- **Validator polling:** Each validator sends a request roughly every **4-5 hours**.  
-- **Video processing limit:** A maximum of **75 recent videos** will be processed per YouTube account.  
-- **Process visibility:** Validator logs can be viewed in the [herald wandb project](https://wandb.ai/herald_network/herald_vali_logs?nw=nwuserwill_herald)  
-- **Auto-updates:** The codebase has auto-update enabled by default.
-
----
-
-## 🔄 Staying Healthy
-
-- Once healthy, your miner auto-detects and scores new uploads.  
-- **Briefs change**—check [content briefs](http://dashboard.herald.network/briefs) regularly.  
-
-Happy mining! 🚀  
+Rewards vest over time. Removing an article or converting it to sponsored content can claw back
+the remaining vest and temporarily zero the hotkey's other Herald rewards.

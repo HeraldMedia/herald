@@ -1,6 +1,7 @@
 services:
   miner:
     build: .
+    restart: unless-stopped
     entrypoint: ["/entrypoint.sh"]
     command: [
       "python", "-u", "neurons/miner.py",
@@ -15,12 +16,20 @@ services:
       - "${AXON_PORT:-8091}:8091"
     environment:
       PYTHONUNBUFFERED: "1"
-    env_file: .env
+      HERALD_PRODUCTION: "${HERALD_PRODUCTION:-false}"
+      HERALD_CLAIM_STORE: /var/lib/herald/claims.json
+      AXON_EXTERNAL_PORT: "${AXON_PORT:-8091}"
+    env_file: "${MINER_ENV_FILE:-.env}"
+    volumes:
+      - miner_wallet:/root/.bittensor
+      - miner_data:/var/lib/herald
+    mem_limit: "${MINER_MEMORY_LIMIT:-2g}"
     tty: true
 
   validator:
     build: .
     profiles: ["validator"]
+    restart: unless-stopped
     entrypoint: ["/entrypoint.sh"]
     command: [
       "python", "-u", "neurons/validator.py",
@@ -32,20 +41,50 @@ services:
       "--neuron.disable_auto_update",
     ]
     ports:
-      - "8092:8092"
+      - "${VALIDATOR_AXON_PORT:-8092}:8092"
     environment:
       PYTHONUNBUFFERED: "1"
-    env_file: .env
+      HERALD_PRODUCTION: "${HERALD_PRODUCTION:-false}"
+      AXON_EXTERNAL_PORT: "${VALIDATOR_AXON_PORT:-8092}"
+    env_file: "${VALIDATOR_ENV_FILE:-.env}"
+    volumes:
+      - validator_state:/root/.bittensor
+    mem_limit: "${VALIDATOR_MEMORY_LIMIT:-4g}"
     tty: true
 
-  brief_board:
+  legacy_brief_board:
     build: .
-    profiles: ["services"]
+    profiles: ["legacy"]
+    restart: unless-stopped
     entrypoint: []
-    command: ["uvicorn", "herald.services.app:app", "--host", "0.0.0.0", "--port", "8093"]
+    command: ["uvicorn", "herald.services.legacy:app", "--host", "0.0.0.0", "--port", "8093"]
     ports:
       - "${BRIEF_BOARD_PORT:-8093}:8093"
     environment:
       PYTHONUNBUFFERED: "1"
-    env_file: .env
+      HERALD_ENABLE_LEGACY_BRIEF_BOARD: "${HERALD_ENABLE_LEGACY_BRIEF_BOARD:-false}"
+      HERALD_BRIEF_STORE: /var/lib/herald/brief_store.json
+      HERALD_RESULT_STORE: /var/lib/herald/result_store.json
+      HERALD_REVEAL_STORE: /var/lib/herald/reveal_store.json
+      HERALD_REGISTRY_DRAFT_STORE: /var/lib/herald/registry_draft.json
+      HERALD_DISPUTE_STORE: /var/lib/herald/dispute_store.json
+      HERALD_FUNDING_STORE: /var/lib/herald/funding_store.json
+      HOTKEY_DATA: ""
+      HOTKEYPUB_DATA: ""
+      COLDKEYPUB_DATA: ""
+    env_file: "${BRIEF_BOARD_ENV_FILE:-.env}"
+    volumes:
+      - legacy_brief_board_data:/var/lib/herald
+    mem_limit: "${BRIEF_BOARD_MEMORY_LIMIT:-1g}"
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://127.0.0.1:8093/public/stats"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
     tty: true
+
+volumes:
+  miner_wallet:
+  miner_data:
+  validator_state:
+  legacy_brief_board_data:

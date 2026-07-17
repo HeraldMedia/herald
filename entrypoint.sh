@@ -53,6 +53,13 @@ fi
 # --- Clear sensitive env vars ---
 unset HOTKEY_DATA
 
+if [ -n "${AXON_EXTERNAL_IP:-}" ]; then
+    set -- "$@" --axon.external_ip "${AXON_EXTERNAL_IP}"
+fi
+if [ -n "${AXON_EXTERNAL_PORT:-}" ]; then
+    set -- "$@" --axon.external_port "${AXON_EXTERNAL_PORT}"
+fi
+
 echo "[entrypoint] Wallet bootstrapped at ${HOTKEY_DIR}/${HOTKEY_NAME}"
 echo "[entrypoint] Starting: $*"
 exec "$@"

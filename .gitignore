@@ -1,4 +1,5 @@
 .env
+.runtime/
 __pycache__/
 .pytest_cache/
 venv/
@@ -19,6 +20,12 @@ terraform/
 
 .venv/
 cache/
+
+# Operator signing keys must never enter source control.
+*.ed25519.key
+herald_registry.key
+herald_briefs.key
+brief_feed.key
 
 # internal ops/design docs — keep local, never on GitHub. AGENTS.md stays at the repo root
 # (Codex auto-loads it there, same as CLAUDE.md); everything else lives under dev/.

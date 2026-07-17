@@ -10,8 +10,8 @@ attribution.
 ## How it works
 
 1. **Commit.** A miner reads the open briefs and commits intent on chain — a salted hash of
-   `(brief_id, outlet, hotkey, nonce, bond, version)` — locking an alpha-stake bond. The
-   target outlet stays hidden until reveal.
+   `(brief_id, outlet, hotkey, nonce, version, evidence)`. The v2 wire shape retains a reserved
+   `bond=0` field for compatibility. The target outlet stays hidden until reveal.
 2. **Claim.** Once the article is live, the miner attaches the URL and serves the reveal when
    a validator pulls it (`ClaimSynapse`).
 3. **Verify.** For each claim the validator runs the oracle, cheapest-first with early-exit:
@@ -26,7 +26,7 @@ attribution.
 ## Layout
 
 - `herald/validator/news/` — the oracle (`oracle.py`), checks (`real_news`, `topic_match`,
-  `fetch`, `search`), `attribution.py`, `commit_index.py`, `bonds.py`, `vesting.py`,
+  `fetch`, `search`), `attribution.py`, `commit_index.py`, `vesting.py`,
   `slashing.py`, `reward.py`, `forward.py`, `registry.py`, `state.py`.
 - `herald/miner/` — `commit.py`, `claim_store.py`, `cli.py`.
 - `herald/registry/admin.py` — operator CLI to manage and sign the outlet registry.
@@ -35,22 +35,36 @@ attribution.
 ## Running
 
 ```bash
-pip install -e .
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+pip install --no-build-isolation -e .
 
 # Validator
-python neurons/validator.py --netuid 69 --wallet.name <w> --wallet.hotkey <hk>
+python neurons/validator.py --netuid 69 --wallet.name <w> --wallet.hotkey <hk> \
+  --axon.external_ip <public-ip> --neuron.disable_auto_update
 
 # Miner: commit to an outlet, then attach the URL once published
-python -m herald.miner.cli commit --brief <id> --outlet <outlet_id> --bond <atto>
+python -m herald.miner.cli commit --brief <id> --outlet <outlet_id>
 python -m herald.miner.cli claim --commit <onchain_value> --url <article_url>
-python neurons/miner.py --netuid 69 --wallet.name <w> --wallet.hotkey <hk>
+python neurons/miner.py --netuid 69 --wallet.name <w> --wallet.hotkey <hk> \
+  --axon.external_ip <public-ip> --neuron.disable_auto_update
 ```
 
 Validators verify the outlet registry's ed25519 signature when `HERALD_REGISTRY_PUBKEY` is set.
 See `.env.example` for configuration.
 
+Production deployments use the standalone `herald-backend`; the JSON Brief Board under
+`herald/services` is restricted to development and migration. Start validators and miners from
+the templates under `deploy/`. With `HERALD_PRODUCTION=true`, neuron startup fails closed on a
+non-mainnet scope, simulator/local endpoints, unsigned feeds or registries, missing provider
+credentials, consensus-fingerprint drift, or a missing live registry anchor.
+
+Miner admission is paid through Bittensor's non-refundable subnet registration burn. Herald does
+not require an additional per-claim miner bond or owner-managed escrow.
+
 ## Tests
 
 ```bash
-pytest tests/news/
+python -m pytest -q
 ```

@@ -7,9 +7,11 @@ set -e
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PROJECT_PARENT="$(cd "$PROJECT_ROOT/.." && pwd)"
 
-# Load environment variables from .env file
-if [ -f "$PROJECT_ROOT/.env" ]; then
-  export $(grep -v '^#' "$PROJECT_ROOT/.env" | sed 's/ *= */=/g' | xargs)
+ENV_FILE=${HERALD_VALIDATOR_ENV_FILE:-"$PROJECT_ROOT/.env"}
+if [ -f "$ENV_FILE" ]; then
+  set -a
+  source "$ENV_FILE"
+  set +a
 fi
 
 # Set default values if variables are not set
@@ -27,11 +29,11 @@ echo "Activating virtual environment..."
 source "$VENV_PATH/bin/activate"
 
 # Ensure required environment variables are set
-if [ -z "$WALLET_NAME" ]; then
+if [ -z "${WALLET_NAME:-}" ]; then
   echo "Error: WALLET_NAME is not set in the .env file."
   exit 1
 fi
-if [ -z "$HOTKEY_NAME" ]; then
+if [ -z "${HOTKEY_NAME:-}" ]; then
   echo "Error: HOTKEY_NAME is not set in the .env file."
   exit 1
 fi
@@ -42,6 +44,7 @@ SUBTENSOR_NETWORK=${SUBTENSOR_NETWORK:-"finney"}
 SUBTENSOR_CHAIN_ENDPOINT=${SUBTENSOR_CHAIN_ENDPOINT:-"wss://entrypoint-finney.opentensor.ai:443"}
 PORT=${PORT:-8092}
 LOGGING=${LOGGING:-"--logging.debug"}
+DISABLE_AUTO_UPDATE=${DISABLE_AUTO_UPDATE:-true}
 
 # Handle boolean flags
 DISABLE_AUTO_UPDATE_FLAG=""
@@ -72,9 +75,20 @@ fi
 
 # STOP VALIDATOR PROCESS
 if pm2 list | grep -q "$PM2_PROCESS_NAME"; then
-  echo "Process '$PM2_PROCESS_NAME' is already running. Restarting it..."
-  pm2 restart "$PM2_PROCESS_NAME"
-else
-  echo "Process '$PM2_PROCESS_NAME' is not running. Starting it for the first time..."
-  pm2 start python --name "$PM2_PROCESS_NAME" -- neurons/validator.py --netuid $NETUID --subtensor.chain_endpoint $SUBTENSOR_CHAIN_ENDPOINT --subtensor.network $SUBTENSOR_NETWORK --wallet.name $WALLET_NAME --wallet.hotkey $HOTKEY_NAME --axon.port $PORT $LOGGING $DISABLE_AUTO_UPDATE_FLAG --neuron.disable_set_weights
+  echo "Replacing existing '$PM2_PROCESS_NAME' process with the current configuration..."
+  pm2 delete "$PM2_PROCESS_NAME"
 fi
+
+AXON_ARGS=(--axon.port "$PORT")
+if [ -n "${AXON_EXTERNAL_IP:-}" ]; then
+  AXON_ARGS+=(--axon.external_ip "$AXON_EXTERNAL_IP")
+fi
+if [ -n "${AXON_EXTERNAL_PORT:-}" ]; then
+  AXON_ARGS+=(--axon.external_port "$AXON_EXTERNAL_PORT")
+fi
+
+pm2 start python --name "$PM2_PROCESS_NAME" -- neurons/validator.py \
+  --netuid "$NETUID" --subtensor.chain_endpoint "$SUBTENSOR_CHAIN_ENDPOINT" \
+  --subtensor.network "$SUBTENSOR_NETWORK" --wallet.name "$WALLET_NAME" \
+  --wallet.hotkey "$HOTKEY_NAME" "${AXON_ARGS[@]}" $LOGGING \
+  $DISABLE_AUTO_UPDATE_FLAG --neuron.disable_set_weights
