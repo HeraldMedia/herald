@@ -100,7 +100,8 @@ async def get_query_api_nodes(dendrite, metagraph, n=0.1, timeout=3):
 
 
 async def get_query_api_axons(
-    wallet, metagraph=None, n=0.1, timeout=3, uids=None
+    wallet, metagraph=None, n=0.1, timeout=3, uids=None,
+    netuid=None, network="finney",
 ):
     """
     Retrieves the axons of query API nodes based on their availability and stake.
@@ -115,10 +116,12 @@ async def get_query_api_axons(
     Returns:
         list: A list of axon objects for the available API nodes.
     """
-    dendrite = bt.Dendrite(wallet=wallet)
-
     if metagraph is None:
-        metagraph = bt.metagraph(netuid=21)
+        if netuid is None:
+            raise ValueError("metagraph or netuid is required")
+        metagraph = bt.Metagraph(netuid=netuid, network=network)
+
+    dendrite = bt.Dendrite(wallet=wallet)
 
     if uids is not None:
         query_uids = [uids] if isinstance(uids, int) else uids

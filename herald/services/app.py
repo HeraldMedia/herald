@@ -10,7 +10,10 @@ from fastapi import Body, FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 
+from herald import __version__
+
 from .render import render_board, render_page
+from .legacy_guard import require_legacy_brief_board
 from .store import BriefStore, DisputeStore, FundingStore, RegistryStore, ResultStore, RevealStore
 
 # Outlet registry for public stats + serving (the signed file if configured, else the seed).
@@ -37,7 +40,7 @@ def create_app(brief_store: BriefStore, result_store: ResultStore,
                dispute_store: DisputeStore = None, disputes_token: str = None,
                briefs_privkey: str = None,
                funding_store: FundingStore = None, funding_token: str = None) -> FastAPI:
-    app = FastAPI(title="Herald Brief Board")
+    app = FastAPI(title="Herald Legacy Brief Board", version=__version__)
 
     # Public read endpoints are consumed cross-origin by the landing page.
     if isinstance(cors_origins, str):
@@ -48,6 +51,10 @@ def create_app(brief_store: BriefStore, result_store: ResultStore,
         allow_methods=["GET"],
         allow_headers=["*"],
     )
+
+    @app.get("/health")
+    def health():
+        return {"ok": True, "version": __version__, "legacy": True}
 
     def _check(expected, token):
         if not expected:
@@ -220,6 +227,9 @@ def create_app(brief_store: BriefStore, result_store: ResultStore,
 
     return app
 
+
+if os.getenv("HERALD_PRODUCTION", "").lower() in ("1", "true", "yes"):
+    require_legacy_brief_board()
 
 app = create_app(
     BriefStore(os.getenv("HERALD_BRIEF_STORE", "brief_store.json")),

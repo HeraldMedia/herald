@@ -8,6 +8,7 @@ from pydantic import BaseModel
 from typing import List, Dict, Any
 from herald.validator.platforms.youtube.evaluation.video.orchestration import vet_video
 from herald.utils.cloudwatch_logging import get_cloudwatch_handler
+from herald import __version__
 import asyncio
 import json
 
@@ -28,11 +29,11 @@ if cw_handler:
 # Note: This API is intended solely for the use of the subnet development team.
 # It can be ignored by anyone else.
 
-app = FastAPI()
+app = FastAPI(title="Herald Internal API", version=__version__)
 
 @app.get("/health")
 async def health_check():
-    return {"status": "healthy"}
+    return {"status": "healthy", "version": __version__}
 
 class VideoRequest(BaseModel):
     video_id: str

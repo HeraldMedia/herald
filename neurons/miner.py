@@ -93,10 +93,11 @@ def auto_update_loop(config):
 
 
 if __name__ == "__main__":
-    with Miner() as miner:
-        update_thread = threading.Thread(target=auto_update_loop, args=(miner.config,), daemon=True)
-        update_thread.start()
+    miner = Miner()
+    update_thread = threading.Thread(target=auto_update_loop, args=(miner.config,), daemon=True)
+    update_thread.start()
 
-        while True:
-            bt.logging.info(f"Miner running... {time.time()}")
-            time.sleep(5)
+    # Keep the Axon lifecycle on the process's main thread. If startup or the
+    # serving loop fails, the process exits and supervisors such as PM2 can
+    # restart it instead of reporting a sleeping wrapper as healthy.
+    miner.run()

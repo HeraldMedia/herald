@@ -25,6 +25,7 @@ from abc import ABC, abstractmethod
 from herald.utils.config import check_config, add_args, config
 from herald.utils.misc import ttl_get_block
 from herald import __spec_version__ as spec_version
+from herald.production import validate_neuron_environment, validate_registry_anchor
 
 
 class BaseNeuron(ABC):
@@ -62,6 +63,11 @@ class BaseNeuron(ABC):
         self.config = self.config()
         self.config.merge(base_config)
         self.check_config(self.config)
+        validate_neuron_environment(
+            self.neuron_type,
+            getattr(self.config.subtensor, "network", ""),
+            self.config.netuid,
+        )
 
         # Set up logging with the provided configuration.
         bt.logging.set_config(config=self.config.logging)
@@ -79,7 +85,17 @@ class BaseNeuron(ABC):
         # The wallet holds the cryptographic key pairs for the miner.
         self.wallet = bt.Wallet(config=self.config)
         self.subtensor = bt.Subtensor(config=self.config)
-        self.metagraph = self.subtensor.metagraph(self.config.netuid)
+        # Bittensor 10.5's public Metagraph.sync() also fetches the complete
+        # subnet "extra info" payload. Herald does not consume that payload,
+        # and a slow/unavailable payload must not prevent an Axon from starting.
+        self.metagraph = bt.Metagraph(
+            netuid=self.config.netuid,
+            network=self.subtensor.chain_endpoint,
+            lite=True,
+            sync=False,
+            subtensor=self.subtensor,
+        )
+        self.sync_core_metagraph()
 
         bt.logging.info(f"Wallet: {self.wallet}")
         bt.logging.info(f"Subtensor: {self.subtensor}")
@@ -92,10 +108,26 @@ class BaseNeuron(ABC):
         self.uid = self.metagraph.hotkeys.index(
             self.wallet.hotkey.ss58_address
         )
+        if self.neuron_type == "ValidatorNeuron":
+            validate_registry_anchor(
+                self.subtensor,
+                self.config.netuid,
+                current_block=self.subtensor.get_current_block(),
+            )
         bt.logging.info(
             f"Running neuron on subnet: {self.config.netuid} with uid {self.uid} using network: {self.subtensor.chain_endpoint}"
         )
         self.step = 0
+
+    def sync_core_metagraph(self):
+        """Sync the chain fields Herald consumes without optional subnet metadata."""
+        block = self.subtensor.get_current_block()
+        # The pinned Bittensor SDK does not expose a public switch for omitting
+        # only extra metagraph metadata, so use the same three core phases as
+        # Metagraph.sync(lite=True) and deliberately skip _apply_extra_info().
+        self.metagraph._assign_neurons(block, True, self.subtensor)
+        self.metagraph._set_metagraph_attributes(block)
+        self.metagraph._get_all_stakes_from_chain(block)
 
     @abstractmethod
     async def forward(self, synapse: bt.Synapse) -> bt.Synapse:

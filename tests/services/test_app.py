@@ -31,6 +31,11 @@ def test_write_endpoints_closed_without_token_by_default(tmp_path):
     assert c.get("/public/articles").status_code == 200  # reads stay open
 
 
+def test_legacy_service_reports_release_version(client):
+    assert client.get("/openapi.json").json()["info"]["version"] == "0.1.0"
+    assert client.get("/health").json() == {"ok": True, "version": "0.1.0", "legacy": True}
+
+
 def test_create_fund_and_list_open_brief(client):
     bid = client.post("/admin/briefs", json={"title": "Push", "tier": 1}).json()["id"]
     assert client.get("/briefs").json() == []          # draft, not open
