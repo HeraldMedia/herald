@@ -87,36 +87,63 @@ btcli stake add       --netuid 69 --wallet.name herald_vali --wallet.hotkey v1 -
 mkdir -p /secure/herald
 curl -s https://api.heraldmedia.ai/registry/outlets.json -o /secure/herald/outlets.signed.json
 ```
-Start from `deploy/validator.env.production.example`:
+Copy `deploy/validator.env.production.example` to `.env` and fill the blanks. It is the exact
+template below — the public trust anchors (endpoint + pubkeys) are baked in; you supply your
+wallet/IP and the operator-provided secrets (results token, authority hotkey, API keys):
 ```ini
+# Herald validator — production .env (Bittensor netuid 69, finney).
+# Copy to .env, fill the blanks (your wallet/IP + operator-provided secrets), then: chmod 600 .env
 HERALD_PRODUCTION=true
 HERALD_PRODUCTION_NETUID=69
 NETUID=69
 SUBTENSOR_NETWORK=finney
-WALLET_NAME=herald_vali
-HOTKEY_NAME=v1
-AXON_EXTERNAL_IP=<your-public-ip>
+# Optional: a dedicated/local subtensor node for resilience (default = public finney entrypoint):
+# SUBTENSOR_CHAIN_ENDPOINT=wss://entrypoint-finney.opentensor.ai:443
+
+# ── Wallet: registered on netuid 69 with stake for a validator permit ──
+WALLET_NAME=
+HOTKEY_NAME=
+# This host's public IP (announced to the chain):
+AXON_EXTERNAL_IP=
 VALIDATOR_AXON_PORT=8092
 
+# ── Canonical subnet backend + trust anchors (the pubkeys are public) ──
 HERALD_BRIEFS_ENDPOINT=https://api.heraldmedia.ai/api/v2/validator/briefs
 HERALD_BRIEFS_PUBKEY=a1b3e1d6e412a1a97d694ce5af196411e1bc2b4cc250d83ab92d0111b7b1af9a
 HERALD_REQUIRE_SIGNED_BRIEFS=true
 HERALD_RESULTS_ENDPOINT=https://api.heraldmedia.ai
-HERALD_RESULTS_TOKEN=<operator-provided>
+# Operator-provided (secret) — the token validators present to POST results/snapshots:
+HERALD_RESULTS_TOKEN=
 
-HERALD_REGISTRY_PATH=/secure/herald/outlets.signed.json
+# ── Signed outlet registry ──
+# Docker:      HERALD_REGISTRY_HOST_FILE is the host file; compose bind-mounts it read-only at
+#              HERALD_REGISTRY_PATH inside the container.
+# Bare-metal:  set HERALD_REGISTRY_PATH to the host file directly and leave HOST_FILE unset.
+HERALD_REGISTRY_HOST_FILE=/secure/herald/outlets.signed.json
+HERALD_REGISTRY_PATH=/run/registry/outlets.signed.json
 HERALD_REGISTRY_PUBKEY=9bc2326f0019bcbfe279948222e1fbc6d0b281bb50bc7569c3551ede764aede6
-HERALD_REGISTRY_AUTHORITY_HOTKEY=<operator-provided SS58>
+# Operator-provided SS58 — the dedicated hotkey that posts the on-chain HRLDREG anchor:
+HERALD_REGISTRY_AUTHORITY_HOTKEY=
 HERALD_REQUIRE_SIGNED_REGISTRY=true
 
-SCRAPINGBEE_API_KEY=<key>
-BRAVE_API_KEY=<key>            # or SERPAPI_API_KEY — match the fleet
+# ── Outside-data providers — CONSENSUS-CRITICAL: enable the identical set on every validator ──
+# Required — the signed registry contains proxy: outlets (fetch provider):
+SCRAPINGBEE_API_KEY=
+# One search provider is required; pick BRAVE or SERPAPI and use it fleet-wide:
+BRAVE_API_KEY=
+# SERPAPI_API_KEY=
+# HERALD_NYT_API_KEY=          # only if the registry contains api:nyt outlets
 HERALD_QUORUM_THRESHOLD=1
 HERALD_ALLOW_LOCAL_FETCH=false
 HERALD_USE_LLM_JUDGE=false
 DISABLE_AUTO_UPDATE=true
 
-HERALD_EXPECTED_CONSENSUS_FP=<from `python -m herald.production fingerprint`>
+# ── Scoring cadence + consensus fingerprint ──
+# Poll for scoring every N steps (~N*60s). Scoring itself stays once per epoch and is NOT in the
+# fingerprint; the default (240) can delay the first snapshot by hours, so 10 is a sensible start.
+HERALD_VALIDATOR_STEPS_INTERVAL=10
+# Compute with `python -m herald.production fingerprint`; set the SAME value here AND on the backend:
+HERALD_EXPECTED_CONSENSUS_FP=
 ```
 `chmod 600 .env`.
 
