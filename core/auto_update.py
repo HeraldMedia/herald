@@ -31,13 +31,15 @@ def run_auto_update(neuron_type):
             project_parent = os.path.abspath(os.path.join(project_root, ".."))
             venv_path = f"{project_parent}/venv_herald"
             setup_cmd = f"source {venv_path}/bin/activate && {project_root}/scripts/setup_env.sh"
-            subprocess.run(setup_cmd, shell=True, executable='/bin/bash')
+            # bash -c (not shell=True) to interpret `source` + `&&`; the command is built only from
+            # internal abspaths, not external input.
+            subprocess.run(["/bin/bash", "-c", setup_cmd])
             
             time.sleep(20)
             print("Finished running the autoupdate steps")
             print("Restarting neuron")
             # Run start script with venv activation
             start_cmd = f"source {venv_path}/bin/activate && {project_root}/scripts/run_{neuron_type}.sh"
-            subprocess.run(start_cmd, shell=True, executable='/bin/bash')
+            subprocess.run(["/bin/bash", "-c", start_cmd])
     else:
         print("Repo is up-to-date.")
