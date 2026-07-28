@@ -39,7 +39,8 @@ bound (web fetches, search-API calls, chain RPC). The optional LLM judge is a *r
   - Backend endpoint (canonical): `https://api.heraldmedia.ai`
   - Brief-feed pubkey: `a1b3e1d6e412a1a97d694ce5af196411e1bc2b4cc250d83ab92d0111b7b1af9a`
   - Registry pubkey: `9bc2326f0019bcbfe279948222e1fbc6d0b281bb50bc7569c3551ede764aede6`
-  - Registry **authority hotkey** (SS58) and the **results token** (secret — operator-provided).
+  - Registry **authority hotkey** (SS58, public / fleet-wide constant): `5FWB5CFZQB4FcmekEXrXtoGgjFt37HGQk27JzWKkRzqWjkg5`
+  - **Results token** — the validator's write credential (secret, operator-provided).
   - The **signed registry file** (byte-identical to what the backend serves).
 
 Rough cost: server ~$20–40/mo + API keys (ScrapingBee is the main line item), scaling with subnet
@@ -89,10 +90,11 @@ curl -s https://api.heraldmedia.ai/registry/outlets.json -o /secure/herald/outle
 ```
 Copy `deploy/validator.env.production.example` to `.env` and fill the blanks. It is the exact
 template below — the public trust anchors (endpoint + pubkeys) are baked in; you supply your
-wallet/IP and the operator-provided secrets (results token, authority hotkey, API keys):
+wallet/IP and the operator-provided secrets (results token, API keys):
 ```ini
 # Herald validator — production .env (Bittensor netuid 69, finney).
 # Copy to .env, fill the blanks (your wallet/IP + operator-provided secrets), then: chmod 600 .env
+# For every available setting (incl. the consensus-critical scoring tunables), see root .env.example.
 HERALD_PRODUCTION=true
 HERALD_PRODUCTION_NETUID=69
 NETUID=69
@@ -122,8 +124,11 @@ HERALD_RESULTS_TOKEN=
 HERALD_REGISTRY_HOST_FILE=/secure/herald/outlets.signed.json
 HERALD_REGISTRY_PATH=/run/registry/outlets.signed.json
 HERALD_REGISTRY_PUBKEY=9bc2326f0019bcbfe279948222e1fbc6d0b281bb50bc7569c3551ede764aede6
-# Operator-provided SS58 — the dedicated hotkey that posts the on-chain HRLDREG anchor:
-HERALD_REGISTRY_AUTHORITY_HOTKEY=
+# The subnet's registry authority hotkey — its on-chain HRLDREG commitment activates registry
+# editions. A fleet-wide CONSENSUS constant (part of the fingerprint): identical on every validator,
+# and public. Currently the owner hotkey (uid 0); a dedicated hotkey is cleaner, but reusing the
+# owner key is fine for bootstrap (its metadata commitment slot doesn't collide with weight-setting).
+HERALD_REGISTRY_AUTHORITY_HOTKEY=5FWB5CFZQB4FcmekEXrXtoGgjFt37HGQk27JzWKkRzqWjkg5
 HERALD_REQUIRE_SIGNED_REGISTRY=true
 
 # ── Outside-data providers — CONSENSUS-CRITICAL: enable the identical set on every validator ──
