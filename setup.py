@@ -47,7 +47,7 @@ setup(
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/herald-network/herald",
-    author="herald.network",
+    author="heraldmedia.ai",
     packages=find_packages(exclude=("tests", "tests.*")),
     package_data={"herald.validator.news": ["outlets*.json"]},
     include_package_data=True,

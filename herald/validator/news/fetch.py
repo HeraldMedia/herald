@@ -56,7 +56,7 @@ def is_safe_fetch_url(url: str) -> bool:
         return False  # unresolvable -> block
     return bool(ips) and all(not _ip_blocked(ip) for ip in ips)
 
-_HEADERS = {"User-Agent": "HeraldValidator/1.0 (+https://herald.network)"}
+_HEADERS = {"User-Agent": "HeraldValidator/1.0 (+https://heraldmedia.ai)"}
 _SKIP_TAGS = {"script", "style", "noscript"}
 _VOID_TAGS = {
     "area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta",
