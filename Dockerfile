@@ -34,4 +34,8 @@ ENV BT_WALLET_PATH=/root/.bittensor/wallets
 # Entrypoint and command are set via Terraform task definition.
 # ARG ROLE is not used at build time — it's documented here for clarity.
 ARG ROLE=miner
+# Runs as root by design: the neuron manages the Bittensor wallet under /root/.bittensor, which the
+# compose volume mounts and entrypoint.sh write to. Moving to a non-root user is a separate change
+# (home dir, BT_WALLET_PATH, volume targets); the container is an isolated neuron, not a public service.
+# nosemgrep: dockerfile.security.missing-user-entrypoint.missing-user-entrypoint
 ENTRYPOINT ["/entrypoint.sh"]
