@@ -44,11 +44,20 @@ services:
       - "${VALIDATOR_AXON_PORT:-8092}:8092"
     environment:
       PYTHONUNBUFFERED: "1"
+      # core/ and neurons/ are COPYed after `pip install -e .` in the Dockerfile, so they aren't
+      # registered as packages; put the app root on the path so `import core`/`neurons` resolve.
+      PYTHONPATH: "/app"
+      # No WANDB_API_KEY + a TTY makes wandb.init() block on an interactive login prompt.
+      # Disable it (optional telemetry only); set a real key + WANDB_MODE=online to re-enable.
+      WANDB_MODE: "${WANDB_MODE:-disabled}"
       HERALD_PRODUCTION: "${HERALD_PRODUCTION:-false}"
       AXON_EXTERNAL_PORT: "${VALIDATOR_AXON_PORT:-8092}"
     env_file: "${VALIDATOR_ENV_FILE:-.env}"
     volumes:
       - validator_state:/root/.bittensor
+      # Your OFFLINE-signed registry, read-only; its bytes must match the on-chain HRLDREG anchor.
+      # Point HERALD_REGISTRY_HOST_FILE at your signed file (default = the repo's bundled registry).
+      - ${HERALD_REGISTRY_HOST_FILE:-./herald/validator/news/outlets.json}:/run/registry/outlets.signed.json:ro
     mem_limit: "${VALIDATOR_MEMORY_LIMIT:-4g}"
     tty: true
 
