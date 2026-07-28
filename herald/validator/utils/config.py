@@ -29,7 +29,7 @@ YOUTUBE_SEARCH_CACHE_EXPIRY = 12 * 60 * 60  # 12 hours
 OPENAI_CACHE_EXPIRY = 3 * 24 * 60 * 60  # 3 days
 
 # required
-HERALD_API_URL = os.getenv('HERALD_API_URL', 'https://herald-api.herald.network')
+HERALD_API_URL = os.getenv('HERALD_API_URL', 'https://api.heraldmedia.ai')
 HERALD_BRIEFS_ENDPOINT = os.getenv('HERALD_BRIEFS_ENDPOINT', f"{HERALD_API_URL}/api/v2/validator/briefs")
 # Ed25519 pubkey the validator uses to verify the brief payload's operator signature (so a brief's
 # reward_pool + kind are attributable, not trust-the-endpoint). Unset = unsigned mode.
