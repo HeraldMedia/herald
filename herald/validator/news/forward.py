@@ -244,6 +244,18 @@ async def forward(self):
         if HERALD_USE_LLM_JUDGE and not HERALD_REF_MODEL_ID:
             bt.logging.warning("HERALD_USE_LLM_JUDGE set without HERALD_REF_MODEL_ID; LLM tier disabled")
         judge_fn = judge if (HERALD_USE_LLM_JUDGE and HERALD_REF_MODEL_ID) else None
+        # topic_matched() falls through to `not keywords`, so a brief with no keywords and no LLM
+        # judge accepts ANY article as on-topic. That is a silent hole in the oracle: warn loudly
+        # so an operator sees it in the logs instead of discovering it from an off-topic payout.
+        if judge_fn is None:
+            ungated = [b.get("id") for b in briefs if not (b.get("keywords") or [])]
+            if ungated:
+                bt.logging.warning(
+                    "No topic gate for brief(s) %s: they carry no keywords and the LLM judge is "
+                    "off, so every article passes the topic check. Set keywords on the brief, or "
+                    "enable HERALD_USE_LLM_JUDGE with a pinned HERALD_REF_MODEL_ID fleet-wide."
+                    % ", ".join(str(i) for i in ungated)
+                )
         briefs_by_id = {b["id"]: b for b in briefs}
 
         winners = winning_articles(
