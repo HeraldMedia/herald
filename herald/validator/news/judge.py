@@ -4,6 +4,8 @@ Pinned model, temperature 0, discrete yes/no — used only as a fallback after t
 deterministic rules, and only when an LLM provider is configured.
 """
 
+import re
+
 import bittensor as bt
 
 from herald.validator.utils.config import (
@@ -29,6 +31,28 @@ def _get_client():
     return get_llm_client()
 
 
+def _verdict(content: str):
+    """Read a yes/no answer, or None when the model did not give one.
+
+    An unparsed answer is not neutral: topic_matched() falls back to accepting the article when a
+    brief has no keywords, so a stray "**Yes**" would silently pass everything. Strip the wrappers
+    a model may add (markdown, quotes, punctuation) before deciding it said nothing.
+    """
+    first = re.sub(r"[^a-z]", " ", (content or "").strip().lower()).split()
+    if not first:
+        bt.logging.warning("LLM judge returned an empty answer; treating it as unavailable")
+        return None
+    if first[0] == "yes":
+        return True
+    if first[0] == "no":
+        return False
+    bt.logging.warning(
+        "LLM judge answered %r, which is neither yes nor no; treating it as unavailable",
+        (content or "")[:80],
+    )
+    return None
+
+
 def judge(question: str, text: str):
     """Return True/False, or None when the model is unavailable or unsure."""
     try:
@@ -42,12 +66,7 @@ def judge(question: str, text: str):
             messages=[{"role": "user", "content": prompt}],
             temperature=0,
         )
-        content = resp["choices"][0]["message"]["content"].strip().lower()
-        if content.startswith("yes"):
-            return True
-        if content.startswith("no"):
-            return False
-        return None
+        return _verdict(resp["choices"][0]["message"]["content"])
     except Exception as e:
         bt.logging.warning(f"LLM judge failed: {e}")
         return None
