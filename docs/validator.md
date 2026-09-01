@@ -176,7 +176,44 @@ Any failure prints `production preflight failed: <exact reasons>`.
 
 ---
 
-## 6. Epoch confirmation & quorum
+## 6. Topic gating and the LLM judge
+
+An article only pays if it is **on the brief's topic**. That check is rules-first:
+
+```python
+keywords = brief.get("keywords") or []
+if keywords and any(k in text): return True     # rule hit
+if judge_fn: ...                                 # optional LLM fallback
+return not keywords                              # NO keywords -> everything passes
+```
+
+So a brief with **no keywords** and **no judge** accepts any article as on-topic. Close it one of
+two ways:
+
+**a) Keywords on the brief (no extra config).** The operator sets them per brief; validators need
+nothing. Cheapest and fully deterministic.
+
+**b) The LLM judge.** Handles briefs whose topic is hard to express as substrings.
+**Consensus-critical — every validator must match exactly, or weights diverge:**
+
+```ini
+HERALD_USE_LLM_JUDGE=true
+HERALD_REF_MODEL_ID=<pinned model id>   # required; without it the tier stays OFF
+LLM_PROVIDER=chutes                     # or openrouter
+CHUTES_API_KEY=<key>                    # or OPENROUTER_API_KEY
+```
+
+Rolling it out:
+1. Agree the provider **and** the pinned model across the fleet — `use_llm_judge`, `ref_model_id`,
+   `llm_provider` and `llm_provider_ready` are all in the consensus fingerprint.
+2. Recompute the fingerprint (`python -m herald.production fingerprint`) and set the new value on
+   **every validator and the backend** (`HERALD_EXPECTED_CONSENSUS_FP`).
+3. Restart the fleet together. A validator left on the old setting will fork its weights.
+
+Note the judge is a *fallback*, not a veto: if it errors or is unsure it returns `None`, and an
+un-keyworded brief then falls through to accepting the article. Keywords remain the safety net.
+
+## 7. Epoch confirmation & quorum
 
 Validators publish **hotkey-signed epoch snapshots** to `POST /api/v3/validator/snapshots`. The
 backend confirms an epoch when **`HERALD_QUORUM_REQUIRED` matching enrolled reporters** agree
@@ -185,7 +222,7 @@ validator bootstrap can lower it to 1, but raise it to ≥2 once independent val
 
 ---
 
-## 7. Troubleshooting (real gotchas)
+## 8. Troubleshooting (real gotchas)
 
 - **`ModuleNotFoundError: No module named 'core'`** — the Dockerfile `pip install -e .` runs before
   `core/`/`neurons/` are copied, so they aren't registered. Set `PYTHONPATH=/app` (already in the

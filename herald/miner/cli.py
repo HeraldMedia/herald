@@ -10,8 +10,21 @@ from herald.validator.utils.briefs import get_briefs
 
 
 def cmd_briefs(args):
+    """List open briefs with everything needed to pitch: the window, the campaign document the
+    operator attached, any reference links, and the keywords the topic check looks for."""
     for b in get_briefs():
-        print(f"{b['id']}\t{b.get('title', '')}\t{b.get('start_date')}..{b.get('end_date')}")
+        window = f"{b.get('start_date')}..{b.get('end_date') or 'open'}"
+        print(f"{b['id']}\t{b.get('title', '')}\t{window}")
+        document = b.get("document") or {}
+        if document.get("url"):
+            name = document.get("name") or "document"
+            print(f"    brief document: {document['url']}  ({name})")
+        for link in b.get("links") or []:
+            if isinstance(link, dict) and link.get("url"):
+                print(f"    link: {link.get('label') or link['url']}  {link['url']}")
+        keywords = b.get("keywords") or []
+        if keywords:
+            print(f"    keywords: {', '.join(str(k) for k in keywords)}")
 
 
 def _build_evidence(args) -> dict:
