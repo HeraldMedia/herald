@@ -1,5 +1,6 @@
 """Operator CLI: read briefs, commit to an outlet, attach the published URL."""
 
+import os
 import argparse
 
 import bittensor as bt
@@ -9,6 +10,11 @@ from herald.miner.commit import resubmit_commitment, submit_commitment
 from herald.validator.utils.briefs import get_briefs
 
 
+def _console_url() -> str:
+    """Where a miner signs in to read a brief. Override for a non-default deployment."""
+    return os.getenv("HERALD_CONSOLE_URL", "https://www.heraldmedia.ai").rstrip("/")
+
+
 def cmd_briefs(args):
     """List open briefs with everything needed to pitch: the window, the campaign document the
     operator attached, any reference links, and the keywords the topic check looks for."""
@@ -16,12 +22,19 @@ def cmd_briefs(args):
         window = f"{b.get('start_date')}..{b.get('end_date') or 'open'}"
         print(f"{b['id']}\t{b.get('title', '')}\t{window}")
         document = b.get("document") or {}
-        if document.get("url"):
+        if document.get("name") or document.get("url"):
             name = document.get("name") or "document"
-            print(f"    brief document: {document['url']}  ({name})")
+            # Not document["url"]: that is the storage location, and it refuses a request without a
+            # download ticket. The console issues one after signing in, so send the miner there.
+            print(f"    brief document: {name}")
+            print(f"      sign in to download: {_console_url()}/console/briefs/{b['id']}")
         for link in b.get("links") or []:
             if isinstance(link, dict) and link.get("url"):
-                print(f"    link: {link.get('label') or link['url']}  {link['url']}")
+                # A link added without a label carries its own URL as the label; printing both
+                # just repeats it.
+                label = str(link.get("label") or "").strip()
+                url = link["url"]
+                print(f"    link: {url}" if not label or label == url else f"    link: {label}  {url}")
         keywords = b.get("keywords") or []
         if keywords:
             print(f"    keywords: {', '.join(str(k) for k in keywords)}")
