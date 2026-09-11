@@ -354,7 +354,7 @@ def test_persistence_holds_when_brief_left_the_board(monkeypatch):
 
 def test_persistence_pays_live_article_despite_offtopic_or_deindexed_fetch(monkeypatch):
     # Regression: the per-epoch pay gate is LIVENESS-only. Topic + search-index were verified
-    # (snapshot-anchored) at claim time; re-checking them on THIS validator's own live fetch would
+    # at claim time; re-checking them on THIS validator's own live fetch would
     # only fork per-epoch pay across the fleet. A live, non-ad page must stay "alive" even when this
     # validator's fetch looks off-topic and its search index doesn't list the URL.
     entry = SimpleNamespace(url="https://www.theguardian.com/a", brief_id="b1")

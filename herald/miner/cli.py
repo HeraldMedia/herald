@@ -84,9 +84,9 @@ def cmd_commit(args):
 
 
 def cmd_claim(args):
-    # Snapshot the article's extracted text with the claim: validators anchor it against their
-    # own fetch, then run the content checks on these identical bytes so the whole fleet grades
-    # the claim the same way (no per-validator page-variant forks).
+    # Snapshot the article's extracted text with the claim. Validators score their own fetch of the
+    # article and check that the snapshot matches it; outlets that validators can only fetch as a
+    # publisher-API excerpt require a snapshot.
     snapshot = None
     if args.snapshot_file:
         with open(args.snapshot_file, "r", encoding="utf-8") as f:
@@ -180,7 +180,7 @@ def build_parser():
     cl.add_argument("--snapshot-file", dest="snapshot_file", default=None,
                     help="attach this text file as the page snapshot instead of fetching")
     cl.add_argument("--no-snapshot", dest="no_snapshot", action="store_true",
-                    help="claim without a page snapshot (validators fall back to their own fetch)")
+                    help="claim without a page snapshot (publisher-API outlets require one)")
     cl.set_defaults(func=cmd_claim)
 
     sub.add_parser("list").set_defaults(func=cmd_list)

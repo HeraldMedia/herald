@@ -91,13 +91,16 @@ def evaluate_article(
     if not fr.ok:
         return _reject(claim, "url_not_live", evidence)
 
-    # Snapshot anchoring: the claim carries the page's extracted text; verify it against OUR source
-    # once (fuzzy), then run the content checks on the identical snapshot bytes so all validators
-    # grade the same input. The anchor DIRECTION depends on the outlet's fetch strategy:
-    #   • full body (direct/proxy): the snapshot must be contained in our full fetch (snapshot ⊆ body)
+    # The content checks score the article this validator fetched. A claim may also carry a snapshot
+    # of the page text the miner saw: it only has to match our fetch (a failed anchor rejects only
+    # this pass) and is never the text that gets graded. The anchor DIRECTION depends on the
+    # outlet's fetch strategy:
+    #   • full body (direct/proxy): the snapshot must be contained in our full fetch (snapshot ⊆ body),
+    #     and the paid-content, topic and attribution checks all run on the article we fetched.
     #   • excerpt (api:*): we hold only an authoritative excerpt, so it must appear IN the snapshot
     #     (excerpt ⊆ snapshot) — that proves the miner's snapshot really is this article, while
-    #     byline/date/topic come from the unfakeable API. A failed anchor rejects only this pass.
+    #     byline/date/topic come from the unfakeable API. With no article body of our own,
+    #     attribution is graded on byline and publish window only.
     snapshot = (getattr(claim, "snapshot_text", None) or "").strip()
     body_kind = getattr(fr, "body_kind", "full")
     if body_kind == "excerpt":
@@ -107,27 +110,22 @@ def evaluate_article(
         evidence["snapshot_anchor"] = round(anchor, 3)
         if anchor < HERALD_SNAPSHOT_ANCHOR:
             return _reject(claim, "snapshot_mismatch", evidence)
-        content_text = snapshot
+        # No full body of our own here; the /paidpost/-style URL path check in is_paid still
+        # applies, and premium outlets disclose sponsored content on the path.
+        paid_text = snapshot
         topic_input = getattr(fr, "topic_text", None) or fr.text  # authoritative, unfakeable
-    elif snapshot:
-        anchor = containment(snapshot, fr.text or "")
-        evidence["snapshot_anchor"] = round(anchor, 3)
-        if anchor < HERALD_SNAPSHOT_ANCHOR:
-            return _reject(claim, "snapshot_mismatch", evidence)
-        content_text = snapshot
-        topic_input = content_text
+        article_text = None
     else:
-        content_text = fr.text
-        topic_input = content_text
+        if snapshot:
+            anchor = containment(snapshot, fr.text or "")
+            evidence["snapshot_anchor"] = round(anchor, 3)
+            if anchor < HERALD_SNAPSHOT_ANCHOR:
+                return _reject(claim, "snapshot_mismatch", evidence)
+        article_text = getattr(fr, "article_text", None) or fr.text
+        paid_text = article_text
+        topic_input = article_text
 
-    verifier_text = getattr(fr, "article_text", None) or fr.text
-    paid_text = content_text if snapshot or body_kind == "excerpt" else verifier_text
     paid, paid_reason = is_paid(claim.article_url, paid_text, judge_fn, outlet=outlet)
-    if not paid and body_kind == "full" and snapshot:
-        # The miner won't include paid markers in its own snapshot — our full fetch stays the
-        # detector. (In excerpt mode we have no full body; the /paidpost/-style URL path check in
-        # is_paid still applies, and premium outlets disclose sponsored content on the path.)
-        paid, paid_reason = is_paid(claim.article_url, verifier_text, judge_fn, outlet=outlet)
     evidence["paid"] = paid
     if paid:
         evidence["paid_reason"] = paid_reason
@@ -144,7 +142,12 @@ def evaluate_article(
 
     # Grade the pre-committed evidence against the published article: the level's multiplier
     # prices how strongly this claim proves the miner CAUSED the coverage (vs predicted it).
-    level, attr_detail = grade_evidence(attr_evidence, fr, brief, article_text=content_text)
+    graded_evidence = attr_evidence
+    if body_kind == "excerpt":
+        # A text proof needs an article body this validator fetched itself, which an excerpt
+        # outlet does not provide: grade the byline and publish window only.
+        graded_evidence = {k: v for k, v in attr_evidence.items() if k != "text"}
+    level, attr_detail = grade_evidence(graded_evidence, fr, brief, article_text=article_text)
     evidence["attribution_level"] = level
     evidence.update({f"attribution_{k}": v for k, v in attr_detail.items()})
 

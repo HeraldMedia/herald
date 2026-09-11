@@ -93,7 +93,7 @@ def wallet(hotkey):
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Fake WEB: url -> (status, html). Each validator can be handed a different page
-# variant to prove snapshot anchoring collapses per-validator fetch variance.
+# variant to model per-validator fetch variance.
 # ─────────────────────────────────────────────────────────────────────────────
 def page(body, published="2026-07-01T06:00:00+00:00", author="Jane Reporter"):
     return (
@@ -129,15 +129,16 @@ URL_C = "https://www.coindesk.com/2026/07/01/defi-herald/"
 
 # Validator-1 sees clean pages. Two V2 variants of the nytimes page model per-validator
 # fetch variance:
-#   • DRAFTLESS: the committed draft sentence is paraphrased away but the topic survives —
-#     the class of variance snapshot anchoring FULLY covers (attribution + emission agree).
-#   • TOPICLESS: every brief keyword scrubbed out — exposes the residual that the per-epoch
-#     persistence re-check runs on the live fetch, not the snapshot.
+#   • CHROME: the same article inside site navigation and a related-links rail — the oracle
+#     scores the article it fetched, and the claim snapshot still matches the page.
+#   • TOPICLESS: every brief keyword scrubbed out after the claim was scored — the per-epoch
+#     persistence re-check runs on the live fetch but checks liveness only.
 WEB_V1 = {URL_A: (200, page(BODY_A)), URL_B: (200, page(BODY_B)), URL_C: (200, page(BODY_C))}
-_draftless_A = BODY_A.replace(
-    DRAFT_A, "The company launched its public pilot this week, framing verifiable coverage as its promise.")
+_chrome_A = page(BODY_A).replace(
+    "<body>", "<body><nav>Home World Business Technology Opinion</nav>").replace(
+    "</body>", "<aside>More in Technology: chip exports and satellite launches</aside></body>")
 _topicless_A = BODY_A.replace("Herald", "The startup").replace("Bittensor", "a decentralized network")
-WEB_V2_DRAFTLESS = {**WEB_V1, URL_A: (200, page(_draftless_A))}
+WEB_V2_CHROME = {**WEB_V1, URL_A: (200, _chrome_A)}
 WEB_V2_TOPICLESS = {**WEB_V1, URL_A: (200, page(_topicless_A))}
 
 CURRENT_WEB = {"pages": WEB_V1}
@@ -300,8 +301,8 @@ print("published 2026-07-01 06:00 UTC (6h after the commit) → passes the fresh
 
 # =============================================================================
 hr("PHASE 4 — VALIDATOR ORACLE: two validators grade the SAME claims")
-print("V2 fetches a mangled nytimes page (every brief keyword scrubbed out).\n")
-WEB_V2 = WEB_V2_TOPICLESS  # oracle grades on the snapshot, so even a keyword-less page agrees
+print("V2 fetches the same nytimes article inside different site chrome (navigation + related links).\n")
+WEB_V2 = WEB_V2_CHROME  # each validator scores the article it fetched; the snapshot matches both pages
 
 def onchain_of(hotkey):
     return chain.with_block()[hotkey][0]
@@ -326,11 +327,12 @@ for label, web in (("V1", WEB_V1), ("V2", WEB_V2)):
     rB = oracle_line(label, claim_B, onchain_of("hkB"), briefs_by_id["b_news"])
     rC = oracle_line(label, claim_C, onchain_of("hkC"), briefs_by_id["b_defi"])
     print()
-    # both validators must agree despite V2's mangled page (snapshot anchoring)
+    # both validators must agree: V2's page wraps the same article in different chrome
     assert rA.passed and rA.usd == 250.0 and rA.evidence["attribution_level"] == 2
     assert rB.passed and rB.usd == 45.0 and rB.evidence["attribution_level"] == 0  # 250 * 0.6 * 0.3
     assert rC.passed and rC.usd == 45.0
-print("→ V1 and V2 produced IDENTICAL verdicts. Snapshot anchoring beat the page variance.")
+print("→ V1 and V2 produced IDENTICAL verdicts: each scored the article it fetched, and the")
+print("  claim snapshot matched both pages.")
 print("→ tier1 text-proof = $250 · tier2 bare = $250×0.6×0.3 = $45  (tier and evidence priced in)")
 
 # =============================================================================
@@ -358,26 +360,29 @@ print("→ A:B = 250:45 (tier×evidence), client brief b_defi drew from its $300
 print("  and all rewarded miners were normalized to 100% of the weight vector.")
 
 # =============================================================================
-hr("PHASE 6 — MULTI-VALIDATOR: agreement on snapshot-covered fetch variance")
-print("V2's live nytimes page dropped the committed DRAFT text but kept the topic.\n")
+hr("PHASE 6 — MULTI-VALIDATOR: agreement when the page chrome differs")
+print("V2's live nytimes page wraps the same article in navigation and a related-links rail.\n")
 state_v2 = HeraldState.fresh()
-w2 = run_epoch(state_v2, E1, web=WEB_V2_DRAFTLESS)
+w2 = run_epoch(state_v2, E1, web=WEB_V2_CHROME)
 show(w2)
 assert all(approx(w1[u], w2[u]) for u in (0, 1, 2, 3))
-print("→ V2 (independent state, draft-less live page) computed the SAME weights as V1. ✓")
-print("  Attribution stayed level-2 off the snapshot even though V2's live page lost the draft.")
+print("→ V2 (independent state, different page chrome) computed the SAME weights as V1. ✓")
+print("  Attribution stayed level-2: the committed draft is in the article V2 fetched.")
 
 # ---------------------------------------------------------------------------
 hr("PHASE 6b — REGRESSION: liveness-only pay gate agrees on a topic-less live page")
-print("V2's live nytimes page now has EVERY brief keyword scrubbed out (topic-less).")
-print("The oracle grades A off the snapshot (A wins $250), and the per-epoch installment")
-print("gate now checks LIVENESS only — topic + search-index were verified at claim time —")
-print("so V2 pays A exactly like V1 instead of forking on its own live fetch.\n")
+print("V2 scores the claims at epoch 1 on the clean page (A wins $250). By epoch 2 its live")
+print("nytimes page has EVERY brief keyword scrubbed out (topic-less). The per-epoch installment")
+print("gate checks LIVENESS only — topic + search-index were verified at claim time — so V2 keeps")
+print("paying A's installment instead of forking on its own live fetch.\n")
 state_v2b = HeraldState.fresh()
-w2b = run_epoch(state_v2b, E1, web=WEB_V2_TOPICLESS)
+run_epoch(state_v2b, E1)
+w2b = run_epoch(state_v2b, E1 + VEST_LEN + 1, web=WEB_V2_TOPICLESS)
 show(w2b)
-assert all(approx(w1[u], w2b[u]) for u in (0, 1, 2, 3))
-print("\n→ V2 (topic-less live page) computed the SAME weights as V1 — the pay-gate fork is gone.")
+# the same epoch-2 installments V1 releases in phase 7: A 250/3, B 45/3, C 45/3
+assert approx(w2b[1], 25 / 34) and approx(w2b[2], 9 / 68) and approx(w2b[3], 9 / 68)
+assert w2b[0] == 0.0
+print("\n→ V2 (topic-less live page) kept paying A's installment — the pay-gate fork is gone.")
 print("  Slashing still uses the live fetch (confirmed 404/410/paid), so security is unchanged.")
 
 # =============================================================================
@@ -410,10 +415,10 @@ print("Operator → Miner → Validator pipeline ran end-to-end on the real code
 print("  • operator created+funded+SIGNED briefs; a tampered feed was rejected")
 print("  • miners committed (real pre_hash) BEFORE publishing, then claimed with snapshots")
 print("  • the oracle graded evidence (text-proof ×1.0 vs bare ×0.3) and tiers")
-print("  • two validators AGREED across ALL fetch variance (snapshot oracle + liveness-only pay)")
+print("  • two validators AGREED across page-chrome variance (article-scored oracle + liveness-only pay)")
 print("  • rewards vested over epochs, participants normalized to 100%, and a dead placement was slashed")
 print("\nCross-validator determinism now covers BOTH stages:")
-print("  • scoring / attribution — graded on the claim snapshot            (phase 4 + 6)")
+print("  • scoring / attribution — graded on the fetched article; the snapshot must match it (phase 4 + 6)")
 print("  • per-epoch payment    — gated on liveness only; topic/index no longer re-forked (phase 6b)")
 print("  • slashing             — still on the live fetch (confirmed 404/410/paid); unchanged")
 print("\nALL ASSERTIONS PASSED ✓")

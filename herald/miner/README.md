@@ -67,9 +67,11 @@ python -m herald.miner.cli claim \
   --url https://approved-outlet.example/article
 ```
 
-The CLI fetches and stores an extracted article snapshot. Validators anchor that snapshot against
-their own fetch so page variants do not change the content verdict. For a bot-walled article, pass
-`--snapshot-file`; use `--no-snapshot` only when you understand the reduced verifiability.
+The CLI fetches and stores an extracted article snapshot. Validators score the article they fetch
+themselves and reject the claim for that pass when its snapshot does not match their fetch. Outlets
+that validators read through a publisher API require a snapshot; for a bot-walled article, pass
+`--snapshot-file`. `--no-snapshot` suits only outlets that validators fetch directly or through a
+proxy.
 
 ## Serve claims
 
