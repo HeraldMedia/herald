@@ -3,6 +3,7 @@
 import hashlib
 import ipaddress
 import re
+import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from html.parser import HTMLParser
@@ -320,6 +321,38 @@ def _providers(proxy_only: bool = False, proxy_profile: str = "classic"):
     return providers
 
 
+# The proxy provider answers with a 5xx (for example when the target serves it a CAPTCHA) or times
+# out often enough that a single attempt, cached for the epoch, loses a live article for a whole day.
+# Transient answers are retried; a 404/410 removal or any other definite status is not.
+_PROXY_FETCH_ATTEMPTS = 3
+_PROXY_RETRY_DELAY = 2.0
+
+
+def _transient(status: int) -> bool:
+    return status == 0 or status == 429 or status >= 500
+
+
+def _call_provider(provider, url: str, attempts: int):
+    """A provider's response for `url`, retrying transient failures up to `attempts` times.
+
+    Returns the last response received (None if every attempt raised), so a persistent failure
+    still reports its status exactly as a single attempt would.
+    """
+    last = None
+    for attempt in range(attempts):
+        try:
+            response = provider(url)
+        except Exception:
+            response = None
+        if response is not None:
+            if not _transient(response[0]):
+                return response
+            last = response
+        if attempt + 1 < attempts:
+            time.sleep(_PROXY_RETRY_DELAY)
+    return last
+
+
 def fetch(url: str, epoch=None, proxy_only: bool = False, proxy_profile: str = "classic") -> FetchResult:
     canon = canonicalize(url)
     cache_key = (canon, epoch, proxy_only, proxy_profile)
@@ -342,10 +375,10 @@ def fetch(url: str, epoch=None, proxy_only: bool = False, proxy_profile: str = "
 
     results = []
     for provider in providers:
-        try:
-            results.append(provider(canon))
-        except Exception:
-            pass
+        # Only bot-walled (proxy) outlets are retried; a direct fetch keeps one attempt per epoch.
+        response = _call_provider(provider, canon, _PROXY_FETCH_ATTEMPTS if proxy_only else 1)
+        if response is not None:
+            results.append(response)
 
     live = [r for r in results if r[0] == 200 and len(r[2]) >= HERALD_MIN_BODY_BYTES]
     ok = len(live) >= min(HERALD_QUORUM_THRESHOLD, len(providers))

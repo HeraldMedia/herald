@@ -105,6 +105,56 @@ def test_fetch_article_passes_signed_proxy_profile(monkeypatch):
     assert captured == {"url": "https://marketwatch.com/story/a", "profile": "premium"}
 
 
+def _proxy_answers(monkeypatch, statuses):
+    """Stub the proxy with a sequence of statuses (None raises, like a timeout); returns the calls."""
+    fetchmod._cache.clear()
+    monkeypatch.setattr(fetchmod, "is_safe_fetch_url", lambda u: True)
+    monkeypatch.setattr(fetchmod, "SCRAPINGBEE_API_KEY", "sim")
+    monkeypatch.setattr(fetchmod, "_PROXY_RETRY_DELAY", 0.0)
+    calls = []
+
+    def fake_proxy(url, profile="classic"):
+        status = statuses[min(len(calls), len(statuses) - 1)]
+        calls.append(status)
+        if status is None:
+            raise RuntimeError("proxy timed out")
+        return status, url, (b"news " * 200 if status == 200 else b"challenge page")
+
+    monkeypatch.setattr(fetchmod, "_scrapingbee_get", fake_proxy)
+    return calls
+
+
+def test_fetch_article_retries_transient_proxy_failures(monkeypatch):
+    calls = _proxy_answers(monkeypatch, [500, None, 200])
+    fr = fetch_article("https://marketwatch.com/story/a", _REG)
+    assert fr.ok is True and fr.status == 200
+    assert calls == [500, None, 200]
+
+
+def test_fetch_article_does_not_retry_a_proxy_removal(monkeypatch):
+    calls = _proxy_answers(monkeypatch, [404, 200])
+    fr = fetch_article("https://marketwatch.com/story/a", _REG)
+    assert fr.ok is False and fr.status == 404
+    assert calls == [404]
+
+
+def test_fetch_article_proxy_gives_up_after_three_transient_failures(monkeypatch):
+    calls = _proxy_answers(monkeypatch, [500, 503, 500, 200])
+    fr = fetch_article("https://marketwatch.com/story/a", _REG)
+    assert fr.ok is False and fr.status == 500
+    assert calls == [500, 503, 500]
+
+
+def test_fetch_article_direct_fetch_is_not_retried(monkeypatch):
+    fetchmod._cache.clear()
+    monkeypatch.setattr(fetchmod, "is_safe_fetch_url", lambda u: True)
+    monkeypatch.setattr(fetchmod, "SCRAPINGBEE_API_KEY", None)
+    calls = []
+    monkeypatch.setattr(fetchmod, "_http_get", lambda url: calls.append(url) or (503, url, b""))
+    assert fetch_article("https://theguardian.com/a", _REG).ok is False
+    assert len(calls) == 1
+
+
 def test_fetch_article_disabled_strategy_fails_closed(monkeypatch):
     fetchmod._cache.clear()
     monkeypatch.setattr(fetchmod, "_http_get", lambda _url: (_ for _ in ()).throw(AssertionError))
