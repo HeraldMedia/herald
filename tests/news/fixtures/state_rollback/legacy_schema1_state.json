@@ -1,0 +1,1 @@
+{"commit_index": {"epoch_len": 360, "first_seen": {"9:hkLegacyB|HRLDREG|1|00cc11dd22ee33ff|900": 950, "9:hkLegacyA|HRLD1|00aa11bb22cc33dd": 1000}}, "vesting": {"vest_epochs": 30, "entries": {}}, "slash": {"until": {}}, "disputes": {}, "pool_spent": {}, "last_scored_epoch": 12, "last_weight_epoch": -1}

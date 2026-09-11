@@ -25,6 +25,11 @@ class Validator(BaseValidatorNeuron):
     def __init__(self, config=None):
         super(Validator, self).__init__(config=config)
 
+        # Load the Herald ledger here, outside forward()'s catch-all: a state file that exists but
+        # cannot be read raises HeraldStateLoadError and stops the process, rather than being logged
+        # and retried every step while the validator runs without its ledger.
+        _state(self)
+
         try:
             cw_handler = get_cloudwatch_handler(
                 log_group="/herald/validator",
@@ -60,10 +65,10 @@ class Validator(BaseValidatorNeuron):
         """
         return await forward(self)
 
-    def should_set_weights(self) -> bool:
-        if not super().should_set_weights():
-            return False
-
+    def _has_weights_to_submit(self) -> bool:
+        # Herald's own gates. The base should_set_weights asks them before it reads the chain for a
+        # pending weight commit, so a failing RPC check is retried, counted and alerted on only for
+        # an epoch this validator would actually submit.
         state = _state(self)
         if state.last_weight_epoch >= state.last_scored_epoch:
             bt.logging.info(
@@ -87,6 +92,9 @@ class Validator(BaseValidatorNeuron):
             return False
 
         state = _state(self)
+        # The only writer of last_weight_epoch: set once the chain accepted the extrinsic, so
+        # should_set_weights does not resubmit the same daily allocation. It is not a liveness
+        # signal; watch on-chain LastUpdate instead (scripts/watchdog.py).
         state.last_weight_epoch = state.last_scored_epoch
         path = _state_path(self)
         if path:

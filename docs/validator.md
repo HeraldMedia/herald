@@ -40,7 +40,8 @@ bound (web fetches, search-API calls, chain RPC). The optional LLM judge is a *r
   - Brief-feed pubkey: `a1b3e1d6e412a1a97d694ce5af196411e1bc2b4cc250d83ab92d0111b7b1af9a`
   - Registry pubkey: `9bc2326f0019bcbfe279948222e1fbc6d0b281bb50bc7569c3551ede764aede6`
   - Registry **authority hotkey** (SS58, public / fleet-wide constant): `5FWB5CFZQB4FcmekEXrXtoGgjFt37HGQk27JzWKkRzqWjkg5`
-  - **Results token** — the validator's write credential (secret, operator-provided).
+  - **Results credentials** — the shared results token, or a per-validator write and read token
+    pair (secret, operator-provided).
   - The **signed registry file** (byte-identical to what the backend serves).
 
 Rough cost: server ~$20–40/mo + API keys (ScrapingBee is the main line item), scaling with subnet
@@ -99,8 +100,9 @@ HERALD_PRODUCTION=true
 HERALD_PRODUCTION_NETUID=69
 NETUID=69
 SUBTENSOR_NETWORK=finney
-# Optional: a dedicated/local subtensor node for resilience (default = public finney entrypoint):
-# SUBTENSOR_CHAIN_ENDPOINT=wss://entrypoint-finney.opentensor.ai:443
+# The provided compose connects with --subtensor.network (finney, as production preflight requires)
+# and passes no chain endpoint. HERALD_WEIGHT_CHECK_FALLBACK_ENDPOINT adds a second finney node that
+# is used only for the pending weight-commit check (see Troubleshooting).
 
 # ── Wallet: registered on netuid 69 with stake for a validator permit ──
 WALLET_NAME=
@@ -114,8 +116,12 @@ HERALD_BRIEFS_ENDPOINT=https://api.heraldmedia.ai/api/v2/validator/briefs
 HERALD_BRIEFS_PUBKEY=a1b3e1d6e412a1a97d694ce5af196411e1bc2b4cc250d83ab92d0111b7b1af9a
 HERALD_REQUIRE_SIGNED_BRIEFS=true
 HERALD_RESULTS_ENDPOINT=https://api.heraldmedia.ai
-# Operator-provided (secret) — the token validators present to POST results/snapshots:
+# Operator-provided (secret) — the shared token validators present to the backend's results routes:
 HERALD_RESULTS_TOKEN=
+# Or scoped credentials, once the operator issues them: the write token for reports and the read
+# token for the reconciliation feed. Each one set replaces the shared token for its routes.
+# HERALD_RESULTS_WRITE_TOKEN=
+# HERALD_RESULTS_READ_TOKEN=
 
 # ── Signed outlet registry ──
 # Docker:      HERALD_REGISTRY_HOST_FILE is the host file; compose bind-mounts it read-only at
@@ -169,8 +175,8 @@ The subnet operator must also **enroll your hotkey as a reporter** on the backen
 With `HERALD_PRODUCTION=true`, the neuron refuses to start unless (see `herald/production.py`):
 finney + netuid 69; **signed registry required**, its pubkey + authority hotkey set, and the file's
 signature verifies; **signed briefs required** + briefs pubkey set; briefs/results endpoints set and
-non-localhost; results token set; **ScrapingBee key present** if the registry has `proxy:` outlets
-(and an NYT key if it has `api:nyt`); **at least one search provider**; `HERALD_EXPECTED_CONSENSUS_FP`
+non-localhost; a results write and read credential (scoped, or the shared token); **ScrapingBee key
+present** if the registry has `proxy:` outlets (and an NYT key if it has `api:nyt`); **at least one search provider**; `HERALD_EXPECTED_CONSENSUS_FP`
 set and matching the computed fingerprint; and a **live on-chain `HRLDREG` registry anchor** exists.
 Any failure prints `production preflight failed: <exact reasons>`.
 
@@ -208,7 +214,10 @@ Rolling it out:
    `llm_provider` and `llm_provider_ready` are all in the consensus fingerprint.
 2. Recompute the fingerprint (`python -m herald.production fingerprint`) and set the new value on
    **every validator and the backend** (`HERALD_EXPECTED_CONSENSUS_FP`).
-3. Restart the fleet together. A validator left on the old setting will fork its weights.
+3. Recreate every validator together (`docker compose --profile validator up -d validator`; a
+   plain `docker restart` keeps the old environment), and recreate the backend so it checks the new
+   value (`docker compose up -d api indexer` in herald-backend). A validator left on the old setting
+   will fork its weights.
 
 Note the judge is a *fallback*, not a veto: if it errors or is unsure it returns `None`, and an
 un-keyworded brief then falls through to accepting the article. Keywords remain the safety net.
@@ -233,13 +242,69 @@ validator bootstrap can lower it to 1, but raise it to ≥2 once independent val
   (default 240 ≈ 4 h), and **`self.step` persists across restarts** (`state.npz`). Frequent restarts
   march the counter past the scoring step. Lower `HERALD_VALIDATOR_STEPS_INTERVAL` (e.g. 1–10) to
   poll often; actual scoring stays gated to once per epoch and is **not** in the fingerprint.
-- **Can't see what it's doing** — INFO logs are suppressed by default (WARNING level). Add
-  `--logging.debug` to the run command to see `step(N)` / `Herald forward pass` / snapshot lines.
+- **Can't see what it's doing** — bittensor logs at WARNING unless told otherwise. The provided
+  compose starts the validator with `--logging.info` (set `HERALD_VALIDATOR_LOGGING=--logging.debug`
+  for more, in the shell or the compose project's `.env`: compose substitutes it into the command
+  and never reads it from a `VALIDATOR_ENV_FILE`). Env and command changes apply when the container
+  is recreated with `docker compose --profile validator up -d validator` (add `--build` after
+  pulling new code, and prefix `VALIDATOR_ENV_FILE=…` if you deploy with one): `docker restart`
+  keeps the command, environment and image the container was created with. A hand-written run
+  command needs the flag itself to show `step(N)` / `Herald forward pass` / snapshot lines.
+- **`Refusing to start: Herald state file …`** — `herald_state.json` may hold in-flight placements,
+  so the validator will not continue without it. With the provided compose the file lives in the
+  `validator_state` volume at
+  `/root/.bittensor/miners/<WALLET_NAME>/<HOTKEY_NAME>/netuid69/validator/herald_state.json` (the
+  validator prints that directory as `full path:` at startup). The container restarts in a loop while
+  it refuses, so stop it before touching the file (prefix each compose command with
+  `VALIDATOR_ENV_FILE=…` if you deploy with one):
+
+  ```bash
+  docker compose --profile validator stop validator
+  docker compose --profile validator run --rm --no-deps --entrypoint sh validator
+  #   cd /root/.bittensor/miners/<WALLET_NAME>/<HOTKEY_NAME>/netuid69/validator
+  #   ls -l herald_state.json*          # dated .bak files, newest last
+  #   cp -p herald_state.json.bak.<newest UTC timestamp> herald_state.json
+  #   exit
+  docker compose --profile validator up -d validator
+  ```
+
+  The message says which case applies:
+  - *exists but cannot be loaded*, or *is missing but backups of it exist* — restore the newest
+    `herald_state.json.bak.<UTC timestamp>` as above.
+  - *needs a validator that reads schema N or later* — a newer release changed the file's format
+    (typically seen after a rollback). Run that release again. Only if you must stay rolled back,
+    set `HERALD_STATE_ALLOW_NEWER_SCHEMA=true` and recreate the container: the file is copied aside
+    as `herald_state.json.schema<N>.<UTC timestamp>`, and what this release does not understand is
+    dropped on its next save. A newer file that only adds fields loads without the override, after
+    the same copy.
+
+  Only if no usable backup exists, set `HERALD_STATE_ALLOW_FRESH_ON_CORRUPT=true` and recreate the
+  container: an unreadable file is copied aside as `herald_state.json.corrupt.<UTC timestamp>`, a
+  missing file's backups are renamed `….kept` so rotation never deletes them, and the ledger starts
+  empty. Keep the override set until the validator has saved a new state (`herald_state.json`'s
+  modification time changes after its next scoring pass, about once a day): an unreadable file is
+  only copied aside, so unsetting the override earlier makes the next start refuse again. While
+  either override is set the validator logs a WARNING on every start; once the save has happened,
+  unset it and recreate the container.
+- **`WEIGHT_SUBMISSION_STALLED`** — the validator had an epoch to submit, but the pending
+  weight-commit check kept failing, so it is deliberately not setting weights (it will not risk a
+  duplicate commit). Set `HERALD_WEIGHT_CHECK_FALLBACK_ENDPOINT` to a second finney node and recreate
+  the container; it is used only for this check. Keep `SUBTENSOR_NETWORK=finney`, as production
+  preflight requires. The check's own log lines show endpoints as `scheme://host[:port]` only. Watch
+  liveness from outside with `python scripts/watchdog.py --hotkey <validator ss58>`, run from a host
+  checkout with the §4.1 environment (the validator image does not contain `scripts/`): it checks
+  the on-chain LastUpdate age and the backend's latest snapshot epoch, and exits 1 on a breach, 2
+  when a check cannot run.
 - **Occasional `UnknownBlock: Expect block number from id`** — transient inconsistency from the
   shared public finney endpoint (a load-balanced pool). The neuron retries and recovers; if it's
-  *frequent*, point `SUBTENSOR_CHAIN_ENDPOINT` at a dedicated/local subtensor node. (Consistent
-  failures are almost never the endpoint — check the step cadence above first.)
-- **`403` publishing snapshots** — your hotkey isn't enrolled/chain-verified as a reporter yet; the
-  operator must `POST /admin/reporters` and the finalized-chain indexer must confirm your permit.
+  *frequent* in the weight-commit check, set `HERALD_WEIGHT_CHECK_FALLBACK_ENDPOINT` as above.
+  (Consistent failures are almost never the endpoint — check the step cadence above first.)
+- **`403` publishing snapshots** — either your hotkey isn't enrolled/chain-verified as a reporter
+  yet (the operator must `POST /admin/reporters` and the finalized-chain indexer must confirm your
+  permit), or `HERALD_RESULTS_WRITE_TOKEN` is a write token the operator bound to a different
+  hotkey. The validator logs only the status line, so ask the operator which it is.
+- **`401` on reports or the feed** — the token is wrong or was retired, or the read and write tokens
+  are swapped (a read token is refused on reports, a write token on the feed). A failed feed read
+  logs nothing on the validator, and the feed is read only in epochs with active briefs.
 
 See also: [miner.md](miner.md) for what you're verifying.

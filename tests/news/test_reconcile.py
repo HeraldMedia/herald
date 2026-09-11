@@ -98,3 +98,27 @@ def test_fetch_board_results_uses_private_feed_and_token(monkeypatch):
     assert fetch_board_results("http://board") == [board_row()]
     assert seen["url"] == "http://board/validator/results"
     assert seen["headers"] == {"X-Results-Token": "validator-secret"}
+
+
+def test_fetch_board_results_sends_the_read_credential(monkeypatch):
+    seen = {}
+
+    class Response:
+        status_code = 200
+
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return []
+
+    monkeypatch.setattr("httpx.get", lambda url, **kwargs: seen.update(kwargs) or Response())
+    monkeypatch.setenv("HERALD_RESULTS_TOKEN", "shared-secret")
+    monkeypatch.setenv("HERALD_RESULTS_WRITE_TOKEN", "write-secret")
+    monkeypatch.setenv("HERALD_RESULTS_READ_TOKEN", "read-secret")
+    fetch_board_results("http://board")
+    assert seen["headers"] == {"X-Results-Token": "read-secret"}
+
+    monkeypatch.setenv("HERALD_RESULTS_READ_TOKEN", " ")  # blank: fall back to the shared token
+    fetch_board_results("http://board")
+    assert seen["headers"] == {"X-Results-Token": "shared-secret"}
