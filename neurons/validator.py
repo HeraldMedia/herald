@@ -60,10 +60,10 @@ class Validator(BaseValidatorNeuron):
         """
         return await forward(self)
 
-    def should_set_weights(self) -> bool:
-        if not super().should_set_weights():
-            return False
-
+    def _has_weights_to_submit(self) -> bool:
+        # Herald's own gates. The base should_set_weights asks them before it reads the chain for a
+        # pending weight commit, so a failing RPC check is retried, counted and alerted on only for
+        # an epoch this validator would actually submit.
         state = _state(self)
         if state.last_weight_epoch >= state.last_scored_epoch:
             bt.logging.info(
