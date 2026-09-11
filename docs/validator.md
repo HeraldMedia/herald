@@ -231,7 +231,43 @@ validator bootstrap can lower it to 1, but raise it to ≥2 once independent val
 
 ---
 
-## 8. Troubleshooting (real gotchas)
+## 8. Reconciliation feed and placement-pool placements
+
+Nothing changes for validators: no new setting, no fingerprint change, no restart. Placements made
+through the Herald console are committed by the subnet's placement-pool hotkeys, and their reveals
+reach validators through the reconciliation feed, which every scoring pass with active briefs
+reads. Each merged reveal is verified from scratch, exactly like a claim pulled from a miner.
+
+- **Required:** `HERALD_RESULTS_ENDPOINT` and a valid read credential, either
+  `HERALD_RESULTS_READ_TOKEN` or the shared `HERALD_RESULTS_TOKEN`, which is still accepted.
+  Production preflight already requires both. A validator whose feed read fails does not score these
+  placements.
+- The feed (`GET /validator/results`) lists pending placement rows first, ahead of older rows.
+- A scoring pass that merges reveals from the feed logs `Reconciled N claim(s) from the board` at
+  INFO, and only when N > 0. A pass with nothing to merge logs nothing, and so does a failed feed
+  read (see the `401` entry under Troubleshooting).
+- To check the feed's health from outside, add `--check-board-feed` to the watchdog, run from a host
+  checkout with the §4.1 environment:
+
+  ```bash
+  python scripts/watchdog.py --hotkey <validator ss58> --check-board-feed
+  ```
+
+  It adds a `board_feed` line read from the backend's public `GET /public/placements/feed-health`
+  (aggregate counts and alarm codes only, sent without a credential; the watchdog only sends GET
+  requests). Any alarm the backend reports is a breach and exits 1. `feed_not_read` means no feed
+  read was recorded recently while placements are waiting in it: check your endpoint and read
+  credential. It counts reads by every validator, so a quiet feed check does not prove your own read
+  works; your validator's `Reconciled N claim(s)` line does. `submitted_not_settled`,
+  `signer_stale`, `pool_hotkey_unregistered`, `committed_not_submitted`, `settlement_mismatch` and
+  `expired_claim_vesting` are for the subnet operator, but they exit 1 as well: if a job pages you
+  on the exit code, leave the flag out of it, or you will be paged for conditions only the operator
+  can fix. An unreachable endpoint or an unexpected payload exits 2. Without the flag the watchdog
+  runs exactly as before.
+
+---
+
+## 9. Troubleshooting (real gotchas)
 
 - **`ModuleNotFoundError: No module named 'core'`** — the Dockerfile `pip install -e .` runs before
   `core/`/`neurons/` are copied, so they aren't registered. Set `PYTHONPATH=/app` (already in the
@@ -294,7 +330,7 @@ validator bootstrap can lower it to 1, but raise it to ≥2 once independent val
   liveness from outside with `python scripts/watchdog.py --hotkey <validator ss58>`, run from a host
   checkout with the §4.1 environment (the validator image does not contain `scripts/`): it checks
   the on-chain LastUpdate age and the backend's latest snapshot epoch, and exits 1 on a breach, 2
-  when a check cannot run.
+  when a check cannot run. Add `--check-board-feed` to check the reconciliation feed as well (§8).
 - **Occasional `UnknownBlock: Expect block number from id`** — transient inconsistency from the
   shared public finney endpoint (a load-balanced pool). The neuron retries and recovers; if it's
   *frequent* in the weight-commit check, set `HERALD_WEIGHT_CHECK_FALLBACK_ENDPOINT` as above.
