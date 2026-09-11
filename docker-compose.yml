@@ -31,6 +31,8 @@ services:
     profiles: ["validator"]
     restart: unless-stopped
     entrypoint: ["/entrypoint.sh"]
+    # INFO by default so forward-pass and weight-setting evidence reaches the logs (bittensor's own
+    # default is WARNING). Override in .env: HERALD_VALIDATOR_LOGGING=--logging.debug (or .trace).
     command: [
       "python", "-u", "neurons/validator.py",
       "--wallet.name", "${WALLET_NAME:-default}",
@@ -39,6 +41,7 @@ services:
       "--subtensor.network", "${SUBTENSOR_NETWORK:-finney}",
       "--axon.port", "8092",
       "--neuron.disable_auto_update",
+      "${HERALD_VALIDATOR_LOGGING:---logging.info}",
     ]
     ports:
       - "${VALIDATOR_AXON_PORT:-8092}:8092"
