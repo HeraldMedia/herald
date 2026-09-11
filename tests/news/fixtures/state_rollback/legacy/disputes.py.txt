@@ -10,8 +10,6 @@ Incentives are weight-only; see dev/DISPUTE_DESIGN.md.
 from dataclasses import dataclass
 from typing import Dict, List, Optional
 
-from .persisted import rebuild_records
-
 OPEN = "open"
 UPHELD = "upheld"
 REJECTED = "rejected"
@@ -27,8 +25,7 @@ class Dispute:
 
 class DisputeLedger:
     def __init__(self, disputes: Dict[str, dict] = None):
-        # Same rollback rule as the vesting ledger: unknown persisted keys are dropped, not fatal.
-        self._d: Dict[str, Dispute] = rebuild_records(Dispute, disputes, label="dispute")
+        self._d: Dict[str, Dispute] = {k: Dispute(**v) for k, v in (disputes or {}).items()}
 
     def open(self, article_id: str, disputer_hotkey: str, filed_epoch: int) -> bool:
         """Register a dispute. One per article; idempotent on re-read, so callers must register in

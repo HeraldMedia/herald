@@ -1,11 +1,20 @@
+import os
+import re
 from types import SimpleNamespace
 
 import numpy as np
+import pytest
 
 from herald.base.neuron import BaseNeuron
 from herald.base.validator import BaseValidatorNeuron
-from herald.validator.news.state import HeraldState
+from herald.validator.news.state import (
+    ALLOW_FRESH_ON_CORRUPT_ENV,
+    HeraldState,
+    HeraldStateLoadError,
+)
 from neurons.validator import Validator
+
+ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
 def _validator(tmp_path, *, scored_epoch=10, weight_epoch=9, scores=(0.0, 1.0)):
@@ -80,3 +89,52 @@ def test_failed_submission_does_not_advance_epoch(tmp_path, monkeypatch):
 
     assert validator.set_weights() is False
     assert validator.herald_state.last_weight_epoch == 9
+
+
+def test_last_weight_epoch_has_exactly_the_documented_writer():
+    # state.py documents Validator.set_weights as the only writer (besides initialisation); keep
+    # that documented statement true.
+    writers = set()
+    for top in ("herald", "neurons", "scripts", "core"):
+        for dirpath, _dirs, files in os.walk(os.path.join(ROOT, top)):
+            for name in files:
+                if not name.endswith(".py"):
+                    continue
+                path = os.path.join(dirpath, name)
+                with open(path, encoding="utf-8") as f:
+                    for line in f:
+                        if re.search(r"\.last_weight_epoch\s*=(?!=)", line):
+                            writers.add((os.path.relpath(path, ROOT), line.strip()))
+    assert writers == {
+        ("herald/validator/news/state.py", "self.last_weight_epoch = last_weight_epoch"),
+        ("neurons/validator.py", "state.last_weight_epoch = state.last_scored_epoch"),
+    }
+
+
+def _patch_startup(tmp_path, monkeypatch):
+    def base_init(self, config=None):
+        self.config = SimpleNamespace(
+            neuron=SimpleNamespace(full_path=str(tmp_path), disable_set_weights=True),
+        )
+        self.uid = 0
+
+    monkeypatch.setattr(BaseValidatorNeuron, "__init__", base_init)
+    monkeypatch.setattr("neurons.validator.get_cloudwatch_handler", lambda **kwargs: None)
+    monkeypatch.delenv(ALLOW_FRESH_ON_CORRUPT_ENV, raising=False)
+
+
+def test_validator_loads_herald_state_at_startup(tmp_path, monkeypatch):
+    saved = HeraldState.fresh()
+    saved.last_scored_epoch = 42
+    saved.save(str(tmp_path / "herald_state.json"))
+    _patch_startup(tmp_path, monkeypatch)
+
+    assert Validator().herald_state.last_scored_epoch == 42
+
+
+def test_validator_refuses_to_start_on_an_unreadable_state_file(tmp_path, monkeypatch):
+    (tmp_path / "herald_state.json").write_text("{ not json")
+    _patch_startup(tmp_path, monkeypatch)
+
+    with pytest.raises(HeraldStateLoadError, match="Refusing to start"):
+        Validator()
