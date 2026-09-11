@@ -94,7 +94,8 @@ def publish_results(endpoint: str, items: list):
     headers = {"X-Results-Token": token} if token else {}
     for item in items:
         try:
-            response = httpx.post(f"{endpoint}/results", json=item, timeout=5.0, headers=headers)
+            response = httpx.post(f"{endpoint.rstrip('/')}/results", json=item, timeout=5.0,
+                                  headers=headers)
             response.raise_for_status()
         except Exception as e:
             bt.logging.warning(f"Result publish failed: {e}")

@@ -19,6 +19,21 @@ def test_non_successful_result_publish_is_reported(monkeypatch):
     assert warnings and "401 Unauthorized" in warnings[0]
 
 
+def test_result_publish_strips_a_trailing_slash_from_the_endpoint(monkeypatch):
+    urls = []
+
+    class Response:
+        def raise_for_status(self):
+            return None
+
+    monkeypatch.setattr(publish.httpx, "post", lambda url, **kwargs: urls.append(url) or Response())
+
+    publish.publish_results("https://board.example/", [{"article_id": "a"}])
+    publish.publish_results("https://board.example", [{"article_id": "b"}])
+
+    assert urls == ["https://board.example/results", "https://board.example/results"]
+
+
 def test_result_projection_is_network_scoped_and_tracks_lifecycle():
     vesting = VestingLedger(vest_epochs=2)
     vesting.start(
