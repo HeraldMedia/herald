@@ -41,6 +41,15 @@ def test_llm_not_called_result_ignored_when_rules_already_pass():
     assert is_paid("https://nytimes.com/world/x", "Normal report.", judge_fn=judge) == (False, "")
 
 
+def test_llm_paid_question_asks_for_an_explicit_disclosure():
+    # Whether a piece "reads as editorial" is a judgement on tone; unpaid coverage of one company
+    # fails it. The fallback must ask whether the text discloses payment.
+    asked = []
+    is_paid("https://nytimes.com/world/x", "A report about one company.",
+            judge_fn=lambda q, t: asked.append(q))
+    assert len(asked) == 1 and "explicit disclosure" in asked[0].lower()
+
+
 def test_llm_decides_topic_when_keywords_absent():
     brief = {"id": "b1", "keywords": ["bittensor"], "topic": "Bittensor"}
     assert topic_matched("A story with no obvious keyword.", brief, judge_fn=lambda q, t: True) is True

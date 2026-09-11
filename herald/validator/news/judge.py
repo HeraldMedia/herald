@@ -14,7 +14,12 @@ from herald.validator.utils.config import (
     OPENROUTER_API_KEY,
 )
 
-PAID_QUESTION = "Is this article paid or sponsored content rather than independent editorial reporting?"
+# Ask for an explicit disclosure rather than whether the piece reads as editorial: coverage of a
+# single company or event reads as promotional to a model even when nobody paid for it.
+PAID_QUESTION = (
+    "Does this text contain an explicit disclosure that it is paid, sponsored, an advertisement or a "
+    "paid partnership?"
+)
 
 
 def topic_question(brief: dict) -> str:
