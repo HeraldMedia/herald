@@ -154,6 +154,33 @@ def _state(self) -> HeraldState:
     return self.herald_state
 
 
+_archive_subtensor = None
+
+
+def _archive_timestamp(block: int):
+    global _archive_subtensor
+    if _archive_subtensor is None:
+        _archive_subtensor = bt.Subtensor(network="archive")
+    return _archive_subtensor.get_timestamp(block)
+
+
+def _block_timestamp(subtensor, block: int) -> float:
+    """Unix time of a historical block.
+
+    Lite RPC nodes keep only recent state and report a zero timestamp (or raise) for older blocks,
+    which commit blocks routinely are by the time an epoch is scored. Those are read from an archive
+    node instead; if that read fails too the error propagates, so the epoch is retried rather than
+    the claim rejected.
+    """
+    try:
+        ts = subtensor.get_timestamp(block).timestamp()
+    except Exception:
+        ts = 0.0
+    if ts > 0:
+        return ts
+    return _archive_timestamp(block).timestamp()
+
+
 async def forward(self):
     if self.step % VALIDATOR_STEPS_INTERVAL != 0:
         time.sleep(VALIDATOR_WAIT)
@@ -275,7 +302,7 @@ async def forward(self):
             if commit_block is None or published_ts is None:
                 bt.logging.info(f"Rejecting {w.url}: publication date unverifiable vs commit")
                 continue
-            commit_ts = self.subtensor.get_timestamp(commit_block).timestamp()
+            commit_ts = _block_timestamp(self.subtensor, commit_block)
             max_ts = commit_ts + HERALD_MAX_PLACEMENT_DAYS * 86400
             if published_ts <= commit_ts or published_ts > max_ts:
                 bt.logging.info(f"Rejecting {w.url}: publication date implausible vs commit")

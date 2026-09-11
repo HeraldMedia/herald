@@ -508,3 +508,49 @@ async def test_failed_cycle_retries_same_epoch(monkeypatch):
     assert captured == {}
     await fwd.forward(self)                         # same epoch must RETRY, not skip
     assert captured.get("rewards") is not None
+
+
+def _pruned_zero(block):
+    return datetime(1970, 1, 1, tzinfo=timezone.utc)
+
+
+def _pruned_raises(block):
+    raise RuntimeError("state discarded for block")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("pruned_read", [_pruned_zero, _pruned_raises], ids=["zero", "raises"])
+async def test_pruned_commit_timestamp_is_read_from_archive(monkeypatch, pruned_read):
+    c1 = make_claim("guardian", "https://www.theguardian.com/a", "hkA")
+    self, captured = make_self({1: c1, 2: c1}, {"hkA": onchain(c1)}, monkeypatch=monkeypatch)
+    monkeypatch.setattr(fwd, "get_commitments_with_block",
+                        lambda subtensor, netuid: {"hkA": (onchain(c1), 400)})
+    monkeypatch.setattr(fetchmod, "_http_get", lambda url: (200, url, b"news " * 200))
+    live = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    self.subtensor.get_timestamp = lambda b: pruned_read(b) if b == 400 else live
+    archive_reads = []
+    monkeypatch.setattr(fwd, "_archive_timestamp", lambda b: archive_reads.append(b) or live)
+
+    await fwd.forward(self)
+
+    assert archive_reads == [400]
+    assert dict(zip(captured["uids"], captured["rewards"]))[1] == pytest.approx(1.0)
+
+
+@pytest.mark.asyncio
+async def test_unreadable_commit_timestamp_retries_the_epoch(monkeypatch):
+    c1 = make_claim("guardian", "https://www.theguardian.com/a", "hkA")
+    self, captured = make_self({1: c1, 2: c1}, {"hkA": onchain(c1)}, monkeypatch=monkeypatch)
+    monkeypatch.setattr(fetchmod, "_http_get", lambda url: (200, url, b"news " * 200))
+    self.subtensor.get_timestamp = _pruned_zero
+
+    def archive_down(block):
+        raise RuntimeError("archive unreachable")
+
+    monkeypatch.setattr(fwd, "_archive_timestamp", archive_down)
+    await fwd.forward(self)                         # no commit time: nothing scored, epoch NOT marked
+    assert captured == {}
+
+    monkeypatch.setattr(fwd, "_archive_timestamp", lambda b: datetime(2026, 1, 1, tzinfo=timezone.utc))
+    await fwd.forward(self)                         # same epoch retries and pays
+    assert dict(zip(captured["uids"], captured["rewards"]))[1] == pytest.approx(1.0)
