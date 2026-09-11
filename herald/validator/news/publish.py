@@ -12,6 +12,35 @@ SNAPSHOT_DOMAIN = b"HERALD_VALIDATOR_SNAPSHOT_V1\n"
 RECEIPT_DOMAIN = b"HERALD_WEIGHT_RECEIPT_V1\n"
 
 
+# Credentials for the backend's results routes. Reports send the write token and the feed read in
+# reconcile.py sends the read token; each falls back to the shared HERALD_RESULTS_TOKEN, so a
+# validator configured with only that token sends exactly what it sent before. None of these is a
+# consensus parameter. They live in this file because herald-backend's signing parity test loads it
+# by path, standalone.
+RESULTS_TOKEN_ENV = "HERALD_RESULTS_TOKEN"
+RESULTS_WRITE_TOKEN_ENV = "HERALD_RESULTS_WRITE_TOKEN"
+RESULTS_READ_TOKEN_ENV = "HERALD_RESULTS_READ_TOKEN"
+
+
+def results_token(scoped_env: str, env=None):
+    """The token for one scope: its own variable when set and not blank, else the shared token.
+
+    Surrounding whitespace (a CRLF env file's trailing carriage return, say) is dropped: an HTTP header
+    value cannot carry it, and the backend matches the stripped token.
+    """
+    env = os.environ if env is None else env
+    for name in (scoped_env, RESULTS_TOKEN_ENV):
+        value = (env.get(name) or "").strip()
+        if value:
+            return value
+    return None
+
+
+def results_headers(scoped_env: str) -> dict:
+    token = results_token(scoped_env)
+    return {"X-Results-Token": token} if token else {}
+
+
 def canonical_bytes(value: dict) -> bytes:
     return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()
 
@@ -90,8 +119,7 @@ def build_result_items(vesting, *, network: str, netuid: int, validator_hotkey: 
 def publish_results(endpoint: str, items: list):
     if not endpoint or not items:
         return
-    token = os.getenv("HERALD_RESULTS_TOKEN")
-    headers = {"X-Results-Token": token} if token else {}
+    headers = results_headers(RESULTS_WRITE_TOKEN_ENV)
     for item in items:
         try:
             response = httpx.post(f"{endpoint.rstrip('/')}/results", json=item, timeout=5.0,
@@ -167,8 +195,7 @@ def sign_snapshot(item: dict, hotkey) -> dict:
 def publish_snapshot(endpoint: str, item: dict, hotkey) -> bool:
     if not endpoint:
         return False
-    token = os.getenv("HERALD_RESULTS_TOKEN")
-    headers = {"X-Results-Token": token} if token else {}
+    headers = results_headers(RESULTS_WRITE_TOKEN_ENV)
     try:
         response = httpx.post(f"{endpoint.rstrip('/')}/api/v3/validator/snapshots",
                               json=sign_snapshot(item, hotkey), headers=headers, timeout=10.0)
@@ -185,8 +212,7 @@ def publish_weight_receipt(endpoint: str, item: dict, hotkey) -> bool:
     unsigned = {k: v for k, v in item.items() if k != "signature"}
     signature = hotkey.sign(RECEIPT_DOMAIN + canonical_bytes(unsigned))
     payload = {**unsigned, "signature": "0x" + bytes(signature).hex()}
-    token = os.getenv("HERALD_RESULTS_TOKEN")
-    headers = {"X-Results-Token": token} if token else {}
+    headers = results_headers(RESULTS_WRITE_TOKEN_ENV)
     try:
         response = httpx.post(f"{endpoint.rstrip('/')}/api/v3/validator/weight-receipts",
                               json=payload, headers=headers, timeout=10.0)

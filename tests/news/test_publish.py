@@ -109,3 +109,35 @@ def test_state_hash_ignores_validator_identity_and_evaluation_block():
     assert one["state_hash"] == two["state_hash"]
     assert "validator_hotkey" not in one["state"]["articles"][0]
     assert "chain_block" not in one["state"]["articles"][0]
+
+
+def test_credentials_are_sent_without_surrounding_whitespace(monkeypatch):
+    monkeypatch.setenv("HERALD_RESULTS_WRITE_TOKEN", " padded-token\r")
+
+    assert publish.results_headers(publish.RESULTS_WRITE_TOKEN_ENV) == {
+        "X-Results-Token": "padded-token"}
+
+
+def test_reports_send_the_write_credential(monkeypatch):
+    sent = []
+
+    class Response:
+        def raise_for_status(self):
+            return None
+
+    monkeypatch.setattr(publish.httpx, "post",
+                        lambda url, **kwargs: sent.append(kwargs["headers"]) or Response())
+    monkeypatch.setenv("HERALD_RESULTS_TOKEN", "shared-secret")
+    monkeypatch.setenv("HERALD_RESULTS_READ_TOKEN", "read-secret")
+    monkeypatch.setenv("HERALD_RESULTS_WRITE_TOKEN", "write-secret")
+    hotkey = SimpleNamespace(sign=lambda message: b"\x01" * 64)
+    item = {"schema_version": 1, "validator_hotkey": "validator"}
+
+    publish.publish_results("https://board.example", [{"article_id": "a"}])
+    assert publish.publish_snapshot("https://board.example", item, hotkey) is True
+    assert publish.publish_weight_receipt("https://board.example", item, hotkey) is True
+    assert sent == [{"X-Results-Token": "write-secret"}] * 3
+
+    monkeypatch.delenv("HERALD_RESULTS_WRITE_TOKEN")
+    publish.publish_results("https://board.example", [{"article_id": "b"}])
+    assert sent[-1] == {"X-Results-Token": "shared-secret"}

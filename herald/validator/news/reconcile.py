@@ -8,12 +8,12 @@ oracle (commitment vs the chain slot, evidence hash, fetch, registry), so a mali
 at worst add claims that fail verification, or withhold — which is no worse than today.
 """
 
-import os
 from typing import Dict, List
 
 from herald.protocol import ClaimRecord
 from herald.validator.utils.config import HERALD_MAX_ARTICLES_PER_MINER
 
+from .publish import RESULTS_READ_TOKEN_ENV, results_headers
 from .url import article_id
 
 _MAX_ROWS = 10_000  # DoS backstop on a hostile/bloated board feed
@@ -69,12 +69,12 @@ def merge_board_claims(claims_by_uid: Dict[int, list], rows: List[dict],
 
 
 def fetch_board_results(endpoint: str) -> List[dict]:
-    """Best-effort fetch of the token-protected full-reveal feed. Failure -> []."""
+    """Best-effort fetch of the token-protected validator results feed, sending the read
+    credential. Failure -> []."""
     import httpx
 
     try:
-        token = os.getenv("HERALD_RESULTS_TOKEN")
-        headers = {"X-Results-Token": token} if token else {}
+        headers = results_headers(RESULTS_READ_TOKEN_ENV)
         resp = httpx.get(f"{endpoint.rstrip('/')}/validator/results", headers=headers,
                          timeout=10.0)
         # Compatibility with the legacy board, whose public result rows carried reveals.
