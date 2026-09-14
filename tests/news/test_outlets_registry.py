@@ -3,6 +3,7 @@ outlet must have a working paid-content detector, and no two outlets may claim o
 (registry.lookup is first-match-wins, so a collision silently makes the losing outlet_id
 unreachable -> every honest claim against it rejects as outlet_mismatch). Data verified live per
 outlet; fixtures carry each outlet's real editorial + sponsored example URL."""
+import gc
 import json
 import re
 import time
@@ -106,13 +107,35 @@ def test_editorial_url_resolves_to_its_own_outlet(oid):
     assert hit is not None and hit.outlet_id == oid, f"{oid}: editorial url resolved to {hit.outlet_id if hit else None}"
 
 
+_ADVERSARIAL_PATH = "/" + "abc123-" * 300  # ~2KB
+_REDOS_BUDGET_S = 0.1
+_REDOS_ATTEMPTS = 3
+
+
+# A pattern that backtracks catastrophically is slow on every run, while a garbage collection can
+# add tens of milliseconds to any single one. Time the fastest of a few runs, with the collector
+# held off, so the budget measures the pattern rather than whatever else the interpreter was doing.
+def _fastest_search_seconds(pattern, text):
+    collecting = gc.isenabled()
+    gc.disable()
+    try:
+        best = float("inf")
+        for _ in range(_REDOS_ATTEMPTS):
+            start = time.perf_counter()
+            re.search(pattern, text, re.I)
+            best = min(best, time.perf_counter() - start)
+        return best
+    finally:
+        if collecting:
+            gc.enable()
+
+
 @pytest.mark.parametrize("oid", _IDS)
 def test_paid_patterns_compile_and_are_not_redos(oid):
     for pat in _OUTLETS[oid].paid_patterns:
         re.compile(pat)  # raises on bad regex
-        t = time.perf_counter()
-        re.search(pat, "/" + "abc123-" * 300, re.I)  # ~2KB adversarial path
-        assert time.perf_counter() - t < 0.1, f"{oid}: slow pattern {pat!r}"
+        seconds = _fastest_search_seconds(pat, _ADVERSARIAL_PATH)
+        assert seconds < _REDOS_BUDGET_S, f"{oid}: slow pattern {pat!r} took {seconds:.3f}s"
 
 
 @pytest.mark.parametrize("oid", _IDS)
