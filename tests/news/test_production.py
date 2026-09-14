@@ -129,3 +129,27 @@ def test_production_registry_anchor_check_verifies_the_live_edition(tmp_path):
         "require_anchor": True, "current_block": 120,
         "network": "finney", "netuid": 69,
     })]
+
+
+def test_validator_production_environment_accepts_scoped_results_tokens(tmp_path):
+    from herald.production import validator_environment_errors
+
+    env = _valid_env(tmp_path)
+    env.pop("HERALD_RESULTS_TOKEN")
+    env.update({"HERALD_RESULTS_WRITE_TOKEN": "write-token",
+                "HERALD_RESULTS_READ_TOKEN": "read-token"})
+
+    assert validator_environment_errors(env, actual_consensus="expected-fingerprint") == []
+
+
+def test_validator_production_environment_needs_a_results_credential_for_each_scope(tmp_path):
+    from herald.production import validator_environment_errors
+
+    env = _valid_env(tmp_path)
+    env.pop("HERALD_RESULTS_TOKEN")
+    env["HERALD_RESULTS_WRITE_TOKEN"] = "write-token"
+    errors = validator_environment_errors(env, actual_consensus="expected-fingerprint")
+
+    assert any("HERALD_RESULTS_READ_TOKEN" in error for error in errors)
+    assert not any("HERALD_RESULTS_WRITE_TOKEN" in error for error in errors)
+    assert not any("write-token" in error for error in errors)

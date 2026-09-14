@@ -88,8 +88,12 @@ def validator_environment_errors(
             errors.append(f"{name} is required")
         elif _local_url(value):
             errors.append(f"{name} cannot use localhost in production")
-    if not env.get("HERALD_RESULTS_TOKEN"):
-        errors.append("HERALD_RESULTS_TOKEN is required")
+    from herald.validator.news.publish import (
+        RESULTS_READ_TOKEN_ENV, RESULTS_TOKEN_ENV, RESULTS_WRITE_TOKEN_ENV, results_token,
+    )
+    for scoped in (RESULTS_WRITE_TOKEN_ENV, RESULTS_READ_TOKEN_ENV):
+        if not results_token(scoped, env):
+            errors.append(f"{scoped} or the shared {RESULTS_TOKEN_ENV} is required")
 
     strategies = [str(outlet.get("fetch", "direct")) for outlet in (registry or {}).get("outlets", [])]
     if any(strategy == "proxy" or strategy.startswith("proxy:") for strategy in strategies):

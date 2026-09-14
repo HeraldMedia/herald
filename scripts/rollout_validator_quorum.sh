@@ -155,7 +155,8 @@ start_validator() {
   local hotkey="$3"
   local slot="$4"
   local command
-  command="cd '$ROOT' && set -a && source .env && set +a && unset HERALD_ALLOW_LOCAL_FETCH && ${sim_env} export HERALD_VALIDATOR_STEPS_INTERVAL=1 HERALD_VALIDATOR_WAIT=60 WANDB_MODE=disabled PYTHONUNBUFFERED=1 && exec .venv/bin/python neurons/validator.py --netuid '$NETUID' --subtensor.network '$SUBTENSOR_NETWORK' --wallet.name '$wallet' --wallet.hotkey '$hotkey' --neuron.name 'herald-netuid${NETUID}-v3-${slot}' --neuron.axon_off --neuron.disable_auto_update --neuron.dont_save_events --logging.logging_dir '$log_root'"
+  # Validators log at INFO unless HERALD_VALIDATOR_LOGGING overrides it (bittensor defaults to WARNING).
+  command="cd '$ROOT' && set -a && source .env && set +a && unset HERALD_ALLOW_LOCAL_FETCH && ${sim_env} export HERALD_VALIDATOR_STEPS_INTERVAL=1 HERALD_VALIDATOR_WAIT=60 WANDB_MODE=disabled PYTHONUNBUFFERED=1 && exec .venv/bin/python neurons/validator.py --netuid '$NETUID' --subtensor.network '$SUBTENSOR_NETWORK' --wallet.name '$wallet' --wallet.hotkey '$hotkey' --neuron.name 'herald-netuid${NETUID}-v3-${slot}' --neuron.axon_off --neuron.disable_auto_update --neuron.dont_save_events ${HERALD_VALIDATOR_LOGGING:---logging.info} --logging.logging_dir '$log_root'"
 
   pm2 delete "$process" >/dev/null 2>&1 || true
   pm2 start /usr/bin/bash --name "$process" --interpreter none -- -lc "$command"

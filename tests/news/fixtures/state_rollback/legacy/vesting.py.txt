@@ -3,8 +3,6 @@
 from dataclasses import asdict, dataclass, field
 from typing import Dict, List, Tuple
 
-from .persisted import rebuild_records
-
 VESTING = "VESTING"
 COMPLETED = "COMPLETED"
 CLAWBACK = "CLAWBACK"
@@ -35,11 +33,9 @@ class VestEntry:
 class VestingLedger:
     def __init__(self, vest_epochs: int, entries: Dict[str, dict] = None):
         self.vest_epochs = vest_epochs
-        # Filter, never splat: a field a newer release added must not crash (or, behind a catch-all,
-        # silently empty) this ledger after a rollback. Dropped keys are logged at WARNING.
-        self._entries: Dict[str, VestEntry] = rebuild_records(
-            VestEntry, entries, label="vesting entry"
-        )
+        self._entries: Dict[str, VestEntry] = {
+            k: VestEntry(**v) for k, v in (entries or {}).items()
+        }
 
     def start(self, article_id, uid, total_usd, url="", hotkey="", brief_id="",
               commit_epoch=0, start_epoch=0, outlet_id="", tier=0, attribution=0,
