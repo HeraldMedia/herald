@@ -340,10 +340,10 @@ def test_malformed_feed_health_is_unknown_not_healthy(wd, payload):
 
 
 def test_a_readable_alarm_outranks_alarm_entries_without_a_code(wd):
-    alarms = ["junk", {"code": "feed_not_read", "detail": "no feed read in 36 h"}, {"detail": "no code"}]
+    alarms = ["junk", {"code": "feed_not_read", "detail": "1 submitted placement(s) and no recent feed read"}, {"detail": "no code"}]
     finding = wd.check_board_feed(_health(alarms=alarms), NOW, network="finney", netuid=69)
     assert finding.status == wd.BREACH and wd.exit_code([finding]) == wd.EXIT_BREACH
-    assert finding.message.startswith("feed health reports 1 alarm(s): feed_not_read: no feed read in 36 h; "
+    assert finding.message.startswith("feed health reports 1 alarm(s): feed_not_read: 1 submitted placement(s) and no recent feed read; "
                                       "also 2 alarm(s) without a code, the first 'junk' (2 submitted")
 
 
@@ -376,11 +376,11 @@ def test_main_runs_the_board_feed_check_only_when_asked(wd):
 
 
 def test_main_board_feed_alarm_is_a_breach(wd):
-    alarm = {"code": "feed_not_read", "detail": "no feed read in 36 h"}
+    alarm = {"code": "feed_not_read", "detail": "1 submitted placement(s) and no recent feed read"}
     backend = FakeBackend([_decision(1255)], health=_health(alarms=[alarm]))
     code, text, _ = _main(wd, BASE_ARGS + ["--check-board-feed"], FakeChain(), backend)
     assert code == wd.EXIT_BREACH and "watchdog: BREACH" in text
-    assert "BREACH   board_feed: feed health reports 1 alarm(s): feed_not_read: no feed read in 36 h" in text
+    assert "BREACH   board_feed: feed health reports 1 alarm(s): feed_not_read: 1 submitted placement(s) and no recent feed read" in text
     assert "OK       last_update" in text and "OK       snapshot_epoch" in text
     assert backend.health_calls == [("finney", 69)]
 
