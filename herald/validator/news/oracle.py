@@ -4,9 +4,14 @@ from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta, timezone
 from typing import Any, Callable, Dict
 
-from herald.validator.utils.config import HERALD_MAX_ARTICLE_AGE_DAYS, HERALD_PUBLISH_BUFFER_DAYS
+from herald.validator.utils.config import (
+    HERALD_DRAFT_MATCH_THRESHOLD,
+    HERALD_MAX_ARTICLE_AGE_DAYS,
+    HERALD_PUBLISH_BUFFER_DAYS,
+)
 from .real_news import is_paid
 from .scoring import article_usd
+from .textmatch import containment
 from .topic_match import topic_matched
 from .url import article_id
 
@@ -58,6 +63,23 @@ def published_in_window(published_ts: float, brief: dict, now_ts: float) -> bool
     return True
 
 
+def _utc_day(ts: float) -> date:
+    return datetime.fromtimestamp(float(ts), tz=timezone.utc).date()
+
+
+def published_after_upload(published_ts: float, uploaded_ts: float) -> bool:
+    """The article's UTC publication day is the draft upload's UTC day or later.
+
+    Days, not seconds, because many outlets state only a publication date.
+    """
+    return _utc_day(published_ts) >= _utc_day(uploaded_ts)
+
+
+def draft_match(draft_text: str, article_text: str) -> float:
+    """Share of the draft's word shingles found in the article body (textmatch containment)."""
+    return containment(draft_text or "", article_text or "")
+
+
 def verify_article(
     url: str,
     brief: dict,
@@ -66,12 +88,16 @@ def verify_article(
     search_fn: Callable,
     judge_fn: Callable,
     now_ts: float,
+    *,
+    draft_text: str,
+    uploaded_ts: int,
 ) -> ArticleResult:
-    """Verify one submitted article against its brief.
+    """Verify one submitted article against its brief and the draft uploaded before publication.
 
     Checks, in order: listed outlet, supported fetch strategy, live page, publication date present and
-    inside the window, not paid content, on topic. A passing article is valued by its outlet tier and
-    search presence.
+    inside the window, published on or after the upload's UTC day, the uploaded draft found in the
+    article body (at least HERALD_DRAFT_MATCH_THRESHOLD), not paid content, on topic. A passing article
+    is valued by its outlet tier and search presence. The draft itself is never added to the evidence.
     """
     brief_id = str(brief.get("id", ""))
     evidence: Dict[str, Any] = {}
@@ -99,8 +125,15 @@ def verify_article(
         return reject("publication_date_unverifiable")
     if not published_in_window(float(published_ts), brief, float(now_ts)):
         return reject("published_outside_window")
+    if not published_after_upload(float(published_ts), uploaded_ts):
+        return reject("published_before_upload")
 
     article_text = getattr(fr, "article_text", None) or fr.text
+    share = draft_match(draft_text, article_text)
+    evidence["draft_match"] = round(share, 3)
+    if share < HERALD_DRAFT_MATCH_THRESHOLD:
+        return reject("draft_mismatch")
+
     paid, paid_reason = is_paid(url, article_text, judge_fn, outlet=outlet)
     evidence["paid"] = paid
     if paid:

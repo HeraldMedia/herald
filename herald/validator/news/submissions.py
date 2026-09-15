@@ -1,8 +1,10 @@
 """Contributor submissions: read the backend feed, validate its rows and choose which to verify.
 
-``GET /api/v4/validator/submissions`` returns bare rows ``{submission_id, network, netuid, brief_id,
-url}``. Every row is validated here, and each chosen article is verified by the oracle before
-anything vests.
+``GET /api/v4/validator/submissions`` returns rows ``{submission_id, network, netuid, brief_id, url,
+draft_text, uploaded_ts}``: the text the contributor uploaded before publishing, and the unix time (UTC
+seconds) of that upload. Every row is validated here, and each chosen article is verified by the oracle
+before anything vests. Draft text is used only for verification; it is never published, stored or
+logged.
 """
 
 import re
@@ -20,7 +22,9 @@ FEED_PATH = "/api/v4/validator/submissions"
 FEED_TIMEOUT_SECONDS = 10.0
 MAX_FEED_ROWS = 10_000
 MAX_URL_LENGTH = 2048
-ROW_KEYS = ("submission_id", "network", "netuid", "brief_id", "url")
+MIN_DRAFT_CHARS = 300
+MAX_DRAFT_CHARS = 40_000
+ROW_KEYS = ("submission_id", "network", "netuid", "brief_id", "url", "draft_text", "uploaded_ts")
 
 _ID = re.compile(r"[A-Za-z0-9._:-]{1,128}")
 _URL_CHARACTERS = re.compile(r"[\x21-\x7e]+")  # printable ASCII, no whitespace
@@ -66,10 +70,21 @@ def _valid_url(url) -> bool:
         return False
 
 
-def validate_rows(rows: list, network: str, netuid: int) -> List[dict]:
+def _valid_draft(text) -> bool:
+    """A string of MIN_DRAFT_CHARS to MAX_DRAFT_CHARS characters once surrounding whitespace is stripped."""
+    return isinstance(text, str) and MIN_DRAFT_CHARS <= len(text.strip()) <= MAX_DRAFT_CHARS
+
+
+def _valid_upload_time(uploaded_ts, now_ts: float) -> bool:
+    """Integer unix seconds after the epoch and no later than chain time."""
+    return type(uploaded_ts) is int and 0 < uploaded_ts <= now_ts
+
+
+def validate_rows(rows: list, network: str, netuid: int, now_ts: float) -> List[dict]:
     """Rows that are well formed and belong to this network and netuid, from the first MAX_FEED_ROWS.
 
-    Each kept row carries exactly ROW_KEYS.
+    A row needs a draft of MIN_DRAFT_CHARS to MAX_DRAFT_CHARS characters (after stripping) and an
+    upload time no later than chain time `now_ts`. Each kept row carries exactly ROW_KEYS.
     """
     valid = []
     for row in rows[:MAX_FEED_ROWS]:
@@ -81,6 +96,8 @@ def validate_rows(rows: list, network: str, netuid: int) -> List[dict]:
         if not (_valid_id(row.get("submission_id")) and _valid_id(row.get("brief_id"))):
             continue
         if not _valid_url(row.get("url")):
+            continue
+        if not (_valid_draft(row.get("draft_text")) and _valid_upload_time(row.get("uploaded_ts"), now_ts)):
             continue
         valid.append({key: row[key] for key in ROW_KEYS})
     return valid

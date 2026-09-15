@@ -1,11 +1,15 @@
+import os
 from datetime import datetime, timezone
 from types import SimpleNamespace
 
 import pytest
 
+from herald.validator.news import oracle
 from herald.validator.news.oracle import verify_article
 from herald.validator.news.registry import OutletRegistry
+from herald.validator.news.topic_match import topic_matched
 from herald.validator.news.url import article_id
+from herald.validator.utils import config
 
 
 def ts(*parts):
@@ -27,7 +31,29 @@ BRIEF = {"id": "b1", "kind": "client", "reward_pool": 1000.0,
 STANDING = {"id": "s1", "kind": "standing", "keywords": ["subnet"]}
 NOW = ts(2026, 9, 12, 12, 0, 0)
 DAY = 86400
-BODY = "A news report about a Bittensor subnet opening its public pilot this week."
+UPLOADED = int(ts(2026, 8, 20, 8, 0, 0))
+DRAFT = ("Herald, a Bittensor subnet that pays for verified media coverage, opened its public pilot to "
+         "PR firms and journalists this week. Contributors upload the text they plan to publish, then "
+         "add the link once the article is live. Validators fetch each article, confirm the outlet and "
+         "the publication date, and check that the uploaded text appears in the published story before "
+         "any reward begins to vest.")
+BODY = "Subnet pilot opens to the public\n" + DRAFT
+# The draft as an editor might run it: a headline and byline added, a few words changed.
+LIGHTLY_EDITED = (
+    "Subnet pilot opens to PR firms\nBy a staff reporter\n"
+    "Herald, a Bittensor subnet that pays for verified media coverage, opened its public pilot to "
+    "PR firms and reporters this week. Contributors upload the text they intend to publish, then "
+    "add the link once the article is live. Validators fetch each article, confirm the outlet and "
+    "the publication date, and check that the uploaded text appears in the published story before "
+    "any reward starts to vest.\nMore on the subnet economy next week."
+)
+# A genuine article on the brief's topic that was not written from the draft.
+UNRELATED_ON_TOPIC = (
+    "The subnet pilot drew a crowd of early users on Tuesday. Several agencies said they would "
+    "test the program with regional newspapers, while one analyst warned that coverage "
+    "incentives could shift how press releases are written. Organisers expect a second round "
+    "of briefs before the end of the month, and a public dashboard is planned for October."
+)
 
 
 def page(published=ts(2026, 9, 8, 9, 0, 0), text=BODY, article_text=None, status=200, ok=True):
@@ -47,8 +73,10 @@ def must_not_run(*_args):
     raise AssertionError("ran after an earlier check had already failed")
 
 
-def verify(url=URL, brief=BRIEF, fetch_fn=None, search_fn=indexed, judge_fn=None, now_ts=NOW):
-    return verify_article(url, brief, REGISTRY, fetch_fn or page(), search_fn, judge_fn, now_ts)
+def verify(url=URL, brief=BRIEF, fetch_fn=None, search_fn=indexed, judge_fn=None, now_ts=NOW,
+           draft_text=DRAFT, uploaded_ts=UPLOADED):
+    return verify_article(url, brief, REGISTRY, fetch_fn or page(), search_fn, judge_fn, now_ts,
+                          draft_text=draft_text, uploaded_ts=uploaded_ts)
 
 
 def test_listed_live_on_topic_article_passes_at_tier_value():
@@ -138,11 +166,11 @@ def test_disclosed_sponsored_body_is_paid_content():
 
 def test_paid_and_topic_checks_read_the_extracted_article_body():
     r = verify(fetch_fn=page(text="Sponsored content directory. Unrelated.", article_text=BODY))
-    assert r.passed
+    assert r.passed and r.evidence["draft_match"] == 1.0
 
 
 def test_keyword_miss_is_a_topic_mismatch():
-    r = verify(fetch_fn=page(text="A report about football results."), search_fn=must_not_run)
+    r = verify(brief={**BRIEF, "keywords": ["football"]}, search_fn=must_not_run)
     assert not r.passed and r.reason == "topic_mismatch" and r.evidence["topic_match"] is False
 
 
@@ -150,3 +178,77 @@ def test_tier2_article_missing_from_search_pays_the_search_floor():
     r = verify(url="https://techcrunch.com/2026/09/08/subnet-pilot", search_fn=not_indexed)
     assert r.passed and r.evidence["in_index"] is False
     assert r.usd == pytest.approx(500 * 0.6 * 0.5)
+
+
+def test_lightly_edited_copy_of_the_draft_passes():
+    r = verify(fetch_fn=page(text=LIGHTLY_EDITED))
+    assert r.passed and r.reason == "ok"
+    assert config.HERALD_DRAFT_MATCH_THRESHOLD <= r.evidence["draft_match"] < 1.0
+
+
+def test_unrelated_on_topic_article_is_a_draft_mismatch():
+    assert topic_matched(UNRELATED_ON_TOPIC, BRIEF)
+    r = verify(fetch_fn=page(text=UNRELATED_ON_TOPIC), search_fn=must_not_run)
+    assert not r.passed and r.reason == "draft_mismatch" and r.usd == 0.0
+    assert r.evidence["draft_match"] < config.HERALD_DRAFT_MATCH_THRESHOLD
+    assert "paid" not in r.evidence and "topic_match" not in r.evidence
+
+
+def test_draft_match_reads_the_extracted_article_body():
+    assert verify(fetch_fn=page(text="Site navigation. Unrelated.", article_text=LIGHTLY_EDITED)).passed
+    r = verify(fetch_fn=page(text=BODY, article_text=UNRELATED_ON_TOPIC), search_fn=must_not_run)
+    assert r.reason == "draft_mismatch"
+
+
+def test_draft_mismatch_is_decided_before_paid_content():
+    r = verify(fetch_fn=page(text="Sponsored content. " + UNRELATED_ON_TOPIC), search_fn=must_not_run)
+    assert r.reason == "draft_mismatch"
+
+
+def test_draft_match_uses_the_configured_threshold(monkeypatch):
+    monkeypatch.setattr(oracle, "HERALD_DRAFT_MATCH_THRESHOLD", 1.0)
+    assert verify(fetch_fn=page(text=LIGHTLY_EDITED)).reason == "draft_mismatch"
+    assert verify().passed
+
+
+def test_default_draft_match_threshold_is_the_attribution_text_threshold():
+    if os.getenv("HERALD_DRAFT_MATCH_THRESHOLD") or os.getenv("HERALD_ATTR_TEXT_THRESHOLD"):
+        pytest.skip("a threshold is set in the environment")
+    assert config.HERALD_DRAFT_MATCH_THRESHOLD == config.HERALD_ATTR_TEXT_THRESHOLD == 0.6
+
+
+@pytest.mark.parametrize("uploaded, published", [
+    (ts(2026, 9, 8, 23, 59, 59), ts(2026, 9, 8, 0, 0, 0)),  # a date-only publication on the upload day
+    (ts(2026, 9, 8, 12, 0, 0), ts(2026, 9, 8, 12, 0, 0)),
+    (ts(2026, 9, 7, 23, 59, 59), ts(2026, 9, 8, 0, 0, 0)),
+])
+def test_publication_on_the_upload_utc_day_or_later_passes(uploaded, published):
+    r = verify(fetch_fn=page(published=published), uploaded_ts=int(uploaded))
+    assert r.passed and r.reason == "ok"
+
+
+@pytest.mark.parametrize("uploaded, published", [
+    (ts(2026, 9, 8, 0, 0, 0), ts(2026, 9, 7, 23, 59, 59)),
+    (ts(2026, 9, 8, 23, 59, 59), ts(2026, 9, 7, 0, 0, 0)),
+])
+def test_publication_the_utc_day_before_the_upload_is_rejected(uploaded, published):
+    r = verify(fetch_fn=page(published=published), uploaded_ts=int(uploaded), search_fn=must_not_run)
+    assert not r.passed and r.reason == "published_before_upload" and r.usd == 0.0
+
+
+def test_publication_window_is_checked_before_the_upload_day():
+    r = verify(fetch_fn=page(published=ts(2026, 8, 28, 12, 0, 0)), uploaded_ts=int(ts(2026, 9, 1, 0, 0, 0)))
+    assert r.reason == "published_outside_window"
+
+
+def test_upload_day_is_checked_before_the_draft_match():
+    r = verify(fetch_fn=page(published=ts(2026, 9, 7, 12, 0, 0), text=UNRELATED_ON_TOPIC),
+               uploaded_ts=int(ts(2026, 9, 8, 12, 0, 0)), search_fn=must_not_run)
+    assert r.reason == "published_before_upload" and "draft_match" not in r.evidence
+
+
+@pytest.mark.parametrize("text", [BODY, UNRELATED_ON_TOPIC])
+def test_evidence_never_carries_the_draft(text):
+    r = verify(fetch_fn=page(text=text))
+    recorded = repr(r.evidence).lower()
+    assert "contributors upload the text" not in recorded and "bittensor" not in recorded

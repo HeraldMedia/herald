@@ -138,6 +138,8 @@ def _verify_submission(row, briefs_by_id, registry, epoch, judge_fn, now_ts):
             search_fn=lambda u: in_index(u, epoch),
             judge_fn=judge_fn,
             now_ts=now_ts,
+            draft_text=row["draft_text"],
+            uploaded_ts=row["uploaded_ts"],
         )
     except Exception as exc:
         bt.logging.warning(f"Verifying submission {row['submission_id']} raised: {exc}")
@@ -194,7 +196,7 @@ async def forward(self):
         briefs_by_id = {b["id"]: b for b in briefs}
 
         # New submissions: each verified article starts one vesting entry on the incentive hotkey.
-        valid_rows = validate_rows(rows, network, self.config.netuid)
+        valid_rows = validate_rows(rows, network, self.config.netuid, now_ts)
         selected = select_new(valid_rows, vesting, HERALD_MAX_SUBMISSIONS_PER_EPOCH)
         bt.logging.info(
             f"Submissions feed: {len(rows)} row(s), {len(valid_rows)} valid, {len(selected)} to verify"

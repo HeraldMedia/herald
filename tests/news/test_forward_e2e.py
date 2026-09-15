@@ -1,3 +1,4 @@
+import json
 from datetime import datetime, timezone
 from types import SimpleNamespace
 
@@ -23,12 +24,29 @@ REGISTRY = OutletRegistry.from_dict({"version_id": 3, "outlets": [
 URL_A = "https://www.theguardian.com/world/2026/sep/10/subnet-pilot"
 URL_B = "https://techcrunch.com/2026/09/10/subnet-pilot"
 STANDING = [{"id": "b1", "kind": "standing"}]
-BODY = "A news report about the subnet pilot."
+UPLOADED = int(datetime(2026, 9, 9, 15, 0, tzinfo=timezone.utc).timestamp())
+DRAFT = ("Quillmere Communications said on Wednesday that the subnet pilot now accepts articles from "
+         "PR firms and independent journalists. Each contributor uploads the text they plan to publish "
+         "and adds the link after the story is live. Validators fetch the article, confirm the outlet "
+         "and the publication date, and check that the uploaded text appears in the published story.")
+BODY = "Subnet pilot opens to contributors\n" + DRAFT
+# A second contributor's draft that no fetched page contains.
+OTHER_DRAFT = ("Wintergreen Analytics said its quarterly survey of 400 newsrooms found that most editors "
+               "now review disclosures twice before publication. The survey also recorded a sharp rise in "
+               "requests for original data, which editors said makes a pitch far more likely to be "
+               "covered. The full Wintergreen report will be released to subscribers next Thursday.")
 
 
-def row(submission_id, url, brief_id="b1"):
+def row(submission_id, url, brief_id="b1", draft_text=DRAFT, uploaded_ts=UPLOADED):
     return {"submission_id": submission_id, "network": "finney", "netuid": 69,
-            "brief_id": brief_id, "url": url}
+            "brief_id": brief_id, "url": url, "draft_text": draft_text, "uploaded_ts": uploaded_ts}
+
+
+def draft_fragments(draft):
+    """Pieces of a draft that must never be published, saved or logged."""
+    words = draft.split()
+    pieces = [" ".join(words[i:i + 6]) for i in range(0, len(words) - 5, 6)]
+    return [draft.split()[0]] + pieces
 
 
 def live_page(url):
@@ -148,6 +166,60 @@ async def test_verified_submission_vests_on_the_incentive_hotkey_with_its_first_
     assert article["earned_microusd"] == 250_000_000
     [[published]] = env.results
     assert published["reveal"] == {"submission_id": "sub-1"}
+
+
+@pytest.mark.asyncio
+async def test_drafts_never_reach_published_results_snapshots_logs_or_the_state_file(env, tmp_path):
+    env.rows = [row("sub-1", URL_A), row("sub-2", URL_B, draft_text=OTHER_DRAFT)]
+    self = make_validator(env)
+    self.config.neuron.full_path = str(tmp_path)
+
+    await fwd.forward(self)
+    next_epoch(env)
+    await fwd.forward(self)
+
+    assert "SUBMISSION_RESULT sub-1 ok" in env.logs
+    assert "SUBMISSION_RESULT sub-2 draft_mismatch" in env.logs
+    vesting = self.herald_state.vesting
+    assert vesting.entry(article_id(URL_A)).reveal == {"submission_id": "sub-1"}
+    assert not vesting.has(article_id(URL_B))
+    assert len(env.results) == 2 and len(env.snapshots) == 2
+    assert [item["reveal"] for rows in env.results for item in rows] == [{"submission_id": "sub-1"}] * 2
+
+    published = json.dumps([env.results, env.snapshots], sort_keys=True)
+    saved = "\n".join(path.read_text(encoding="utf-8") for path in sorted(tmp_path.rglob("*")) if path.is_file())
+    logged = "\n".join(env.logs)
+    assert "sub-1" in published and "sub-1" in saved
+    for draft in (DRAFT, OTHER_DRAFT):
+        for fragment in draft_fragments(draft):
+            for text in (published, saved, logged):
+                assert fragment.lower() not in text.lower()
+
+
+@pytest.mark.asyncio
+async def test_rows_without_a_valid_draft_or_upload_time_are_not_verified(env):
+    after_chain_time = int(NOW.timestamp()) + 1
+    env.rows = [row("sub-1", URL_A, draft_text="Too short to be an article."),
+                row("sub-2", URL_B, uploaded_ts=after_chain_time),
+                row("sub-3", URL_B + "-follow-up")]
+    self = make_validator(env)
+
+    await fwd.forward(self)
+
+    assert "Submissions feed: 3 row(s), 1 valid, 1 to verify" in env.logs
+    assert [line for line in env.logs if line.startswith("SUBMISSION_RESULT")] == ["SUBMISSION_RESULT sub-3 ok"]
+
+
+@pytest.mark.asyncio
+async def test_article_published_before_the_draft_upload_day_does_not_vest(env):
+    upload_next_day = int(datetime(2026, 9, 11, 0, 0, tzinfo=timezone.utc).timestamp())
+    env.rows = [row("sub-1", URL_A, uploaded_ts=upload_next_day)]
+    self = make_validator(env)
+
+    await fwd.forward(self)
+
+    assert results_for(env, "published_before_upload") == ["SUBMISSION_RESULT sub-1 published_before_upload"]
+    assert self.herald_state.vesting.to_dict()["entries"] == {}
 
 
 @pytest.mark.asyncio

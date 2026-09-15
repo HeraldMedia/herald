@@ -1,4 +1,5 @@
 import json
+from datetime import datetime, timezone
 from pathlib import Path
 
 import httpx
@@ -12,17 +13,23 @@ from herald.validator.news.vesting import VestingLedger
 FIXTURE = Path(__file__).parent / "fixtures" / "submission_row.json"
 NETWORK, NETUID = "finney", 69
 STORY = "https://www.example.com/news/story"
+NOW_TS = datetime(2026, 9, 12, 12, 0, tzinfo=timezone.utc).timestamp()
+UPLOADED = int(datetime(2026, 9, 9, 15, 0, tzinfo=timezone.utc).timestamp())
+DRAFT = ("A Bittensor subnet opened its public pilot to PR firms and journalists this week. Contributors "
+         "upload the text they plan to publish, then add the link once the article is live. Validators "
+         "fetch each article, confirm the outlet and publication date, and check that the uploaded text "
+         "appears in the published story before any reward begins to vest.")
 
 
 def row(submission_id="sub-1", url=STORY, **over):
     fields = {"submission_id": submission_id, "network": NETWORK, "netuid": NETUID,
-              "brief_id": "brief-1", "url": url}
+              "brief_id": "brief-1", "url": url, "draft_text": DRAFT, "uploaded_ts": UPLOADED}
     fields.update(over)
     return fields
 
 
 def kept_ids(rows):
-    return [r["submission_id"] for r in validate_rows(rows, NETWORK, NETUID)]
+    return [r["submission_id"] for r in validate_rows(rows, NETWORK, NETUID, NOW_TS)]
 
 
 def selected_ids(selected):
@@ -31,8 +38,9 @@ def selected_ids(selected):
 
 def test_fixture_row_has_exactly_the_feed_keys_and_validates():
     data = json.loads(FIXTURE.read_text(encoding="utf-8"))
-    assert set(data) == {"submission_id", "network", "netuid", "brief_id", "url"}
-    assert validate_rows([data], NETWORK, NETUID) == [data]
+    assert set(data) == {"submission_id", "network", "netuid", "brief_id", "url", "draft_text", "uploaded_ts"}
+    assert set(data) == set(submissions.ROW_KEYS)
+    assert validate_rows([data], NETWORK, NETUID, NOW_TS) == [data]
 
 
 def test_rows_for_another_network_or_netuid_are_dropped():
@@ -59,27 +67,67 @@ def test_rows_for_another_network_or_netuid_are_dropped():
     {"url": "https://www.example.com/" + "a" * 2048},
 ])
 def test_rows_with_a_bad_id_or_url_are_dropped(bad):
-    assert validate_rows([row(**bad)], NETWORK, NETUID) == []
+    assert validate_rows([row(**bad)], NETWORK, NETUID, NOW_TS) == []
 
 
 def test_id_and_url_length_limits_are_inclusive():
     prefix = "https://www.example.com/"
     good = row(submission_id="S" * 128, brief_id="brief:2026.09_a-1", url=prefix + "a" * (2048 - len(prefix)))
-    assert validate_rows([good], NETWORK, NETUID) == [good]
+    assert validate_rows([good], NETWORK, NETUID, NOW_TS) == [good]
 
 
 def test_non_object_rows_are_dropped_and_extra_keys_are_not_kept():
     rows = [None, "row", ["sub-1"], {**row(), "payout_address": "5Fexample"}]
-    assert validate_rows(rows, NETWORK, NETUID) == [row()]
+    assert validate_rows(rows, NETWORK, NETUID, NOW_TS) == [row()]
+
+
+@pytest.mark.parametrize("bad", [
+    {"draft_text": None},
+    {"draft_text": 12345},
+    {"draft_text": [DRAFT]},
+    {"draft_text": ""},
+    {"draft_text": "x" * 299},
+    {"draft_text": "  \n" + "x" * 299 + "\t "},
+    {"draft_text": " " * 400},
+    {"draft_text": "x" * 40_001},
+    {"uploaded_ts": None},
+    {"uploaded_ts": str(UPLOADED)},
+    {"uploaded_ts": float(UPLOADED)},
+    {"uploaded_ts": True},
+    {"uploaded_ts": 0},
+    {"uploaded_ts": -UPLOADED},
+    {"uploaded_ts": int(NOW_TS) + 1},
+], ids=["draft-none", "draft-int", "draft-list", "draft-empty", "draft-299", "draft-299-padded",
+        "draft-blank", "draft-40001", "uploaded-none", "uploaded-string", "uploaded-float",
+        "uploaded-bool", "uploaded-zero", "uploaded-negative", "uploaded-after-chain-time"])
+def test_rows_with_a_bad_draft_or_upload_time_are_dropped(bad):
+    assert validate_rows([row(**bad)], NETWORK, NETUID, NOW_TS) == []
+
+
+@pytest.mark.parametrize("missing", ["draft_text", "uploaded_ts"])
+def test_rows_without_a_draft_or_upload_time_are_dropped(missing):
+    incomplete = row()
+    del incomplete[missing]
+    assert validate_rows([incomplete, row("sub-2", url=STORY + "-2")], NETWORK, NETUID, NOW_TS) == [
+        row("sub-2", url=STORY + "-2")]
+
+
+def test_draft_length_limits_are_inclusive_after_stripping_and_upload_at_chain_time_is_kept():
+    rows = [
+        row("shortest", url=STORY + "-1", draft_text="\n  " + "x" * 300 + "  \n"),
+        row("longest", url=STORY + "-2", draft_text="x" * 40_000),
+        row("at-chain-time", url=STORY + "-3", uploaded_ts=int(NOW_TS)),
+    ]
+    assert validate_rows(rows, NETWORK, NETUID, NOW_TS) == rows
 
 
 def test_url_whose_canonical_form_keeps_a_query_is_dropped():
-    assert validate_rows([row(url=STORY + "?output=amp")], NETWORK, NETUID) == []
+    assert validate_rows([row(url=STORY + "?output=amp")], NETWORK, NETUID, NOW_TS) == []
 
 
 def test_url_with_only_tracking_parameters_is_kept():
     tracked = row(url=STORY + "?utm_source=newsletter&utm_medium=email")
-    assert validate_rows([tracked], NETWORK, NETUID) == [tracked]
+    assert validate_rows([tracked], NETWORK, NETUID, NOW_TS) == [tracked]
 
 
 def test_only_the_first_feed_rows_are_read(monkeypatch):

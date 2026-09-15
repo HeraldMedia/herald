@@ -226,6 +226,9 @@ HERALD_PUBLISH_BUFFER_DAYS = int(os.getenv('HERALD_PUBLISH_BUFFER_DAYS', '3'))
 HERALD_MAX_ARTICLE_AGE_DAYS = int(os.getenv('HERALD_MAX_ARTICLE_AGE_DAYS', '21'))
 # At most this many new submissions are verified in one evaluation epoch.
 HERALD_MAX_SUBMISSIONS_PER_EPOCH = int(os.getenv('HERALD_MAX_SUBMISSIONS_PER_EPOCH', '500'))
+# Share of the uploaded draft's word shingles that must appear in the published article body. The
+# default is the attribution text threshold's default, so every validator applies the same rule.
+HERALD_DRAFT_MATCH_THRESHOLD = float(os.getenv('HERALD_DRAFT_MATCH_THRESHOLD', '0.6'))
 
 # Log out all non-sensitive config variables
 bt.logging.info(f"HERALD_BRIEFS_ENDPOINT: {HERALD_BRIEFS_ENDPOINT}")
