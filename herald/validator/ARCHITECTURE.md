@@ -100,15 +100,18 @@ instead of letting the SDK convert it into uniform rewards.
 8. Search-index check
 9. Attribution-evidence grading and USD calculation
 
-Direct/proxy fetches anchor the miner snapshot inside the validator's full page. Publisher API
-adapters reverse the direction: the authoritative excerpt must appear inside the miner's snapshot.
-Topic metadata for API adapters remains publisher-controlled.
+Direct/proxy fetches anchor the miner snapshot inside the validator's full page; the paid-content,
+topic and attribution checks then run on the article the validator fetched, so the snapshot only
+has to match it. Publisher API adapters reverse the direction: the authoritative excerpt must appear
+inside the miner's snapshot. Topic metadata for API adapters remains publisher-controlled, and
+because the validator holds no article body of its own for those outlets, their attribution is
+graded on byline and publication window only.
 
 ## Attribution and winner selection
 
 Commitments can bind three evidence levels:
 
-- Level 2: precommitted draft or quote appears in the article.
+- Level 2: precommitted draft or quote appears in the article the validator fetched.
 - Level 1: precommitted byline and bounded publication window match.
 - Level 0: bare prediction.
 

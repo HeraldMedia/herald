@@ -51,12 +51,12 @@ def _persistence_status(entry, briefs_by_id, epoch, judge_fn, registry=None) -> 
     """alive (pay), dead (clawback + slash), or hold (transient/unconfirmed — do nothing).
 
     Gates the per-epoch installment on LIVENESS ONLY: a reachable, non-thin page that hasn't
-    turned into an ad. Topic match and search-index presence were already verified at claim time
-    (snapshot-anchored, so the whole fleet agreed on them); re-checking them here on each
-    validator's own live fetch only forks per-epoch pay across the fleet — search results and page
-    variants legitimately differ per validator — for no slashing benefit, so they are intentionally
-    NOT re-run. Clawback+slash still fire only on a CONFIRMED removal (404/410) or a confirmed swap
-    to paid content, so a transient outage never slashes an honest miner.
+    turned into an ad. Topic match and search-index presence were already verified at claim time;
+    re-checking them here on each validator's own live fetch only forks per-epoch pay across the
+    fleet — search results and page variants legitimately differ per validator — for no slashing
+    benefit, so they are intentionally NOT re-run. Clawback+slash still fire only on a CONFIRMED
+    removal (404/410) or a confirmed swap to paid content, so a transient outage never slashes an
+    honest miner.
     """
     if entry.brief_id not in briefs_by_id:
         return "hold"  # brief closed/defunded: withhold its installment, don't slash

@@ -4,8 +4,9 @@ Outlets behind a bot-wall (NYT, etc.) can't be scraped by a code-only validator 
 returns a JS challenge. But the publisher's own API returns AUTHORITATIVE, deterministic metadata
 (byline, publish date, section, abstract, lead paragraph) with no bot-wall — identical bytes for
 every validator, so no cross-validator fork. The oracle anchors the miner's claim snapshot to the
-API's lead paragraph (proving the snapshot really is that article), then runs the body checks on the
-anchored snapshot while trusting byline/date/topic from the API.
+API's lead paragraph (proving the snapshot really is that article), then runs the paid-content check
+on the anchored snapshot while trusting byline/date/topic from the API. Holding no article body of its
+own for these outlets, the oracle grades their attribution on byline and publish window only.
 
 A FetchResult with body_kind="excerpt" signals the oracle to flip the snapshot anchor direction
 (the short authoritative excerpt must appear IN the snapshot, not vice-versa).

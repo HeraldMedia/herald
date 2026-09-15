@@ -205,17 +205,133 @@ def test_hotkey_mismatch_rejected():
 
 BRIEF_KW = {"id": "b1", "keywords": ["bittensor"]}
 SNAPSHOT = ("The Bittensor media subnet Herald opened its public pilot this week. " * 4).strip()
+ARTICLE_SENTENCES = [
+    "The Bittensor media subnet Herald opened its public pilot this week after months of rehearsal.",
+    "Miners are paid only for articles that pass an automated verification oracle run by validators.",
+    "Earned coverage should be provable, not promised, the team said in its launch note on Tuesday.",
+    "The registry of approved outlets is signed offline and anchored on chain for auditability.",
+]
+ARTICLE = " ".join(ARTICLE_SENTENCES)
+PAGE_WITH_CHROME = "Site navigation: World Business Technology. " + ARTICLE + " Footer: About Contact."
 
 
-def test_snapshot_makes_content_checks_deterministic():
-    # Our own fetch got a page variant MISSING the brief keyword; the anchored snapshot has it.
-    # Content checks run on the snapshot bytes, so every validator passes this claim identically.
-    variant = SNAPSHOT.replace("Bittensor", "the network")  # same page, keyword dropped
+def test_topic_is_checked_on_the_fetched_article_not_the_snapshot():
+    # The snapshot names the brief keyword; the page we fetched does not. The snapshot still clears
+    # the 0.5 anchor floor, and topic is decided on the page we fetched.
+    page = SNAPSHOT.replace("Bittensor", "the network")
     c = make_claim(snapshot_text=SNAPSHOT)
     r = evaluate_article(c, onchain_for(c), REGISTRY, BRIEF_KW,
-                         fetch_fn=live_with(text=variant), search_fn=indexed)
+                         fetch_fn=live_with(text=page), search_fn=indexed)
+    assert 0.5 <= r.evidence["snapshot_anchor"] < 0.6
+    assert not r.passed and r.reason == "topic_mismatch"
+    assert r.evidence["topic_match"] is False
+
+
+def test_snapshot_above_the_anchor_floor_is_scored_on_the_fetched_article():
+    # The miner saw a page variant without the keyword; the page we fetched carries it. About half
+    # of the snapshot differs, which the 0.5 floor tolerates, and the claim passes on our fetch.
+    c = make_claim(snapshot_text=SNAPSHOT.replace("Bittensor", "Tao"))
+    r = evaluate_article(c, onchain_for(c), REGISTRY, BRIEF_KW,
+                         fetch_fn=live_with(text=SNAPSHOT), search_fn=indexed)
+    assert r.passed and 0.5 <= r.evidence["snapshot_anchor"] < 0.6
+    assert r.evidence["topic_match"] is True
+
+
+def test_attribution_is_graded_on_the_fetched_article_not_the_snapshot():
+    # The committed quote is in the snapshot, but the page we fetched paraphrases it. The snapshot
+    # still clears the anchor; the quote is graded against the page we fetched, so no text proof.
+    quote = ARTICLE_SENTENCES[2]
+    page = ARTICLE.replace(quote, "The team framed verification as central in its launch note.")
+    c = make_evidence_claim({"text": quote}, snapshot_text=ARTICLE)
+    r = evaluate_article(c, onchain_for(c), REGISTRY, BRIEF,
+                         fetch_fn=live_with(text=page), search_fn=indexed)
+    assert r.passed and r.evidence["snapshot_anchor"] >= 0.5
+    assert r.evidence["attribution_level"] == 0
+    assert r.usd == HERALD_BASE_PAYOUT_USD * HERALD_ATTR_MULT[0]
+
+
+def test_attribution_reads_only_the_fetched_article():
+    # The snapshot also carries the committed draft. Topic passes on the page we fetched, and
+    # attribution is graded on that page too.
+    c = make_evidence_claim({"text": DRAFT}, snapshot_text=ARTICLE + " " + DRAFT)
+    r = evaluate_article(c, onchain_for(c), REGISTRY, BRIEF_KW,
+                         fetch_fn=live_with(text=ARTICLE), search_fn=indexed)
     assert r.passed and r.evidence["snapshot_anchor"] >= 0.5
     assert r.evidence["topic_match"] is True
+    assert r.evidence["attribution_level"] == 0
+
+
+def test_claim_without_a_snapshot_is_topic_checked_on_the_extracted_article():
+    # Only the headline outside the extracted article body names the brief keyword. With an article
+    # body extracted, topic is decided on that body; with none, on the page text.
+    article = ARTICLE.replace("Bittensor", "decentralised")
+    page = "Bittensor subnet opens its public pilot. " + article + " Footer: About Contact."
+    c = make_claim()
+    r = evaluate_article(c, onchain_for(c), REGISTRY, BRIEF_KW,
+                         fetch_fn=live_with(text=page, article_text=article), search_fn=indexed)
+    assert not r.passed and r.reason == "topic_mismatch"
+    assert r.evidence["topic_match"] is False
+    r = evaluate_article(c, onchain_for(c), REGISTRY, BRIEF_KW,
+                         fetch_fn=live_with(text=page), search_fn=indexed)
+    assert r.passed and r.evidence["topic_match"] is True
+
+
+def test_claim_without_a_snapshot_is_attribution_graded_on_the_extracted_article():
+    # The committed quote appears only as a pull quote outside the extracted article body. With an
+    # article body extracted there is no text proof; with none, the quote is graded on the page text.
+    quote = ARTICLE_SENTENCES[2]
+    article = " ".join(ARTICLE_SENTENCES[:2] + ARTICLE_SENTENCES[3:])
+    page = quote + " " + article
+    c = make_evidence_claim({"text": quote})
+    r = evaluate_article(c, onchain_for(c), REGISTRY, BRIEF,
+                         fetch_fn=live_with(text=page, article_text=article), search_fn=indexed)
+    assert r.passed and r.evidence["attribution_level"] == 0
+    r = evaluate_article(c, onchain_for(c), REGISTRY, BRIEF,
+                         fetch_fn=live_with(text=page), search_fn=indexed)
+    assert r.passed and r.evidence["attribution_level"] == 2
+
+
+def test_committed_text_that_appears_in_the_fetched_article_reaches_level2():
+    # An honest claim: the snapshot carries a banner our extraction leaves out, and the committed
+    # quote really is in the article body we fetched.
+    quote = ARTICLE_SENTENCES[2]
+    c = make_evidence_claim({"text": quote}, snapshot_text="Subscribe for daily briefings. " + ARTICLE)
+    r = evaluate_article(c, onchain_for(c), REGISTRY, BRIEF_KW,
+                         fetch_fn=live_with(text=PAGE_WITH_CHROME, article_text=ARTICLE),
+                         search_fn=indexed)
+    assert r.passed and r.evidence["snapshot_anchor"] >= 0.5
+    assert r.evidence["attribution_level"] == 2
+    assert r.usd == HERALD_BASE_PAYOUT_USD * HERALD_ATTR_MULT[2]
+
+
+def test_snapshot_below_the_anchor_rejects_even_when_the_fetch_would_pass():
+    # The page we fetched carries the committed draft and would grade a text proof; a snapshot that
+    # does not match that page still rejects the claim for this pass.
+    c = make_evidence_claim({"text": DRAFT},
+                            snapshot_text="A completely different page about football results.")
+    r = evaluate_article(c, onchain_for(c), REGISTRY, BRIEF,
+                         fetch_fn=live_with(text="Intro. " + DRAFT + " Outro."), search_fn=indexed)
+    assert not r.passed and r.reason == "snapshot_mismatch"
+    assert r.evidence["snapshot_anchor"] < 0.5
+
+
+def test_paid_checks_read_the_fetched_article_for_full_body_outlets():
+    # Both the disclosure rules and the LLM fallback read the article we fetched, never the snapshot.
+    from herald.validator.news.judge import PAID_QUESTION
+
+    asked = []
+
+    def judge_fn(question, text):
+        asked.append((question, text))
+        return None  # no verdict: the rules decide
+
+    c = make_claim(snapshot_text=ARTICLE + " Sponsored content by the client.")
+    r = evaluate_article(c, onchain_for(c), REGISTRY, BRIEF,
+                         fetch_fn=live_with(text=PAGE_WITH_CHROME, article_text=ARTICLE),
+                         search_fn=indexed, judge_fn=judge_fn)
+    assert r.passed and r.evidence["paid"] is False
+    assert PAID_QUESTION in [question for question, _ in asked]
+    assert all(text == ARTICLE for _, text in asked)
 
 
 def test_snapshot_mismatch_rejected_this_pass():
@@ -253,25 +369,6 @@ def test_paid_marker_inside_article_still_rejects_snapshot_claim():
         fetch_fn=live_with(text=article, article_text=article), search_fn=indexed,
     )
     assert not r.passed and r.reason == "paid_not_real_news"
-
-
-def test_attribution_graded_against_anchored_snapshot():
-    # Evidence text appears in the snapshot; our own fetch is an anchored variant with just that
-    # quote paraphrased away — grading on the snapshot keeps the level identical across validators.
-    sents = [
-        "The Bittensor media subnet Herald opened its public pilot this week after months of rehearsal.",
-        "Miners are paid only for articles that pass an automated verification oracle run by validators.",
-        "Earned coverage should be provable, not promised, the team said in its launch note on Tuesday.",
-        "The registry of approved outlets is signed offline and anchored on chain for auditability.",
-    ]
-    snapshot = " ".join(sents)
-    quote = sents[2]
-    variant = snapshot.replace(quote, "The team framed verification as central in its launch note.")
-    c = make_evidence_claim({"text": quote}, snapshot_text=snapshot)
-    r = evaluate_article(c, onchain_for(c), REGISTRY, BRIEF,
-                         fetch_fn=live_with(text=variant), search_fn=indexed)
-    assert r.passed and r.evidence["snapshot_anchor"] >= 0.5
-    assert r.evidence["attribution_level"] == 2
 
 
 LEAD = "The lead paragraph carries a distinctive verbatim sentence about the world summit today."
@@ -322,3 +419,23 @@ def test_excerpt_mode_grades_byline_from_authoritative_api():
                          fetch_fn=excerpt_with(author="Jane Doe", published="2026-07-12"),
                          search_fn=indexed)
     assert r.passed and r.evidence["attribution_level"] == 1
+
+
+def test_excerpt_mode_never_grades_a_text_proof():
+    # api outlet: the only article body is the claim's own snapshot, so committed text is not
+    # graded, even when it also appears in the authoritative lead paragraph.
+    c = make_evidence_claim({"text": LEAD}, snapshot_text="Intro. " + LEAD + " Outro paragraph.")
+    r = evaluate_article(c, onchain_for(c), REGISTRY, BRIEF,
+                         fetch_fn=excerpt_with(), search_fn=indexed)
+    assert r.passed and r.evidence["attribution_level"] == 0
+    assert r.usd == HERALD_BASE_PAYOUT_USD * HERALD_ATTR_MULT[0]
+
+
+def test_excerpt_mode_grades_byline_and_window_when_text_is_also_committed():
+    evidence = {"text": LEAD, "author": "Jane Doe", "window": ["2026-07-10", "2026-07-15"]}
+    c = make_evidence_claim(evidence, snapshot_text="Intro. " + LEAD + " Outro paragraph.")
+    r = evaluate_article(c, onchain_for(c), REGISTRY, BRIEF,
+                         fetch_fn=excerpt_with(author="Jane Doe", published="2026-07-12"),
+                         search_fn=indexed)
+    assert r.passed and r.evidence["attribution_level"] == 1
+    assert r.usd == HERALD_BASE_PAYOUT_USD * HERALD_ATTR_MULT[1]
