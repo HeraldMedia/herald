@@ -1,38 +1,55 @@
 # Herald Validator
 
-Herald is Bittensor netuid 69 for verified editorial media placement. Validators pull article
-claims from miners, verify them against public evidence, maintain vesting and slashing state, and
-aggregate the current placement installments by miner. Positive miner totals are normalized to
-100% of Bittensor weights; there is no unused-emission or UID-0 remainder.
+Herald is Bittensor netuid 69 for verified editorial media placement. PR firms and journalists
+submit articles through the Herald website. Validators read those submissions from the backend,
+verify each article against the outlet's own page, vest its value on one incentive hotkey
+(`HERALD_INCENTIVE_HOTKEY`), and set weights on that hotkey and UID 0 only. The incentive hotkey
+receives the epoch's verified USD installments divided by the USD value of the day's miner
+emission, at most 100%; UID 0 receives the rest, which is burned. Registered miner hotkeys receive
+no weight.
 
 The core path is rules-based. An LLM is optional and must not be enabled unless every validator
 uses the same provider and pinned model.
 
 ## What a validator verifies
 
-For every claim, the validator checks:
+For every new submission, the validator checks, in order:
 
-1. The reveal matches the miner's current on-chain commitment and serving hotkey.
-2. The target outlet and registry version match the signed outlet registry.
-3. The URL is live and was published after the commitment.
-4. The article snapshot matches the validator's direct, proxy, or publisher-API fetch.
-5. The URL and article do not match generic or outlet-specific paid-content rules.
-6. The article matches the funded brief and, when configured, appears in a search index.
-7. Attribution evidence is graded and the strongest, earliest valid claimant wins.
+1. The submission's brief is in the signed active brief feed.
+2. The outlet is in the signed outlet registry and is fetched directly or through the proxy.
+3. The URL is live and states a publication time.
+4. Publication is no later than chain time, at most `HERALD_MAX_ARTICLE_AGE_DAYS` before it, and,
+   for a brief with an end date, inside the brief window (start date minus
+   `HERALD_PUBLISH_BUFFER_DAYS` through end date).
+5. The article was published on or after the UTC day the contributor uploaded their text.
+6. At least `HERALD_DRAFT_MATCH_THRESHOLD` of the uploaded text appears in the article the
+   validator fetched.
+7. The URL and article do not match generic or outlet-specific paid-content rules.
+8. The article matches the brief's topic. Search-index presence then sets the value multiplier.
 
-Rewards vest over the configured persistence window. Confirmed removal or conversion to paid
-content claws back the remaining vest and slashes the miner for a cooldown.
+Rewards vest over the configured persistence window while the article stays live. Confirmed
+removal or conversion to paid content claws back the remaining vest. There is no slashing.
+
+When the verified brief feed is empty, or a step every article depends on fails (the incentive
+hotkey check, chain time, pricing, the outlet registry or the submissions feed), the validator
+puts all weight on UID 0 for the day. See [docs/validator.md](../../docs/validator.md) §8 for the
+submissions feed, settings, pricing inputs, weight vector checks and log tags.
 
 ## Requirements
 
 - Linux, Python 3.11 or 3.12
 - A registered validator hotkey with subnet-69 alpha stake
 - A publicly routable axon address
-- The same consensus-affecting configuration as every other Herald validator
+- The same consensus-affecting configuration as every other Herald validator, including
+  `HERALD_INCENTIVE_HOTKEY`
 - The offline-signed production outlet registry
 - A signed brief-board validator feed
+- `HERALD_RESULTS_ENDPOINT` with a results read credential (the submissions feed) and write
+  credential (reports)
 - ScrapingBee credentials for the shipped registry's `proxy:*`-strategy outlets
 - SerpAPI and/or Brave credentials for the search-index multiplier
+- Outbound HTTPS to CoinGecko for the TAO/USD price
+- A subnet MinAllowedWeights of 1, so single-entry burn vectors are accepted
 
 Copy the root configuration template:
 
@@ -41,8 +58,8 @@ cp .env.example .env
 ```
 
 At minimum, configure the wallet, network, axon address, brief endpoint, registry trust anchors,
-fetch/search providers, and result endpoint. Keep provider availability and every
-`HERALD_*` consensus value identical across the fleet.
+fetch/search providers, results endpoint and credentials, and the incentive hotkey. Keep provider
+availability and every `HERALD_*` consensus value identical across the fleet.
 
 ## Registry trust
 
@@ -66,9 +83,10 @@ Registry editions advance one version at a time. Validators keep the previous si
 a finalized anchor's effective block is still in the future, then fail closed until the backend
 serves the newly active edition for their network and netuid.
 
-Use a dedicated registered authority hotkey: Bittensor gives each hotkey one commitment slot, so a
-miner, validator, or dispute hotkey would overwrite (or be overwritten by) the registry anchor.
-Publish only after inspecting the printed `HRLDREG|...` value:
+Use a dedicated registered authority hotkey: Bittensor gives each hotkey one commitment slot, so
+any other commitment from the same hotkey would overwrite (or be overwritten by) the registry
+anchor. The authority hotkey must also differ from `HERALD_INCENTIVE_HOTKEY`. Publish only after
+inspecting the printed `HRLDREG|...` value:
 
 ```bash
 python -m herald.registry.admin publish-anchor outlets.signed.json \
@@ -96,7 +114,8 @@ HERALD_REQUIRE_SIGNED_REGISTRY=true
 HERALD_REGISTRY_AUTHORITY_HOTKEY=<AUTHORITY_SS58>
 ```
 
-When an authority hotkey is configured, a missing or mismatched anchor fails closed.
+When an authority hotkey is configured, a missing or mismatched anchor fails closed and the day is
+burned.
 
 For a guarded two-validator PM2 handoff after a testnet canary has scored its target epoch:
 
@@ -134,8 +153,29 @@ HERALD_REQUIRE_SIGNED_BRIEFS=true
 HERALD_BRIEFS_MAX_AGE=900
 ```
 
-An explicitly empty, valid feed clears the score vector and submits no weights. A network failure
-uses the existing brief cache when available; it is not treated as an authoritative empty feed.
+An explicitly empty, valid feed puts all weight on UID 0 for the epoch
+(`INCENTIVE_BURN epoch=<e> reason=no_briefs`). A network failure uses the existing brief cache when
+available; it is not treated as an authoritative empty feed.
+
+## Incentive hotkey and submissions
+
+```dotenv
+HERALD_INCENTIVE_HOTKEY=<INCENTIVE_SS58>
+HERALD_RESULTS_ENDPOINT=https://herald-api.example
+HERALD_RESULTS_READ_TOKEN=<READ_TOKEN>
+```
+
+- `HERALD_INCENTIVE_HOTKEY` is provided by the subnet operator and must be identical on every
+  validator; it is part of the consensus fingerprint. Production preflight requires a valid SS58
+  address that differs from `HERALD_REGISTRY_AUTHORITY_HOTKEY`. At scoring time the day is burned
+  if the hotkey is not registered, is this validator's own hotkey, or holds UID 0.
+- The validator reads `GET /api/v4/validator/submissions` with `HERALD_RESULTS_READ_TOKEN`, or the
+  shared `HERALD_RESULTS_TOKEN`. A feed that cannot be read burns the day.
+- Uploaded draft text is used only for verification. The validator never publishes, stores or logs
+  it.
+- `HERALD_DRAFT_MATCH_THRESHOLD` (default `0.6`), `HERALD_PUBLISH_BUFFER_DAYS` (`3`),
+  `HERALD_MAX_ARTICLE_AGE_DAYS` (`21`) and `HERALD_MAX_SUBMISSIONS_PER_EPOCH` (`500`) are consensus
+  values.
 
 ## Run
 
@@ -160,14 +200,13 @@ docker compose logs -f validator
 ```
 
 Compose persists the wallet, score checkpoint, Herald ledger, and logs in the
-`validator_state` volume. It also applies a configurable memory limit because Bittensor reads a
-raw dendrite response before the bounded `ClaimSynapse` model parses it.
+`validator_state` volume. It also applies a configurable memory limit.
 
-The score checkpoint records the producing spec version; a mismatch discards old scores instead
-of publishing an old emission model under a new version key. The Herald ledger separately records
-the last scored and last successfully submitted weight epochs, preventing one daily allocation
-from being resubmitted at each shorter Bittensor weight-update interval. Back up and restore both
-state files together.
+The score checkpoint records the producing spec version (20 for release `0.2.0`); a mismatch
+discards old scores instead of publishing an old emission model under a new version key. The
+Herald ledger separately records the last scored and last successfully submitted weight epochs,
+preventing one daily allocation from being resubmitted at each shorter Bittensor weight-update
+interval. Back up and restore both state files together.
 
 Set `AXON_EXTERNAL_IP` when automatic public-address discovery is not reliable. If the public port
 differs from the listen port, also set `AXON_EXTERNAL_PORT`.
@@ -178,23 +217,15 @@ differs from the listen port, also set `AXON_EXTERNAL_PORT`.
 - Set `HERALD_REGISTRY_ENDPOINT` to the backend base URL. Each validator fetches the activated
   edition but independently verifies its Ed25519 signature and finalized authority anchor before
   caching it; a new anchor without its matching edition fails closed.
-- With `HERALD_RESULTS_ENDPOINT` set, each evaluation publishes an immutable hotkey-signed epoch
+- With `HERALD_RESULTS_ENDPOINT` set, each scored epoch publishes an immutable hotkey-signed epoch
   snapshot containing exact micro-USD pool accounting, daily contributions, lifecycle state, and
-  the intended normalized vector. A second signed receipt follows weight submission.
+  the intended vector on UID 0 and the incentive hotkey's UID. A second signed receipt follows
+  weight submission. An epoch burned by a failed step publishes no snapshot.
+- The backend confirms an epoch when `HERALD_QUORUM_REQUIRED` enrolled reporters agree. Set it to 1
+  when a single operator's validator is the only confirming reporter.
 - Roll out consensus changes to the entire fleet together; automatic git updates should stay off.
-- Give every validator the same registry edition, anchor, brief key, provider set, quorum, and LLM
-  configuration.
-- Bootstrap a new validator's vesting state from published results before its first scoring epoch:
-
-```bash
-python -m herald.validator.news.bootstrap \
-  --results-url "$HERALD_RESULTS_ENDPOINT" \
-  --state-path <full_path>/herald_state.json \
-  --netuid 69 --network finney
-```
-
-Claim reconciliation uses the result board only as a hint; every imported reveal is fully
-reverified against the chain, registry, and article.
+- Give every validator the same registry edition, anchor, brief key, incentive hotkey, provider
+  set, quorum, and LLM configuration.
 
 ## Verification and monitoring
 
@@ -206,6 +237,9 @@ pm2 logs herald_validator
 curl -fsS https://herald-api.example/public/articles
 ```
 
-Before mainnet, rehearse with at least two validators and several miners. Confirm identical
-fingerprints, restart recovery, result reconciliation, persistence checks, normalized weights, and a real
-`set_weights` extrinsic.
+Watch for `SUBMISSION_RESULT`, `INCENTIVE_WEIGHT`, `INCENTIVE_BURN` and `WEIGHT_VECTOR_REFUSED`
+lines; [docs/validator.md](../../docs/validator.md) §8.8 lists every tag.
+
+Before mainnet, rehearse with at least two validators and several submissions. Confirm identical
+fingerprints, restart recovery, persistence checks, `INCENTIVE_WEIGHT` and `INCENTIVE_BURN` lines,
+and a real `set_weights` extrinsic that carries only UID 0 and the incentive hotkey's UID.
