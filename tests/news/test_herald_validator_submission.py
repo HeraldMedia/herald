@@ -108,6 +108,7 @@ def test_last_weight_epoch_has_exactly_the_documented_writer():
     assert writers == {
         ("herald/validator/news/state.py", "self.last_weight_epoch = last_weight_epoch"),
         ("neurons/validator.py", "state.last_weight_epoch = state.last_scored_epoch"),
+        ("herald/validator/news/forward.py", "state.last_weight_epoch = state.last_scored_epoch - 1"),
     }
 
 
@@ -130,6 +131,26 @@ def test_validator_loads_herald_state_at_startup(tmp_path, monkeypatch):
     _patch_startup(tmp_path, monkeypatch)
 
     assert Validator().herald_state.last_scored_epoch == 42
+
+
+@pytest.mark.parametrize("wallet_hotkey, expected", [("hkOwner", True), ("hkOther", False)])
+def test_startup_logs_whether_the_wallet_hotkey_holds_uid_zero(tmp_path, monkeypatch, wallet_hotkey,
+                                                              expected):
+    _patch_startup(tmp_path, monkeypatch)
+    base_init = BaseValidatorNeuron.__init__
+
+    def init_with_chain_view(self, config=None):
+        base_init(self, config)
+        self.wallet = SimpleNamespace(hotkey=SimpleNamespace(ss58_address=wallet_hotkey))
+        self.metagraph = SimpleNamespace(hotkeys=["hkOwner", "hkOther"])
+
+    monkeypatch.setattr(BaseValidatorNeuron, "__init__", init_with_chain_view)
+    logs = []
+    monkeypatch.setattr("neurons.validator.bt.logging.info", lambda msg, *a, **k: logs.append(str(msg)))
+
+    Validator()
+
+    assert f"OWNER_VALIDATOR_CHECK wallet_hotkey_is_uid0={expected}" in logs
 
 
 def test_validator_refuses_to_start_on_an_unreadable_state_file(tmp_path, monkeypatch):

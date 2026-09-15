@@ -30,6 +30,13 @@ class Validator(BaseValidatorNeuron):
         # and retried every step while the validator runs without its ledger.
         _state(self)
 
+        # Shows whether this validator signs with the hotkey registered at UID 0.
+        try:
+            is_uid0 = self.wallet.hotkey.ss58_address == self.metagraph.hotkeys[0]
+            bt.logging.info(f"OWNER_VALIDATOR_CHECK wallet_hotkey_is_uid0={is_uid0}")
+        except Exception as e:
+            bt.logging.warning(f"OWNER_VALIDATOR_CHECK unavailable: {e}")
+
         try:
             cw_handler = get_cloudwatch_handler(
                 log_group="/herald/validator",

@@ -7,6 +7,8 @@ import hashlib
 import json
 import os
 
+from herald.validator.news import pricing
+from herald.validator.news.emission import BURN_UID
 from herald.validator.utils import config as cfg
 
 
@@ -23,35 +25,31 @@ def consensus_params() -> dict:
         "vest_epochs": cfg.VEST_EPOCHS,
         "vest_grace": cfg.HERALD_VEST_GRACE_EPOCHS,
         "dead_confirm": cfg.HERALD_DEAD_CONFIRM_EPOCHS,
-        "slash_cooldown": cfg.SLASH_COOLDOWN_EPOCHS,
-        "max_placement_days": cfg.HERALD_MAX_PLACEMENT_DAYS,
         # scoring
         "base_payout": cfg.HERALD_BASE_PAYOUT_USD,
         "tier_mult": cfg.HERALD_TIER_MULTIPLIER,
         "no_search_floor": cfg.HERALD_NO_SEARCH_FLOOR,
-        "emission_mode": "participant_normalized_v1",
-        "max_articles_per_miner": cfg.HERALD_MAX_ARTICLES_PER_MINER,
-        # Explicitly version the removal of per-claim miner bonding. Older validators omit this
-        # key and therefore advertise a different fingerprint instead of silently disagreeing.
-        "miner_bond_required": False,
-        # attribution evidence
-        "attr_mult": cfg.HERALD_ATTR_MULT,
-        "attr_min_text_words": cfg.HERALD_ATTR_MIN_TEXT_WORDS,
-        "attr_text_threshold": cfg.HERALD_ATTR_TEXT_THRESHOLD,
-        "attr_max_window_days": cfg.HERALD_ATTR_MAX_WINDOW_DAYS,
-        "snapshot_anchor": cfg.HERALD_SNAPSHOT_ANCHOR,
-        # dispute-filer stake eligibility / weight slashing (legacy config names)
-        "slash_mult": cfg.SLASH_MULTIPLIER,
-        "bond_alpha_per_usd": cfg.HERALD_BOND_ALPHA_PER_USD,
-        # judgement tier + disputes (must be enabled identically or weights diverge)
+        # weights: the incentive hotkey's share is verified USD over the USD value of the day's
+        # miner emission; UID 0 receives the rest
+        "emission_mode": "incentive_burn_v1",
+        "burn_uid": BURN_UID,
+        "incentive_hotkey": cfg.HERALD_INCENTIVE_HOTKEY,
+        "price_source": pricing.PRICE_SOURCE,
+        "miner_emission_share": pricing.MINER_EMISSION_SHARE,
+        "blocks_per_day": pricing.BLOCKS_PER_DAY,
+        # submission intake and verification
+        "intake": "backend_submissions_draft_match_v1",
+        "draft_match_threshold": cfg.HERALD_DRAFT_MATCH_THRESHOLD,
+        "publish_buffer_days": cfg.HERALD_PUBLISH_BUFFER_DAYS,
+        "max_article_age_days": cfg.HERALD_MAX_ARTICLE_AGE_DAYS,
+        "max_submissions_per_epoch": cfg.HERALD_MAX_SUBMISSIONS_PER_EPOCH,
+        # judgement tier (must be enabled identically or weights diverge)
         "use_llm_judge": cfg.HERALD_USE_LLM_JUDGE,
         "ref_model_id": cfg.HERALD_REF_MODEL_ID,
         "llm_provider": cfg.LLM_PROVIDER,
         "llm_provider_ready": bool(
             cfg.CHUTES_API_KEY if cfg.LLM_PROVIDER == "chutes" else cfg.OPENROUTER_API_KEY
         ),
-        "dispute_reward_fraction": cfg.HERALD_DISPUTE_REWARD_FRACTION,
-        "dispute_window": cfg.HERALD_DISPUTE_WINDOW_EPOCHS,
         # outside-data providers (the set + quorum are consensus per RUNBOOK)
         "quorum_threshold": cfg.HERALD_QUORUM_THRESHOLD,
         "search_top_n": cfg.HERALD_SEARCH_TOP_N,

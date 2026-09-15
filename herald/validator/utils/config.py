@@ -159,65 +159,35 @@ HERALD_TIER_MULTIPLIER = {1: 1.0, 2: 0.6, 3: 0.2}  # publications sheet weights 
 # this is a consensus-stability parameter, not just pricing.
 HERALD_NO_SEARCH_FLOOR = float(os.getenv('HERALD_NO_SEARCH_FLOOR', '0.5'))
 
-# ── Attribution evidence (see evidence.py/textmatch.py) — CONSENSUS-CRITICAL: set identically on
-# every validator or the same claim pays differently and weights diverge. Payout multiplier per
-# evidence level: 2 = committed text found in the article, 1 = committed byline + tight publish
-# window both match, 0 = bare commit (ratchet L0 to 0 once miners adopt evidence).
-HERALD_ATTR_MULT = {
-    2: float(os.getenv('HERALD_ATTR_MULT_L2', '1.0')),
-    1: float(os.getenv('HERALD_ATTR_MULT_L1', '0.7')),
-    0: float(os.getenv('HERALD_ATTR_MULT_L0', '0.3')),
-}
+# ── Attribution text matching (see evidence.py/textmatch.py) ──
 # Level 2 gates: min evidence-text length and shingle-containment threshold vs the article.
 HERALD_ATTR_MIN_TEXT_WORDS = int(os.getenv('HERALD_ATTR_MIN_TEXT_WORDS', '8'))
 HERALD_ATTR_TEXT_THRESHOLD = float(os.getenv('HERALD_ATTR_TEXT_THRESHOLD', '0.6'))
 # Level 1 gate: the committed publish window may span at most this many days.
 HERALD_ATTR_MAX_WINDOW_DAYS = int(os.getenv('HERALD_ATTR_MAX_WINDOW_DAYS', '7'))
-# Snapshot anchoring: a claim's page snapshot must reach this shingle containment against the
-# validator's own fetch. Below the anchor -> reject this pass (re-fetched next epoch). For direct and
-# proxy outlets the content checks run on the validator's fetch, not on the snapshot.
-HERALD_SNAPSHOT_ANCHOR = float(os.getenv('HERALD_SNAPSHOT_ANCHOR', '0.5'))
-HERALD_MAX_ARTICLES_PER_MINER = int(os.getenv('HERALD_MAX_ARTICLES_PER_MINER', '200'))
 # Miner axon collection is network I/O, not a consensus rule. Retry failed/timeout responses in
 # the same forward pass so one transient query at an epoch boundary does not erase a miner's day.
 HERALD_CLAIM_QUERY_ATTEMPTS = int(os.getenv('HERALD_CLAIM_QUERY_ATTEMPTS', '3'))
 HERALD_CLAIM_QUERY_TIMEOUT = float(os.getenv('HERALD_CLAIM_QUERY_TIMEOUT', '12'))
 HERALD_CLAIM_QUERY_RETRY_DELAY = float(os.getenv('HERALD_CLAIM_QUERY_RETRY_DELAY', '1'))
 
-# Legacy names retained for deployment compatibility. These values now stake-gate only dispute
-# filers; article claims do not require miner alpha stake or a per-claim bond.
-SLASH_MULTIPLIER = float(os.getenv('HERALD_SLASH_MULTIPLIER', '1.5'))
-HERALD_BOND_ALPHA_PER_USD = float(os.getenv('HERALD_BOND_ALPHA_PER_USD', '1.0'))
-
-# Vesting over the persistence window, and slash cooldown (in evaluation epochs).
+# Vesting installments over the persistence window (in evaluation epochs).
 VEST_EPOCHS = int(os.getenv('HERALD_VEST_EPOCHS', '30'))
-SLASH_COOLDOWN_EPOCHS = int(os.getenv('HERALD_SLASH_COOLDOWN_EPOCHS', '7'))
 # Require this many consecutive confirmed-dead epochs before clawback+slash, so a transient
 # 404/geo-block (or a stray "sponsored" string) doesn't slash an honest miner.
 HERALD_DEAD_CONFIRM_EPOCHS = int(os.getenv('HERALD_DEAD_CONFIRM_EPOCHS', '2'))
 # Expire an article still vesting long after its window (bounds state; terminates held entries).
 HERALD_VEST_GRACE_EPOCHS = int(os.getenv('HERALD_VEST_GRACE_EPOCHS', '30'))
 
-# ── Disputes (escalated re-scrutiny of a placement; see dev/DISPUTE_DESIGN.md) ──────
-# A dispute (on-chain HRLDDIS commit) forces the pinned judge on a placement; the existing
-# persistence verdict decides it. Resolution runs the judge, so it is DISABLED unless
-# HERALD_REF_MODEL_ID is pinned identically across validators (a mixed fleet would diverge).
-# Share of a slashed miner's forfeited vesting paid to the disputer's UID.
-HERALD_DISPUTE_REWARD_FRACTION = float(os.getenv('HERALD_DISPUTE_REWARD_FRACTION', '0.5'))
-# Epochs a dispute stays open; a still-alive article at the window's close rejects it and slashes
-# the disputer. Kept >= HERALD_DEAD_CONFIRM_EPOCHS so an upheld dispute has time to confirm dead.
-HERALD_DISPUTE_WINDOW_EPOCHS = int(os.getenv('HERALD_DISPUTE_WINDOW_EPOCHS', '4'))
-
 # ── Client-funded briefs (prepaid reward pool + DSV treasury; see dev/FUNDING_DESIGN.md) ──
 # A client brief is paid from its prepaid `reward_pool` (USD), funded when the client pays alpha/TAO
 # into the DSV treasury; the standing brief pays from emissions. The operator confirms the payment and
 # signs the brief funded (the trusted funded signal). Treasury address for that settlement:
 HERALD_TREASURY_COLDKEY = os.getenv('HERALD_TREASURY_COLDKEY', '')
-# Max plausible gap between commit and publication; a far-future date is rejected as implausible.
-HERALD_MAX_PLACEMENT_DAYS = int(os.getenv('HERALD_MAX_PLACEMENT_DAYS', '90'))
 
 # ── Contributor submissions (backend feed: GET /api/v4/validator/submissions) ──
-# Hotkey that every verified article vests to. Set identically on every validator.
+# Hotkey that every verified article vests to, and the only UID besides 0 that receives weight. Set
+# identically on every validator.
 HERALD_INCENTIVE_HOTKEY = os.getenv('HERALD_INCENTIVE_HOTKEY', '')
 # Publication window for a brief with an end_date: from start_date minus this many days (00:00 UTC)
 # through end_date 23:59:59 UTC.
