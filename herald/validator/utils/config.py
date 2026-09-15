@@ -216,6 +216,17 @@ HERALD_TREASURY_COLDKEY = os.getenv('HERALD_TREASURY_COLDKEY', '')
 # Max plausible gap between commit and publication; a far-future date is rejected as implausible.
 HERALD_MAX_PLACEMENT_DAYS = int(os.getenv('HERALD_MAX_PLACEMENT_DAYS', '90'))
 
+# ── Contributor submissions (backend feed: GET /api/v4/validator/submissions) ──
+# Hotkey that every verified article vests to. Set identically on every validator.
+HERALD_INCENTIVE_HOTKEY = os.getenv('HERALD_INCENTIVE_HOTKEY', '')
+# Publication window for a brief with an end_date: from start_date minus this many days (00:00 UTC)
+# through end_date 23:59:59 UTC.
+HERALD_PUBLISH_BUFFER_DAYS = int(os.getenv('HERALD_PUBLISH_BUFFER_DAYS', '3'))
+# An article published more than this many days before the scoring block's chain time is rejected.
+HERALD_MAX_ARTICLE_AGE_DAYS = int(os.getenv('HERALD_MAX_ARTICLE_AGE_DAYS', '21'))
+# At most this many new submissions are verified in one evaluation epoch.
+HERALD_MAX_SUBMISSIONS_PER_EPOCH = int(os.getenv('HERALD_MAX_SUBMISSIONS_PER_EPOCH', '500'))
+
 # Log out all non-sensitive config variables
 bt.logging.info(f"HERALD_BRIEFS_ENDPOINT: {HERALD_BRIEFS_ENDPOINT}")
 bt.logging.info(f"YOUTUBE_SUBMIT_ENDPOINT: {YOUTUBE_SUBMIT_ENDPOINT}")

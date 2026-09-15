@@ -200,7 +200,6 @@ The following must match across validators:
 ```bash
 source .venv/bin/activate
 python -m pytest -q
-python scripts/e2e_simulation.py
 docker compose config -q
 bash -n entrypoint.sh scripts/*.sh
 ```

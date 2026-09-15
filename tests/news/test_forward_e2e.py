@@ -4,373 +4,407 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from herald.commit import commit_hash, encode
-from herald.validator.news import fetch as fetchmod
 from herald.validator.news import forward as fwd
-from herald.validator.news import search as searchmod
 from herald.validator.news import state as statemod
-from herald.validator.news.url import article_id as fwd_article_id
+from herald.validator.news.registry import OutletRegistry
+from herald.validator.news.state import HeraldState
+from herald.validator.news.url import article_id
 
-BRIEFS = [{"id": "b1", "kind": "standing"}]
+STAR = "hkStar"
+HOTKEYS = ["hkOwner", "hkMiner", STAR]
+UID_STAR = 2
+AUTHORITY = "hkAuthority"
+NOW = datetime(2026, 9, 12, 12, 0, tzinfo=timezone.utc)
+PUBLISHED = datetime(2026, 9, 10, 9, 0, tzinfo=timezone.utc).timestamp()
+REGISTRY = OutletRegistry.from_dict({"version_id": 3, "outlets": [
+    {"outlet_id": "guardian", "tier": 1, "domains": ["www.theguardian.com"]},
+    {"outlet_id": "techcrunch", "tier": 2, "domains": ["techcrunch.com"]},
+]})
+URL_A = "https://www.theguardian.com/world/2026/sep/10/subnet-pilot"
+URL_B = "https://techcrunch.com/2026/09/10/subnet-pilot"
+STANDING = [{"id": "b1", "kind": "standing"}]
+BODY = "A news report about the subnet pilot."
 
 
-def make_claim(outlet, url, hotkey):
-    return SimpleNamespace(
-        brief_id="b1", target_outlet_id=outlet, article_url=url,
-        claimer_hotkey=hotkey, nonce="n", bond_atto=0, version_id=1,
+def row(submission_id, url, brief_id="b1"):
+    return {"submission_id": submission_id, "network": "finney", "netuid": 69,
+            "brief_id": brief_id, "url": url}
+
+
+def live_page(url):
+    return SimpleNamespace(ok=True, status=200, final_url=url, text_hash="h", text=BODY,
+                           article_text=None, published_ts=PUBLISHED)
+
+
+def missing_page(url):
+    return SimpleNamespace(ok=False, status=404, final_url=url, text_hash="", text="",
+                           article_text=None, published_ts=None)
+
+
+@pytest.fixture
+def env(monkeypatch):
+    env = SimpleNamespace(
+        briefs=STANDING, rows=[], pages={}, block=fwd.VEST_EPOCH_LEN * 1000 + 100,
+        feed_calls=0, commitment_reads=0, registry_calls=[], updates=[], results=[],
+        snapshots=[], logs=[],
     )
-
-
-def onchain(c):
-    return encode(commit_hash(
-        brief_id=c.brief_id, target_outlet_id=c.target_outlet_id,
-        claimer_hotkey=c.claimer_hotkey, nonce=c.nonce,
-        bond_atto=c.bond_atto, version_id=c.version_id))
-
-
-def make_self(claim_by_uid, commitments, block=1000, monkeypatch=None):
-    captured = {}
-    block_state = {"v": block}
-
-    # forward reads commitments-with-block from chain; supply {hotkey: (value, block)}
-    if monkeypatch is not None:
-        monkeypatch.setattr(
-            fwd, "get_commitments_with_block",
-            lambda subtensor, netuid: {hk: (v, block) for hk, v in commitments.items()},
-        )
-
-    async def fake_dendrite(axons, synapse, deserialize, timeout):
-        return [SimpleNamespace(claims=[claim_by_uid[a]]) for a in axons]
-
-    self = SimpleNamespace(
-        step=0,
-        config=SimpleNamespace(
-            netuid=69,
-            neuron=SimpleNamespace(moving_average_alpha=0.6),
-        ),
-        block_state=block_state,
-        subtensor=SimpleNamespace(
-            get_current_block=lambda: block_state["v"],
-            get_timestamp=lambda b: datetime(2026, 1, 1, tzinfo=timezone.utc),
-        ),
-        metagraph=SimpleNamespace(
-            hotkeys={1: "hkA", 2: "hkB"},
-            axons={1: 1, 2: 2},
-            alpha_stake={1: 5000.0, 2: 5000.0},
-        ),
-        dendrite=fake_dendrite,
-        scores=np.zeros(3, dtype=np.float32),
-    )
-
-    def update_scores(rewards, uids):
-        scattered = np.zeros_like(self.scores)
-        scattered[np.asarray(uids)] = rewards
-        alpha = self.config.neuron.moving_average_alpha
-        self.scores = alpha * scattered + (1 - alpha) * self.scores
-        captured.update(rewards=rewards, uids=uids)
-
-    self.update_scores = update_scores
-    return self, captured
-
-
-@pytest.fixture(autouse=True)
-def _setup(monkeypatch):
-    # These tests exercise emission/vesting mechanics with bare commits; pin the level-0
-    # attribution multiplier to 1.0 so the USD arithmetic stays legible (attribution grading
-    # has its own tests in test_oracle/test_reward/test_attribution).
-    from herald.validator.utils.config import HERALD_ATTR_MULT
-    monkeypatch.setitem(HERALD_ATTR_MULT, 0, 1.0)
-    monkeypatch.setattr(searchmod, "SERPAPI_API_KEY", "k")  # search provider is now key-gated
-    monkeypatch.setattr(searchmod, "_serpapi_search", lambda q, n: [q])
-    monkeypatch.setattr(fwd, "get_briefs", lambda now=None: BRIEFS)
-    monkeypatch.setattr(fwd, "get_all_uids", lambda self: [1, 2])
-    monkeypatch.setattr(fwd.time, "sleep", lambda *_: None)
     monkeypatch.setattr(statemod, "VEST_EPOCHS", 2)
-    monkeypatch.setattr(fwd, "HERALD_DEAD_CONFIRM_EPOCHS", 1)  # single confirmed-dead slashes (tests)
-    # Freshness gate fails closed on a missing date; a dateless body here stands for a normal
-    # live article, so default it to a date inside the window after the 2026-01-01 commit. The
-    # organic (2020) / future (2030) tests carry explicit dates and are parsed normally.
-    _real_parse = fetchmod._parse_published_ts
-    monkeypatch.setattr(
-        fetchmod, "_parse_published_ts",
-        lambda html: _real_parse(html) or datetime(2026, 1, 15, tzinfo=timezone.utc).timestamp(),
-    )
-
-
-@pytest.mark.asyncio
-async def test_forward_vests_first_installment(monkeypatch):
-    monkeypatch.setattr(fetchmod, "_http_get", lambda url: (200, url, b"news " * 200))
-    c1 = make_claim("guardian", "https://www.theguardian.com/a", "hkA")   # tier 1 -> 500
-    c2 = make_claim("techcrunch", "https://techcrunch.com/b", "hkB")  # tier 2 -> 300
-    self, captured = make_self({1: c1, 2: c2}, {"hkA": onchain(c1), "hkB": onchain(c2)}, monkeypatch=monkeypatch)
-
-    await fwd.forward(self)
-
-    # installments: tier1 500/2=250, tier2 300/2=150 -> proportional weights 250:150 = 5:3
-    weights = dict(zip(captured["uids"], captured["rewards"]))
-    assert weights[1] == pytest.approx(5 / 8)
-    assert weights[2] == pytest.approx(3 / 8)
-
-
-@pytest.mark.asyncio
-async def test_forward_single_miner_receives_all_weight_and_replaces_prior_scores(monkeypatch):
-    monkeypatch.setattr(fwd, "get_all_uids", lambda self: [0, 1])
-    monkeypatch.setattr(fetchmod, "_http_get", lambda url: (200, url, b"news " * 200))
-
-    c1 = make_claim("guardian", "https://www.theguardian.com/a", "hkA")  # tier 1, 500 / 2 = 250
-    monkeypatch.setattr(fwd, "get_commitments_with_block",
-                        lambda subtensor, netuid: {"hkA": (onchain(c1), 1000)})
-
-    async def fake_dendrite(axons, synapse, deserialize, timeout):
-        return [SimpleNamespace(claims=[c1] if a == 1 else []) for a in axons]
-
-    captured = {}
-    self = SimpleNamespace(
-        step=0,
-        config=SimpleNamespace(
-            netuid=69,
-            neuron=SimpleNamespace(moving_average_alpha=0.6),
-        ),
-        subtensor=SimpleNamespace(
-            get_current_block=lambda: 1000,
-            get_timestamp=lambda b: datetime(2026, 1, 1, tzinfo=timezone.utc),
-        ),
-        metagraph=SimpleNamespace(
-            hotkeys={0: "reserve", 1: "hkA"}, axons={0: 0, 1: 1}, alpha_stake={0: 0.0, 1: 5000.0},
-        ),
-        dendrite=fake_dendrite,
-        scores=np.array([0.8, 0.2], dtype=np.float32),
-    )
-
-    def update_scores(rewards, uids):
-        scattered = np.zeros_like(self.scores)
-        scattered[np.asarray(uids)] = rewards
-        alpha = self.config.neuron.moving_average_alpha
-        self.scores = alpha * scattered + (1 - alpha) * self.scores
-        captured.update(rewards=rewards, uids=uids)
-
-    self.update_scores = update_scores
-
-    await fwd.forward(self)
-    w = dict(zip(captured["uids"], captured["rewards"]))
-    assert w[1] == pytest.approx(1.0)
-    assert w[0] == 0.0
-    assert self.scores[0] == 0.0
-    assert self.scores[1] > 0.0
-
-
-@pytest.mark.asyncio
-async def test_empty_trusted_brief_feed_clears_scores(monkeypatch):
-    monkeypatch.setattr(fwd, "get_briefs", lambda now=None: [])
-    monkeypatch.setattr(fwd, "get_all_uids", lambda self: [0, 1])
-
-    captured = {}
-    scores = np.array([0.25, 0.75], dtype=np.float32)
-    self = SimpleNamespace(
-        step=0,
-        config=SimpleNamespace(netuid=69, neuron=SimpleNamespace(moving_average_alpha=0.6)),
-        subtensor=SimpleNamespace(
-            get_current_block=lambda: 1000,
-            get_timestamp=lambda b: datetime(2026, 1, 1, tzinfo=timezone.utc),
-        ),
-        metagraph=SimpleNamespace(
-            hotkeys={0: "reserve", 1: "hkA"}, axons={0: 0, 1: 1}, alpha_stake={0: 0.0, 1: 5000.0},
-        ),
-        scores=scores,
-    )
-
-    def update_scores(rewards, uids):
-        scattered = np.zeros_like(self.scores)
-        scattered[np.asarray(uids)] = rewards
-        alpha = self.config.neuron.moving_average_alpha
-        self.scores = alpha * scattered + (1 - alpha) * self.scores
-        captured.update(rewards=rewards, uids=uids)
-
-    self.update_scores = update_scores
-
-    await fwd.forward(self)
-
-    weights = dict(zip(captured["uids"], captured["rewards"]))
-    assert weights == {0: pytest.approx(0.0), 1: pytest.approx(0.0)}
-    assert self.scores.tolist() == [0.0, 0.0]
-    assert self.herald_state.last_scored_epoch >= 0
-
-
-@pytest.mark.asyncio
-async def test_forward_caps_client_brief_at_reward_pool(monkeypatch):
-    monkeypatch.setattr(fwd, "get_briefs", lambda now=None: [{"id": "b1", "kind": "client", "reward_pool": 100.0}])
-    monkeypatch.setattr(fwd, "get_all_uids", lambda self: [0, 1])
-    monkeypatch.setattr(fetchmod, "_http_get", lambda url: (200, url, b"news " * 200))
-
-    c1 = make_claim("guardian", "https://www.theguardian.com/a", "hkA")  # tier1 500/2=250 installment
-    monkeypatch.setattr(fwd, "get_commitments_with_block",
-                        lambda subtensor, netuid: {"hkA": (onchain(c1), 1000)})
-
-    async def fake_dendrite(axons, synapse, deserialize, timeout):
-        return [SimpleNamespace(claims=[c1] if a == 1 else []) for a in axons]
-
-    captured = {}
-    self = SimpleNamespace(
-        step=0,
-        config=SimpleNamespace(
-            netuid=69,
-            neuron=SimpleNamespace(moving_average_alpha=0.6),
-        ),
-        subtensor=SimpleNamespace(
-            get_current_block=lambda: 1000,
-            get_timestamp=lambda b: datetime(2026, 1, 1, tzinfo=timezone.utc),
-        ),
-        metagraph=SimpleNamespace(
-            hotkeys={0: "reserve", 1: "hkA"}, axons={0: 0, 1: 1}, alpha_stake={0: 0.0, 1: 5000.0},
-        ),
-        dendrite=fake_dendrite,
-        scores=np.zeros(2, dtype=np.float32),
-    )
-
-    def update_scores(rewards, uids):
-        captured.update(rewards=rewards, uids=uids)
-
-    self.update_scores = update_scores
-
-    await fwd.forward(self)
-    w = dict(zip(captured["uids"], captured["rewards"]))
-    # The pool caps payable USD to 100, but the only rewarded miner still receives 100%.
-    assert w[1] == pytest.approx(1.0)
-    assert w[0] == 0.0
-
-
-@pytest.mark.asyncio
-async def test_claim_organic_article_predating_commit_rejected(monkeypatch):
-    c1 = make_claim("guardian", "https://www.theguardian.com/a", "hkA")
-    self, captured = make_self({1: c1, 2: c1}, {"hkA": onchain(c1)}, monkeypatch=monkeypatch)
-    # article carries a 2020 publish date — long before the (2026) commit
-    organic = b'<script>{"datePublished":"2020-05-01T00:00:00Z"}</script>' + b"news " * 200
-    monkeypatch.setattr(fetchmod, "_http_get", lambda url: (200, url, organic))
-
-    await fwd.forward(self)
-    rewards = dict(zip(captured["uids"], captured["rewards"]))
-    assert rewards.get(1, 0.0) == 0.0  # organic article pays no one
-
-
-@pytest.mark.asyncio
-async def test_future_dated_article_rejected(monkeypatch):
-    c1 = make_claim("guardian", "https://www.theguardian.com/a", "hkA")
-    self, captured = make_self({1: c1, 2: c1}, {"hkA": onchain(c1)}, monkeypatch=monkeypatch)
-    # commit is 2026-01-01; a far-future 2030 date is implausible -> rejected
-    future = b'<script>{"datePublished":"2030-05-01T00:00:00Z"}</script>' + b"news " * 200
-    monkeypatch.setattr(fetchmod, "_http_get", lambda url: (200, url, future))
-    await fwd.forward(self)
-    assert dict(zip(captured["uids"], captured["rewards"])).get(1, 0.0) == 0.0
-
-
-@pytest.mark.asyncio
-async def test_undated_article_rejected_fail_closed(monkeypatch):
-    c1 = make_claim("guardian", "https://www.theguardian.com/a", "hkA")
-    self, captured = make_self({1: c1, 2: c1}, {"hkA": onchain(c1)}, monkeypatch=monkeypatch)
-    # no parseable publish date -> can't prove the article post-dates the commit -> pays no one
-    # (this case used to slip through a fail-open branch)
-    monkeypatch.setattr(fetchmod, "_http_get", lambda url: (200, url, b"news " * 200))
-    monkeypatch.setattr(fetchmod, "_parse_published_ts", lambda html: None)
-    await fwd.forward(self)
-    assert dict(zip(captured["uids"], captured["rewards"])).get(1, 0.0) == 0.0
-
-
-@pytest.mark.asyncio
-async def test_uid_reassignment_does_not_pay_new_holder(monkeypatch):
-    c1 = make_claim("guardian", "https://www.theguardian.com/a", "hkA")
-    self, captured = make_self({1: c1, 2: c1}, {"hkA": onchain(c1)}, monkeypatch=monkeypatch)
-    monkeypatch.setattr(fetchmod, "_http_get", lambda url: (200, url, b"news " * 200))
-
-    await fwd.forward(self)  # cycle 1: placer hkA (uid 1) earns
-    assert dict(zip(captured["uids"], captured["rewards"]))[1] == pytest.approx(1.0)
-
-    self.metagraph.hotkeys[1] = "hkEVIL"          # uid 1 reassigned to a new hotkey
-    self.block_state["v"] += fwd.VEST_EPOCH_LEN + 1
-    await fwd.forward(self)  # cycle 2: installment must NOT go to the new holder
-    assert dict(zip(captured["uids"], captured["rewards"]))[1] == 0.0
-
-
-@pytest.mark.asyncio
-async def test_persistence_clawback_on_value_regression(monkeypatch):
-    c1 = make_claim("guardian", "https://www.theguardian.com/a", "hkA")
-    self, captured = make_self({1: c1, 2: c1}, {"hkA": onchain(c1)}, monkeypatch=monkeypatch)
-    monkeypatch.setattr(fetchmod, "_http_get", lambda url: (200, url, b"news " * 200))
-    await fwd.forward(self)  # cycle 1: valuable
-    assert dict(zip(captured["uids"], captured["rewards"]))[1] == pytest.approx(1.0)
-
-    # cycle 2: still HTTP 200 but converted to sponsored content -> not valuable -> clawback
-    self.block_state["v"] += fwd.VEST_EPOCH_LEN + 1
-    monkeypatch.setattr(fetchmod, "_http_get", lambda url: (200, url, b"This is Sponsored Content " * 50))
-    await fwd.forward(self)
-    assert dict(zip(captured["uids"], captured["rewards"]))[1] == 0.0
-    epoch = self.subtensor.get_current_block() // fwd.VEST_EPOCH_LEN
-    assert self.herald_state.slash.is_slashed("hkA", epoch)
-
-
-@pytest.mark.asyncio
-async def test_same_epoch_rerun_is_skipped(monkeypatch):
-    c1 = make_claim("guardian", "https://www.theguardian.com/a", "hkA")
-    self, captured = make_self({1: c1, 2: c1}, {"hkA": onchain(c1)}, monkeypatch=monkeypatch)
-    monkeypatch.setattr(fetchmod, "_http_get", lambda url: (200, url, b"news " * 200))
-    await fwd.forward(self)                       # cycle 1 scores
-    first = dict(captured)
-    captured.clear()
-    await fwd.forward(self)                       # same block/epoch -> must skip, not re-score
-    assert captured == {}                         # update_scores not called again
-    assert first["rewards"] is not None
-
-
-@pytest.mark.asyncio
-async def test_dead_must_be_confirmed_over_consecutive_epochs(monkeypatch):
+    monkeypatch.setattr(fwd, "HERALD_INCENTIVE_HOTKEY", STAR)
     monkeypatch.setattr(fwd, "HERALD_DEAD_CONFIRM_EPOCHS", 2)
-    c1 = make_claim("guardian", "https://www.theguardian.com/a", "hkA")
-    self, captured = make_self({1: c1, 2: c1}, {"hkA": onchain(c1)}, monkeypatch=monkeypatch)
-    monkeypatch.setattr(fetchmod, "_http_get", lambda url: (200, url, b"news " * 200))
-    await fwd.forward(self)  # cycle 1: alive
+    monkeypatch.setattr(fwd.time, "sleep", lambda *_: None)
+    monkeypatch.setenv("HERALD_RESULTS_ENDPOINT", "http://results.invalid")
+    monkeypatch.setattr(fwd, "get_briefs", lambda now=None: env.briefs)
 
-    # cycle 2: a single 404 must NOT slash (confirm threshold is 2)
-    self.block_state["v"] += fwd.VEST_EPOCH_LEN + 1
-    monkeypatch.setattr(fetchmod, "_http_get", lambda url: (404, url, b""))
-    await fwd.forward(self)
-    e2 = self.subtensor.get_current_block() // fwd.VEST_EPOCH_LEN
-    assert self.herald_state.slash.is_slashed("hkA", e2) is False
+    def feed(endpoint, network, netuid):
+        env.feed_calls += 1
+        return None if env.rows is None else list(env.rows)
 
-    # cycle 3: a second consecutive 404 -> confirmed dead -> slash
-    self.block_state["v"] += fwd.VEST_EPOCH_LEN + 1
+    def commitments(subtensor, netuid):
+        env.commitment_reads += 1
+        return {AUTHORITY: ("HRLDREG|anchor", 5), "hkMiner": ("HRLD1|other", 6)}
+
+    def registry(*args, **kwargs):
+        env.registry_calls.append((args, kwargs))
+        return REGISTRY
+
+    monkeypatch.setattr(fwd, "fetch_submissions", feed)
+    monkeypatch.setattr(fwd, "get_commitments_with_block", commitments)
+    monkeypatch.setattr(fwd, "load_registry", registry)
+    monkeypatch.setattr(fwd, "fetch_article",
+                        lambda url, registry=None, epoch=None: env.pages.get(url, live_page)(url))
+    monkeypatch.setattr(fwd, "in_index",
+                        lambda url, epoch=None: SimpleNamespace(in_index=True, matched_url=url))
+    monkeypatch.setattr(fwd, "publish_results", lambda endpoint, rows: env.results.append(rows))
+    monkeypatch.setattr(fwd, "publish_snapshot",
+                        lambda endpoint, snapshot, hotkey: env.snapshots.append(snapshot) or True)
+    for level in ("info", "warning", "error"):
+        monkeypatch.setattr(fwd.bt.logging, level, lambda msg, *a, **k: env.logs.append(str(msg)))
+    return env
+
+
+def make_validator(env, hotkeys=HOTKEYS, scores=None):
+    """A validator with only what scoring may use: no axons, no dendrite, no stake."""
+    self = SimpleNamespace(
+        step=0,
+        uid=0,
+        config=SimpleNamespace(netuid=69, neuron=SimpleNamespace(moving_average_alpha=1.0)),
+        subtensor=SimpleNamespace(network="finney", get_current_block=lambda: env.block,
+                                  get_timestamp=lambda block: NOW),
+        metagraph=SimpleNamespace(hotkeys=list(hotkeys)),
+        wallet=SimpleNamespace(hotkey=SimpleNamespace(ss58_address="hkValidator")),
+        scores=np.zeros(len(hotkeys), dtype=np.float32) if scores is None
+        else np.asarray(scores, dtype=np.float32),
+    )
+
+    def update_scores(rewards, uids):
+        scattered = np.zeros_like(self.scores)
+        scattered[np.asarray(uids)] = rewards
+        alpha = self.config.neuron.moving_average_alpha
+        self.scores = alpha * scattered + (1 - alpha) * self.scores
+        env.updates.append((list(uids), [float(r) for r in rewards]))
+
+    self.update_scores = update_scores
+    return self
+
+
+def epoch_of(env):
+    return (env.block - fwd.HERALD_EPOCH_LAG) // fwd.VEST_EPOCH_LEN
+
+
+def next_epoch(env):
+    env.block += fwd.VEST_EPOCH_LEN
+
+
+def results_for(env, reason):
+    return [line for line in env.logs if line.startswith("SUBMISSION_RESULT") and line.endswith(" " + reason)]
+
+
+@pytest.mark.asyncio
+async def test_verified_submission_vests_on_the_incentive_hotkey_with_its_first_installment(env):
+    env.rows = [row("sub-1", URL_A)]
+    self = make_validator(env, scores=[0.1, 0.6, 0.3])
+
     await fwd.forward(self)
-    e3 = self.subtensor.get_current_block() // fwd.VEST_EPOCH_LEN
-    assert self.herald_state.slash.is_slashed("hkA", e3) is True
+
+    epoch = epoch_of(env)
+    state = self.herald_state
+    assert state.last_scored_epoch == epoch
+    entry = state.vesting.entry(article_id(URL_A))
+    assert (entry.hotkey, entry.uid, entry.reveal) == (STAR, UID_STAR, {"submission_id": "sub-1"})
+    assert (entry.url, entry.brief_id, entry.outlet_id, entry.tier, entry.attribution) == (
+        URL_A, "b1", "guardian", 1, 0)
+    assert (entry.commit_epoch, entry.start_epoch, entry.last_release_epoch) == (epoch, epoch, epoch)
+    assert entry.total_usd == pytest.approx(500.0) and entry.remaining == 1
+    assert "SUBMISSION_RESULT sub-1 ok" in env.logs
+    assert env.updates == [([0], [1.0])]
+    assert self.scores.tolist() == [1.0, 0.0, 0.0]
+    assert env.commitment_reads == 0
+
+    [snapshot] = env.snapshots
+    assert snapshot["epoch"] == epoch and snapshot["state"]["rewards"] == []
+    assert snapshot["state"]["weights"] == [{"uid": 0, "hotkey": "hkOwner", "weight_u16": 65535}]
+    [article] = snapshot["state"]["articles"]
+    assert (article["hotkey"], article["reveal"]) == (STAR, {"submission_id": "sub-1"})
+    assert article["earned_microusd"] == 250_000_000
+    [[published]] = env.results
+    assert published["reveal"] == {"submission_id": "sub-1"}
+
+
+@pytest.mark.asyncio
+async def test_the_same_article_later_does_not_start_a_second_entry(env):
+    env.rows = [row("sub-1", URL_A)]
+    self = make_validator(env)
+    await fwd.forward(self)
+
+    next_epoch(env)
+    env.rows = [row("sub-0", URL_A + "?utm_source=feed"), row("sub-7", URL_A)]
+    await fwd.forward(self)
+
+    entries = self.herald_state.vesting.to_dict()["entries"]
+    assert list(entries) == [article_id(URL_A)]
+    assert entries[article_id(URL_A)]["reveal"] == {"submission_id": "sub-1"}
+    assert entries[article_id(URL_A)]["status"] == "COMPLETED"
+    assert not [line for line in env.logs if line.startswith(("SUBMISSION_RESULT sub-0", "SUBMISSION_RESULT sub-7"))]
+
+
+@pytest.mark.asyncio
+async def test_a_row_that_raises_during_verification_is_rejected_alone(env):
+    def broken(url):
+        raise RuntimeError("page parser failed")
+
+    env.pages[URL_A] = broken
+    env.rows = [row("sub-1", URL_A), row("sub-2", URL_B)]
+    self = make_validator(env)
+
+    await fwd.forward(self)
+
+    assert "SUBMISSION_RESULT sub-1 verify_error" in env.logs
+    assert "SUBMISSION_RESULT sub-2 ok" in env.logs
+    vesting = self.herald_state.vesting
+    assert not vesting.has(article_id(URL_A))
+    assert vesting.entry(article_id(URL_B)).total_usd == pytest.approx(300.0)
+    assert self.herald_state.last_scored_epoch == epoch_of(env)
+
+
+@pytest.mark.asyncio
+async def test_a_liveness_check_that_raises_holds_the_article(env, monkeypatch):
+    monkeypatch.setattr(statemod, "VEST_EPOCHS", 4)
+    env.rows = [row("sub-1", URL_A)]
+    self = make_validator(env)
+    await fwd.forward(self)
+    first_epoch = epoch_of(env)
+    entry = self.herald_state.vesting.entry(article_id(URL_A))
+
+    def broken(*args, **kwargs):
+        raise RuntimeError("liveness check failed")
+
+    real_status = fwd._persistence_status
+    monkeypatch.setattr(fwd, "_persistence_status", broken)
+    next_epoch(env)
+    await fwd.forward(self)
+    assert self.herald_state.last_scored_epoch == epoch_of(env)
+    assert (entry.status, entry.remaining, entry.last_release_epoch) == ("VESTING", 3, first_epoch)
+    assert (entry.dead_streak, entry.last_dead_epoch) == (0, -1)
+
+    monkeypatch.setattr(fwd, "_persistence_status", real_status)
+    next_epoch(env)
+    await fwd.forward(self)
+    assert (entry.remaining, entry.last_release_epoch) == (1, epoch_of(env))  # the held epoch catches up
+
+
+@pytest.mark.asyncio
+async def test_entries_without_a_submission_id_expire_once(env):
+    self = make_validator(env)
+    epoch = epoch_of(env)
+    state = HeraldState.fresh()
+    state.vesting.start("legacy", uid=1, total_usd=50.0, url=URL_B, hotkey="hkMiner", brief_id="b1",
+                        commit_epoch=epoch - 1, start_epoch=epoch, reveal={"nonce": "n1"})
+    state.vesting.start("other-hotkey", uid=1, total_usd=500.0, url=URL_A, hotkey="hkEarlierIncentive",
+                        brief_id="b1", commit_epoch=epoch, start_epoch=epoch,
+                        reveal={"submission_id": "sub-0"})
+    self.herald_state = state
+
+    await fwd.forward(self)
+    assert state.vesting.status("legacy") == "EXPIRED"
+    other = state.vesting.entry("other-hotkey")
+    assert other.status == "VESTING" and other.last_release_epoch == epoch
+    assert env.logs.count("LEGACY_VESTING_EXPIRED 1") == 1
+
+    next_epoch(env)
+    await fwd.forward(self)
+    assert state.vesting.status("legacy") == "EXPIRED"
+    assert state.vesting.status("other-hotkey") == "COMPLETED"
+    assert len([line for line in env.logs if line.startswith("LEGACY_VESTING_EXPIRED")]) == 1
+
+
+@pytest.mark.asyncio
+async def test_article_dead_for_two_epochs_is_clawed_back_without_a_slash(env, monkeypatch):
+    monkeypatch.setattr(statemod, "VEST_EPOCHS", 4)
+    env.rows = [row("sub-1", URL_A)]
+    self = make_validator(env)
+    await fwd.forward(self)
+    entry = self.herald_state.vesting.entry(article_id(URL_A))
+
+    env.pages[URL_A] = missing_page
+    next_epoch(env)
+    await fwd.forward(self)
+    assert (entry.status, entry.dead_streak) == ("VESTING", 1)
+
+    next_epoch(env)
+    await fwd.forward(self)
+    assert (entry.status, entry.dead_streak, entry.remaining) == ("CLAWBACK", 2, 3)
+    assert self.herald_state.slash.to_dict() == {"until": {}}
+    assert self.herald_state.disputes.to_dict() == {}
+    assert self.herald_state.last_scored_epoch == epoch_of(env)
+
+
+@pytest.mark.asyncio
+async def test_client_reward_pool_caps_installments(env):
+    env.briefs = [{"id": "b1", "kind": "client", "reward_pool": 100.0,
+                   "start_date": "2026-09-01", "end_date": "2026-09-30"}]
+    env.rows = [row("sub-1", URL_A)]
+    self = make_validator(env)
+
+    await fwd.forward(self)
+    assert self.herald_state.pool_spent == {"b1": pytest.approx(100.0)}
+    assert any(line.endswith("payable_usd=100.000000; weight goes to UID 0") for line in env.logs)
+    [brief_row] = env.snapshots[0]["state"]["briefs"]
+    assert (brief_row["pool_spent_microusd"], brief_row["pool_remaining_microusd"]) == (100_000_000, 0)
+
+    next_epoch(env)
+    await fwd.forward(self)
+    assert self.herald_state.pool_spent == {"b1": pytest.approx(100.0)}
+    assert any(line.endswith("payable_usd=0.000000; weight goes to UID 0") for line in env.logs)
+    assert self.herald_state.vesting.status(article_id(URL_A)) == "COMPLETED"
+
+
+@pytest.mark.asyncio
+async def test_empty_briefs_put_all_weight_on_uid_zero_without_reading_chain_commitments(env, monkeypatch):
+    monkeypatch.setenv("HERALD_REGISTRY_AUTHORITY_HOTKEY", AUTHORITY)
+    env.briefs = []
+    self = make_validator(env, scores=[0.2, 0.5, 0.3])
+
+    await fwd.forward(self)
+
+    assert env.updates == [([0], [1.0])]
+    assert self.scores.tolist() == [1.0, 0.0, 0.0]
+    assert self.herald_state.last_scored_epoch == epoch_of(env)
+    assert (env.commitment_reads, env.feed_calls, env.registry_calls) == (0, 0, [])
+    assert env.snapshots == [] and env.results == []
+
+
+@pytest.mark.asyncio
+async def test_forward_never_uses_axons_or_the_dendrite(env):
+    env.rows = [row("sub-1", URL_A)]
+    self = make_validator(env)
+    assert not hasattr(self, "dendrite") and not hasattr(self.metagraph, "axons")
+
+    await fwd.forward(self)
+
+    assert self.herald_state.last_scored_epoch == epoch_of(env)
+    assert self.herald_state.vesting.has(article_id(URL_A))
+
+
+@pytest.mark.asyncio
+async def test_same_epoch_rerun_is_skipped(env):
+    env.rows = [row("sub-1", URL_A)]
+    self = make_validator(env)
+    await fwd.forward(self)
+    await fwd.forward(self)
+    assert len(env.updates) == 1 and env.feed_calls == 1
+
+
+@pytest.mark.asyncio
+async def test_unreadable_feed_leaves_the_epoch_unscored_and_retries(env):
+    env.rows = None
+    self = make_validator(env)
+    await fwd.forward(self)
+    assert self.herald_state.last_scored_epoch == -1 and env.updates == []
+
+    env.rows = [row("sub-1", URL_A)]
+    await fwd.forward(self)
+    assert self.herald_state.last_scored_epoch == epoch_of(env)
+    assert self.herald_state.vesting.has(article_id(URL_A))
+
+
+@pytest.mark.asyncio
+async def test_unset_incentive_hotkey_leaves_the_epoch_unscored(env, monkeypatch):
+    monkeypatch.setattr(fwd, "HERALD_INCENTIVE_HOTKEY", "")
+    env.rows = [row("sub-1", URL_A)]
+    self = make_validator(env)
+    await fwd.forward(self)
+    assert self.herald_state.last_scored_epoch == -1
+    assert env.feed_calls == 0 and env.updates == []
+
+
+@pytest.mark.asyncio
+async def test_registry_anchor_is_the_only_commitment_read(env, monkeypatch):
+    monkeypatch.setenv("HERALD_REGISTRY_AUTHORITY_HOTKEY", AUTHORITY)
+    env.rows = [row("sub-1", URL_A)]
+    self = make_validator(env)
+
+    await fwd.forward(self)
+
+    assert env.commitment_reads == 1
+    [(args, kwargs)] = env.registry_calls
+    assert args == ("HRLDREG|anchor",)
+    assert kwargs["require_anchor"] is True and kwargs["netuid"] == 69
+    assert self.herald_state.last_scored_epoch == epoch_of(env)
+
+
+@pytest.mark.asyncio
+async def test_row_for_a_brief_not_on_the_board_does_not_vest(env):
+    env.rows = [row("sub-1", URL_A, brief_id="closed-brief")]
+    self = make_validator(env)
+    await fwd.forward(self)
+    assert results_for(env, "brief_not_active") == ["SUBMISSION_RESULT sub-1 brief_not_active"]
+    assert not self.herald_state.vesting.has(article_id(URL_A))
+
+
+@pytest.mark.asyncio
+async def test_rejected_article_logs_its_reason_and_does_not_vest(env):
+    env.pages[URL_A] = missing_page
+    env.rows = [row("sub-1", URL_A)]
+    self = make_validator(env)
+    await fwd.forward(self)
+    assert "SUBMISSION_RESULT sub-1 url_not_live" in env.logs
+    assert self.herald_state.vesting.to_dict()["entries"] == {}
+
+
+@pytest.mark.asyncio
+async def test_incentive_hotkey_without_a_uid_vests_with_uid_minus_one(env):
+    env.rows = [row("sub-1", URL_A)]
+    self = make_validator(env, hotkeys=["hkOwner", "hkMiner"])
+    await fwd.forward(self)
+    entry = self.herald_state.vesting.entry(article_id(URL_A))
+    assert (entry.uid, entry.hotkey) == (-1, STAR)
 
 
 def test_persistence_holds_when_brief_left_the_board(monkeypatch):
-    # A live, indexed article whose brief is no longer open must HOLD (not pay): the closed brief
-    # isn't in the signed feed, so it has no reward_pool/kind for apply_reward_pools to draw from.
-    monkeypatch.setattr(fetchmod, "_http_get", lambda url: (200, url, b"news " * 200))
-    monkeypatch.setattr(searchmod, "SERPAPI_API_KEY", "k")  # search provider is now key-gated
-    monkeypatch.setattr(searchmod, "_serpapi_search", lambda q, n: [q])
-    entry = SimpleNamespace(url="https://www.theguardian.com/a", brief_id="gone")
+    # A live article whose brief is no longer on the signed board holds: the closed brief has no
+    # reward_pool/kind for apply_reward_pools to draw from.
+    monkeypatch.setattr(fwd, "fetch_article", lambda url, registry=None, epoch=None: live_page(url))
+    entry = SimpleNamespace(url=URL_A, brief_id="gone")
     assert fwd._persistence_status(entry, {"b1": {"id": "b1"}}, epoch=1, judge_fn=None) == "hold"
 
 
 def test_persistence_pays_live_article_despite_offtopic_or_deindexed_fetch(monkeypatch):
-    # Regression: the per-epoch pay gate is LIVENESS-only. Topic + search-index were verified
-    # at claim time; re-checking them on THIS validator's own live fetch would
-    # only fork per-epoch pay across the fleet. A live, non-ad page must stay "alive" even when this
-    # validator's fetch looks off-topic and its search index doesn't list the URL.
-    entry = SimpleNamespace(url="https://www.theguardian.com/a", brief_id="b1")
-    briefs_by_id = {"b1": {"id": "b1", "keywords": ["bittensor"]}}  # the page below lacks the keyword
+    # The per-epoch pay gate is liveness only. Topic and search presence were verified when the
+    # article was accepted; a live, non-paid page stays "alive" even when this validator's fetch
+    # looks off-topic and its search index does not list the URL.
+    entry = SimpleNamespace(url=URL_A, brief_id="b1")
+    briefs_by_id = {"b1": {"id": "b1", "keywords": ["bittensor"]}}
     monkeypatch.setattr(fwd, "fetch_article", lambda url, registry=None, epoch=None: SimpleNamespace(
         status=200, ok=True, text="an unrelated but genuine news story about world events"))
-    # the pay gate must not consult the search index any more; make it fail loudly if it does
-    def _boom(*a, **k):
-        raise AssertionError("persistence must not re-check the search index")
-    monkeypatch.setattr(fwd, "in_index", _boom)
+
+    def unexpected(*args, **kwargs):
+        raise AssertionError("liveness must not consult the search index")
+
+    monkeypatch.setattr(fwd, "in_index", unexpected)
     assert fwd._persistence_status(entry, briefs_by_id, epoch=5, judge_fn=None) == "alive"
 
 
 def test_persistence_detects_outlet_specific_paid_content_swap(monkeypatch):
-    from herald.validator.news.registry import OutletRegistry
-
     entry = SimpleNamespace(url="https://example.com/story", brief_id="b1")
     registry = OutletRegistry.from_dict({
         "version_id": 1,
@@ -388,169 +422,3 @@ def test_persistence_detects_outlet_specific_paid_content_swap(monkeypatch):
     assert fwd._persistence_status(
         entry, {"b1": {"id": "b1"}}, epoch=5, judge_fn=None, registry=registry,
     ) == "dead"
-
-
-@pytest.mark.asyncio
-async def test_no_credit_when_brief_deactivated_mid_vest(monkeypatch):
-    c1 = make_claim("guardian", "https://www.theguardian.com/a", "hkA")
-    self, captured = make_self({1: c1, 2: c1}, {"hkA": onchain(c1)}, monkeypatch=monkeypatch)
-    monkeypatch.setattr(fetchmod, "_http_get", lambda url: (200, url, b"news " * 200))
-    await fwd.forward(self)  # cycle 1: pays under b1
-    assert dict(zip(captured["uids"], captured["rewards"]))[1] == pytest.approx(1.0)
-
-    # cycle 2: b1 leaves the active board (closed/defunded); another brief keeps the list non-empty
-    monkeypatch.setattr(fwd, "get_briefs", lambda now=None: [{"id": "b2", "kind": "standing"}])
-    self.block_state["v"] += fwd.VEST_EPOCH_LEN + 1
-    await fwd.forward(self)
-    assert dict(zip(captured["uids"], captured["rewards"])).get(1, 0.0) == 0.0  # held, no credit
-    epoch2 = self.subtensor.get_current_block() // fwd.VEST_EPOCH_LEN
-    assert self.herald_state.slash.is_slashed("hkA", epoch2) is False           # and not slashed
-    assert self.herald_state.vesting.status(fwd_article_id(c1.article_url)) == "VESTING"
-
-
-@pytest.mark.asyncio
-async def test_dead_streak_not_double_counted_on_restart(monkeypatch):
-    # A crash-restart loses the in-memory same-epoch guard but keeps the persisted
-    # dead_streak; re-running the same confirmed-dead epoch must not double-count it.
-    monkeypatch.setattr(fwd, "HERALD_DEAD_CONFIRM_EPOCHS", 2)
-    c1 = make_claim("guardian", "https://www.theguardian.com/a", "hkA")
-    self, captured = make_self({1: c1, 2: c1}, {"hkA": onchain(c1)}, monkeypatch=monkeypatch)
-    monkeypatch.setattr(fetchmod, "_http_get", lambda url: (200, url, b"news " * 200))
-    await fwd.forward(self)  # cycle 1: alive
-
-    # cycle 2: one confirmed-dead epoch -> dead_streak 1, below threshold 2 -> no slash
-    self.block_state["v"] += fwd.VEST_EPOCH_LEN + 1
-    monkeypatch.setattr(fetchmod, "_http_get", lambda url: (404, url, b""))
-    await fwd.forward(self)
-    e2 = self.subtensor.get_current_block() // fwd.VEST_EPOCH_LEN
-    assert self.herald_state.slash.is_slashed("hkA", e2) is False
-
-    # restart with a stale/pre-upgrade state file: guard lost, ledger kept; re-run the SAME epoch
-    self.herald_state.last_scored_epoch = -1
-    await fwd.forward(self)
-    assert self.herald_state.slash.is_slashed("hkA", e2) is False  # still below threshold
-
-
-@pytest.mark.asyncio
-async def test_transient_outage_holds_without_slashing(monkeypatch):
-    c1 = make_claim("guardian", "https://www.theguardian.com/a", "hkA")
-    self, captured = make_self({1: c1, 2: c1}, {"hkA": onchain(c1)}, monkeypatch=monkeypatch)
-    monkeypatch.setattr(fetchmod, "_http_get", lambda url: (200, url, b"news " * 200))
-    await fwd.forward(self)  # cycle 1: pays
-    assert dict(zip(captured["uids"], captured["rewards"]))[1] == pytest.approx(1.0)
-
-    # cycle 2: provider outage (5xx) -> hold, NOT clawback/slash
-    self.block_state["v"] += fwd.VEST_EPOCH_LEN + 1
-    monkeypatch.setattr(fetchmod, "_http_get", lambda url: (503, url, b""))
-    await fwd.forward(self)
-    epoch2 = self.subtensor.get_current_block() // fwd.VEST_EPOCH_LEN
-    assert self.herald_state.slash.is_slashed("hkA", epoch2) is False
-    assert self.herald_state.vesting.status(fwd_article_id(c1.article_url)) == "VESTING"
-
-    # cycle 3: recovers -> resumes paying
-    self.block_state["v"] += fwd.VEST_EPOCH_LEN + 1
-    monkeypatch.setattr(fetchmod, "_http_get", lambda url: (200, url, b"news " * 200))
-    await fwd.forward(self)
-    assert dict(zip(captured["uids"], captured["rewards"]))[1] == pytest.approx(1.0)
-
-
-@pytest.mark.asyncio
-async def test_geo_block_451_holds_without_slashing(monkeypatch):
-    # 451 (Unavailable For Legal Reasons) is per-validator/jurisdictional and transient; it
-    # must hold (no pay), never confirm a removal — even at a confirm threshold of 1.
-    c1 = make_claim("guardian", "https://www.theguardian.com/a", "hkA")
-    self, captured = make_self({1: c1, 2: c1}, {"hkA": onchain(c1)}, monkeypatch=monkeypatch)
-    monkeypatch.setattr(fetchmod, "_http_get", lambda url: (200, url, b"news " * 200))
-    await fwd.forward(self)  # cycle 1: alive, pays
-
-    self.block_state["v"] += fwd.VEST_EPOCH_LEN + 1
-    monkeypatch.setattr(fetchmod, "_http_get", lambda url: (451, url, b""))
-    await fwd.forward(self)
-    epoch2 = self.subtensor.get_current_block() // fwd.VEST_EPOCH_LEN
-    assert self.herald_state.slash.is_slashed("hkA", epoch2) is False
-    assert self.herald_state.vesting.status(fwd_article_id(c1.article_url)) == "VESTING"
-
-
-@pytest.mark.asyncio
-async def test_clawback_and_slash_when_article_disappears(monkeypatch):
-    c1 = make_claim("guardian", "https://www.theguardian.com/a", "hkA")
-    commitments = {"hkA": onchain(c1)}
-    self, captured = make_self({1: c1, 2: c1}, commitments, monkeypatch=monkeypatch)
-
-    # cycle 1: article live -> only hkA committed, so miner 1 wins all weight
-    monkeypatch.setattr(fetchmod, "_http_get", lambda url: (200, url, b"news " * 200))
-    await fwd.forward(self)
-    assert dict(zip(captured["uids"], captured["rewards"]))[1] == pytest.approx(1.0)
-
-    # cycle 2: advance past the epoch boundary so the persistence re-check isn't cached
-    self.block_state["v"] += fwd.VEST_EPOCH_LEN + 1
-    monkeypatch.setattr(fetchmod, "_http_get", lambda url: (404, url, b""))
-    await fwd.forward(self)
-    assert dict(zip(captured["uids"], captured["rewards"]))[1] == 0.0
-    assert self.herald_state.slash.is_slashed("hkA", self.subtensor.get_current_block() // fwd.VEST_EPOCH_LEN)
-
-
-@pytest.mark.asyncio
-async def test_failed_cycle_retries_same_epoch(monkeypatch):
-    c1 = make_claim("guardian", "https://www.theguardian.com/a", "hkA")
-    self, captured = make_self({1: c1, 2: c1}, {"hkA": onchain(c1)}, monkeypatch=monkeypatch)
-    monkeypatch.setattr(fetchmod, "_http_get", lambda url: (200, url, b"news " * 200))
-    calls = {"n": 0}
-
-    def flaky(rewards, uids):
-        calls["n"] += 1
-        if calls["n"] == 1:
-            raise RuntimeError("rpc down")        # first attempt fails after partial work
-        captured.update(rewards=rewards, uids=uids)
-
-    self.update_scores = flaky
-    await fwd.forward(self)                         # attempt 1 throws (swallowed); epoch NOT marked
-    assert captured == {}
-    await fwd.forward(self)                         # same epoch must RETRY, not skip
-    assert captured.get("rewards") is not None
-
-
-def _pruned_zero(block):
-    return datetime(1970, 1, 1, tzinfo=timezone.utc)
-
-
-def _pruned_raises(block):
-    raise RuntimeError("state discarded for block")
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize("pruned_read", [_pruned_zero, _pruned_raises], ids=["zero", "raises"])
-async def test_pruned_commit_timestamp_is_read_from_archive(monkeypatch, pruned_read):
-    c1 = make_claim("guardian", "https://www.theguardian.com/a", "hkA")
-    self, captured = make_self({1: c1, 2: c1}, {"hkA": onchain(c1)}, monkeypatch=monkeypatch)
-    monkeypatch.setattr(fwd, "get_commitments_with_block",
-                        lambda subtensor, netuid: {"hkA": (onchain(c1), 400)})
-    monkeypatch.setattr(fetchmod, "_http_get", lambda url: (200, url, b"news " * 200))
-    live = datetime(2026, 1, 1, tzinfo=timezone.utc)
-    self.subtensor.get_timestamp = lambda b: pruned_read(b) if b == 400 else live
-    archive_reads = []
-    monkeypatch.setattr(fwd, "_archive_timestamp", lambda b: archive_reads.append(b) or live)
-
-    await fwd.forward(self)
-
-    assert archive_reads == [400]
-    assert dict(zip(captured["uids"], captured["rewards"]))[1] == pytest.approx(1.0)
-
-
-@pytest.mark.asyncio
-async def test_unreadable_commit_timestamp_retries_the_epoch(monkeypatch):
-    c1 = make_claim("guardian", "https://www.theguardian.com/a", "hkA")
-    self, captured = make_self({1: c1, 2: c1}, {"hkA": onchain(c1)}, monkeypatch=monkeypatch)
-    monkeypatch.setattr(fetchmod, "_http_get", lambda url: (200, url, b"news " * 200))
-    self.subtensor.get_timestamp = _pruned_zero
-
-    def archive_down(block):
-        raise RuntimeError("archive unreachable")
-
-    monkeypatch.setattr(fwd, "_archive_timestamp", archive_down)
-    await fwd.forward(self)                         # no commit time: nothing scored, epoch NOT marked
-    assert captured == {}
-
-    monkeypatch.setattr(fwd, "_archive_timestamp", lambda b: datetime(2026, 1, 1, tzinfo=timezone.utc))
-    await fwd.forward(self)                         # same epoch retries and pays
-    assert dict(zip(captured["uids"], captured["rewards"]))[1] == pytest.approx(1.0)

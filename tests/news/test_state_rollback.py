@@ -169,3 +169,33 @@ def test_unknown_vest_field_breaks_the_legacy_loader_but_not_this_one(legacy, tm
     assert loaded.vesting.active_article_ids() == ["art1"]
     assert loaded.vesting.entry("art1").total_usd == 500.0
     assert loaded.slash.is_slashed("hkB", 10) and loaded.disputes.is_disputed("art1")
+
+
+def test_submission_ledger_written_by_new_code_loads_under_the_legacy_loader(legacy, tmp_path):
+    state = HeraldState.fresh()
+    state.vesting.start("art-vesting", uid=2, total_usd=500.0, url="https://example.com/a",
+                        hotkey="hkStar", brief_id="b1", commit_epoch=7, start_epoch=7,
+                        outlet_id="guardian", tier=1, attribution=0, reveal={"submission_id": "sub-1"})
+    state.vesting.release("art-vesting", epoch=7)
+    state.vesting.start("art-clawback", uid=2, total_usd=300.0, url="https://example.com/b",
+                        hotkey="hkStar", brief_id="b1", commit_epoch=6, start_epoch=6,
+                        outlet_id="techcrunch", tier=2, attribution=0, reveal={"submission_id": "sub-2"})
+    entry = state.vesting.entry("art-clawback")
+    entry.dead_streak, entry.last_dead_epoch = 2, 8
+    state.vesting.clawback("art-clawback")
+    state.vesting.start("art-expired", uid=3, total_usd=50.0, url="https://example.com/c",
+                        hotkey="hkMiner", brief_id="b1", reveal={"nonce": "n1"})
+    state.vesting.expire("art-expired")
+    state.pool_spent = {"b1": 250.0}
+    state.last_scored_epoch = 8
+    path = tmp_path / "herald_state.json"
+    state.save(str(path))
+
+    old = legacy.HeraldState.from_dict(json.loads(path.read_text()))
+    assert old.to_dict() == _without_schema(state.to_dict())
+    loaded = legacy.HeraldState.load(str(path))  # the legacy load() starts fresh on any error
+    assert sorted(loaded.vesting.to_dict()["entries"]) == ["art-clawback", "art-expired", "art-vesting"]
+    assert loaded.vesting.entry("art-vesting").reveal == {"submission_id": "sub-1"}
+    assert loaded.vesting.entry("art-clawback").status == "CLAWBACK"
+    assert loaded.vesting.active_article_ids() == ["art-vesting"]
+    assert loaded.to_dict() == _without_schema(state.to_dict())
