@@ -186,7 +186,7 @@ def test_beincrypto_ad_slot_label_does_not_reject_editorial_article():
     # ordinary staff reporting.  Its paid articles remain unambiguous via the Advertorial
     # byline and explicit promotional disclaimer.
     outlet = _OUTLETS["beincrypto"]
-    editorial = "Written and edited by a staff journalist. Sponsored Why markets changed today."
+    editorial = "Written and edited by a staff writer. Sponsored Why markets changed today."
     assert is_paid(_FIXTURE["beincrypto"]["editorial_url"], editorial,
                    None, outlet=outlet)[0] is False
     partner = ("Advertorial created by third parties for promotional purposes and "

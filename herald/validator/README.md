@@ -1,6 +1,6 @@
 # Herald Validator
 
-Herald is Bittensor netuid 69 for verified editorial media placement. PR firms and journalists
+Herald is Bittensor netuid 69 for verified editorial media placement. PR firms and PR professionals
 submit articles through the Herald website. Validators read those submissions from the backend,
 verify each article against the outlet's own page, vest its value on one incentive hotkey
 (`HERALD_INCENTIVE_HOTKEY`), and set weights on that hotkey and UID 0 only. The incentive hotkey

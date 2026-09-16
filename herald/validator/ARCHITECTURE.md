@@ -38,10 +38,10 @@ contributors claim their share of the incentive hotkey's alpha to a connected wa
 
 ## Participants
 
-- **Contributors** are PR firms and journalists. They sign in to the Herald website with Google,
-  pick a brief, upload the text they will publish before publishing, and add the published link.
-  They need no wallet, hotkey or command line to contribute; a wallet connected on the website is
-  used only to claim earnings.
+- **Contributors** are PR firms and PR professionals. They sign in to the Herald website with
+  Google, pick a brief, upload the text they will publish before publishing, and add the published
+  link. They need no wallet, hotkey or command line to contribute; a wallet connected on the
+  website is used only to claim earnings.
 - **The Herald backend** (`herald-backend`, a separate service) signs the brief feed, records each
   upload and link against the contributor's account, serves the submissions feed, confirms signed
   epoch snapshots, and credits each account its share of the alpha the incentive hotkey receives.

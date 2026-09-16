@@ -4,7 +4,7 @@
 > neurons, read miner commitments or weight miner UIDs. They set weight only on the subnet's single
 > incentive hotkey and burn the rest to UID 0. `herald-miner` (`python -m herald.miner.cli`) and the
 > miner neuron (`neurons/miner.py`) are deprecated: commits, claims and served reveals earn nothing.
-> **PR firms and journalists now take part through the Herald website**, as described below. No
+> **PR firms and PR professionals now take part through the Herald website**, as described below. No
 > wallet, hotkey, registration, server or command line is needed to contribute.
 
 ---

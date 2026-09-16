@@ -257,8 +257,8 @@ An epoch burned by a failed step publishes no results or snapshot (§8.5).
 
 ## 8. Contributor submissions, the incentive hotkey and weights
 
-Contributors (PR firms and journalists) submit through the Herald website with Google sign-in: they
-pick a brief, upload the text they will publish before publishing, then add the published link.
+Contributors (PR firms and PR professionals) submit through the Herald website with Google sign-in:
+they pick a brief, upload the text they will publish before publishing, then add the published link.
 The backend decides which account a submission belongs to. The validator verifies the article
 itself, vests its value on one incentive hotkey, and sets weight on that hotkey and UID 0 only.
 Registered miner hotkeys receive no weight, and the validator sends no queries to miners.

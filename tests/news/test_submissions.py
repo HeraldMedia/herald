@@ -15,10 +15,10 @@ NETWORK, NETUID = "finney", 69
 STORY = "https://www.example.com/news/story"
 NOW_TS = datetime(2026, 9, 12, 12, 0, tzinfo=timezone.utc).timestamp()
 UPLOADED = int(datetime(2026, 9, 9, 15, 0, tzinfo=timezone.utc).timestamp())
-DRAFT = ("A Bittensor subnet opened its public pilot to PR firms and journalists this week. Contributors "
-         "upload the text they plan to publish, then add the link once the article is live. Validators "
-         "fetch each article, confirm the outlet and publication date, and check that the uploaded text "
-         "appears in the published story before any reward begins to vest.")
+DRAFT = ("A Bittensor subnet opened its public pilot to PR firms and PR professionals this week. "
+         "Contributors upload the text they plan to publish, then add the link once the article is "
+         "live. Validators fetch each article, confirm the outlet and publication date, and check that "
+         "the uploaded text appears in the published story before any reward begins to vest.")
 
 
 def row(submission_id="sub-1", url=STORY, **over):

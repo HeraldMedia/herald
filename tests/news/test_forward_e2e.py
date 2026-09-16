@@ -30,9 +30,10 @@ URL_B = "https://techcrunch.com/2026/09/10/subnet-pilot"
 STANDING = [{"id": "b1", "kind": "standing"}]
 UPLOADED = int(datetime(2026, 9, 9, 15, 0, tzinfo=timezone.utc).timestamp())
 DRAFT = ("Quillmere Communications said on Wednesday that the subnet pilot now accepts articles from "
-         "PR firms and independent journalists. Each contributor uploads the text they plan to publish "
-         "and adds the link after the story is live. Validators fetch the article, confirm the outlet "
-         "and the publication date, and check that the uploaded text appears in the published story.")
+         "PR firms and independent PR professionals. Each contributor uploads the text they plan to "
+         "publish and adds the link after the story is live. Validators fetch the article, confirm the "
+         "outlet and the publication date, and check that the uploaded text appears in the published "
+         "story.")
 BODY = "Subnet pilot opens to contributors\n" + DRAFT
 # A second contributor's draft that no fetched page contains.
 OTHER_DRAFT = ("Wintergreen Analytics said its quarterly survey of 400 newsrooms found that most editors "

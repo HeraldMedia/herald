@@ -33,19 +33,19 @@ NOW = ts(2026, 9, 12, 12, 0, 0)
 DAY = 86400
 UPLOADED = int(ts(2026, 8, 20, 8, 0, 0))
 DRAFT = ("Herald, a Bittensor subnet that pays for verified media coverage, opened its public pilot to "
-         "PR firms and journalists this week. Contributors upload the text they plan to publish, then "
-         "add the link once the article is live. Validators fetch each article, confirm the outlet and "
-         "the publication date, and check that the uploaded text appears in the published story before "
-         "any reward begins to vest.")
+         "PR firms and PR professionals this week. Contributors upload the text they plan to publish, "
+         "then add the link once the article is live. Validators fetch each article, confirm the outlet "
+         "and the publication date, and check that the uploaded text appears in the published story "
+         "before any reward begins to vest.")
 BODY = "Subnet pilot opens to the public\n" + DRAFT
 # The draft as an editor might run it: a headline and byline added, a few words changed.
 LIGHTLY_EDITED = (
     "Subnet pilot opens to PR firms\nBy a staff reporter\n"
     "Herald, a Bittensor subnet that pays for verified media coverage, opened its public pilot to "
-    "PR firms and reporters this week. Contributors upload the text they intend to publish, then "
-    "add the link once the article is live. Validators fetch each article, confirm the outlet and "
-    "the publication date, and check that the uploaded text appears in the published story before "
-    "any reward starts to vest.\nMore on the subnet economy next week."
+    "PR firms and PR specialists this week. Contributors upload the text they intend to publish, "
+    "then add the link once the article is live. Validators fetch each article, confirm the outlet "
+    "and the publication date, and check that the uploaded text appears in the published story "
+    "before any reward starts to vest.\nMore on the subnet economy next week."
 )
 # A genuine article on the brief's topic that was not written from the draft.
 UNRELATED_ON_TOPIC = (

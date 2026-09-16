@@ -3,8 +3,8 @@
 > **Deprecated.** Registered miner hotkeys no longer earn on Herald. Validators do not pull
 > `ClaimSynapse` responses, read miner commitments or weight miner UIDs; they set weight only on one
 > incentive hotkey and burn the rest to UID 0. The miner neuron (`neurons/miner.py`) and the
-> `herald-miner` CLI in this directory are deprecated and earn nothing. PR firms and journalists
-> take part through the Herald website with Google sign-in; see
+> `herald-miner` CLI in this directory are deprecated and earn nothing. PR firms and
+> PR professionals take part through the Herald website with Google sign-in; see
 > [docs/miner.md](../../docs/miner.md).
 
 ## Taking part now

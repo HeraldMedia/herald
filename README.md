@@ -1,7 +1,7 @@
 # Herald — Verified Media Placement (Bittensor netuid 69)
 
 Herald is a Bittensor subnet that rewards **verified editorial articles in real news outlets**. PR
-firms and journalists take part through the Herald website. Validators run an automatic,
+firms and PR professionals take part through the Herald website. Validators run an automatic,
 code-only **verification oracle** on every submitted article, checking it against the outlet's own
 page, and direct the subnet's miner incentive to one **incentive hotkey** in proportion to the
 verified value. The part of the day's miner emission that verified value does not cover goes to
