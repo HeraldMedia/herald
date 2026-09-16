@@ -33,8 +33,9 @@ class HeraldState:
         # Persisted so a restart inside an already-scored epoch doesn't re-score it: the vesting
         # ledger already released that epoch's installments, so a re-run would lose that day's vector.
         self.last_scored_epoch = last_scored_epoch
-        # Chain weight publication is independently checkpointed. Bittensor's short weight-update
-        # interval must not cause an unchanged Herald daily allocation to be submitted repeatedly.
+        # Chain weight publication is independently checkpointed: the last epoch whose allocation
+        # was published. Bookkeeping only — how often the latest vector is re-submitted is decided
+        # from the age of the chain's own weight record, not from this field.
         self.last_weight_epoch = last_weight_epoch
 
     @classmethod

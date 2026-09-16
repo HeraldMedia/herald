@@ -105,6 +105,11 @@ TRANSCRIPT_MAX_LENGTH = 250000
 # validation cycle (env-tunable so a local test can score every few seconds; prod defaults unchanged)
 VALIDATOR_WAIT = int(os.getenv('HERALD_VALIDATOR_WAIT', '60'))  # seconds between forward passes
 VALIDATOR_STEPS_INTERVAL = int(os.getenv('HERALD_VALIDATOR_STEPS_INTERVAL', '240'))  # score every Nth step
+# Re-submit the latest miner weights once the chain's record for this validator's own uid is at
+# least this many blocks old. Submission cadence ONLY: the scores themselves are still computed once
+# per evaluation epoch, so this is deployment infra and NOT a consensus parameter. With commit-reveal
+# a new commit only lands at the next tempo boundary, so the achievable cadence is at least one tempo.
+WEIGHT_RESUBMIT_BLOCKS = int(os.getenv('HERALD_WEIGHT_RESUBMIT_BLOCKS', '180'))
 
 # synapse limits
 MAX_ACCOUNTS_PER_SYNAPSE = 1000
@@ -247,6 +252,7 @@ bt.logging.info(f"TRANSCRIPT_MAX_RETRY: {TRANSCRIPT_MAX_RETRY}")
 bt.logging.info(f"TRANSCRIPT_MAX_LENGTH: {TRANSCRIPT_MAX_LENGTH}")
 bt.logging.info(f"VALIDATOR_WAIT: {VALIDATOR_WAIT}")
 bt.logging.info(f"VALIDATOR_STEPS_INTERVAL: {VALIDATOR_STEPS_INTERVAL}")
+bt.logging.info(f"WEIGHT_RESUBMIT_BLOCKS: {WEIGHT_RESUBMIT_BLOCKS}")
 bt.logging.info(f"MAX_ACCOUNTS_PER_SYNAPSE: {MAX_ACCOUNTS_PER_SYNAPSE}")
 bt.logging.info(f"CREDENTIAL_BATCH_SIZE: {CREDENTIAL_BATCH_SIZE}")
 bt.logging.info(f"DISCRETE_MODE: {DISCRETE_MODE}")
