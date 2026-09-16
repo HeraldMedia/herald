@@ -204,9 +204,14 @@ Compose persists the wallet, score checkpoint, Herald ledger, and logs in the
 
 The score checkpoint records the producing spec version (20 for release `0.2.0`); a mismatch
 discards old scores instead of publishing an old emission model under a new version key. The
-Herald ledger separately records the last scored and last successfully submitted weight epochs,
-preventing one daily allocation from being resubmitted at each shorter Bittensor weight-update
-interval. Back up and restore both state files together.
+Herald ledger separately records the last scored epoch, so an epoch is scored once, and the last
+successfully submitted weight epoch, as bookkeeping. Back up and restore both state files together.
+
+Scoring runs once per epoch, but the latest vector is submitted again whenever the chain's weight
+record for this validator's uid is at least `HERALD_WEIGHT_RESUBMIT_BLOCKS` blocks old (default
+180), so the chain's copy stays inside the subnet's activity cutoff. Every submission keeps the
+pending-commit skip and the vector checks. With commit-reveal the record is refreshed about once
+per tempo. See `docs/validator.md` §8.5.
 
 Set `AXON_EXTERNAL_IP` when automatic public-address discovery is not reliable. If the public port
 differs from the listen port, also set `AXON_EXTERNAL_PORT`.

@@ -102,6 +102,7 @@ def env(monkeypatch):
     for level in ("info", "warning", "error"):
         monkeypatch.setattr(fwd.bt.logging, level, lambda msg, *a, **k: env.logs.append(str(msg)))
     monkeypatch.setattr("herald.validator.utils.config.HERALD_INCENTIVE_HOTKEY", STAR)
+    monkeypatch.setattr("neurons.validator.WEIGHT_RESUBMIT_BLOCKS", 180)
 
     # One day of miner emission is worth $1000.
     env.price = {"alpha_tao": 0.004, "alpha_out": 1.0, "ratio": 1.0, "daily_miner_alpha": 1000.0,
@@ -702,10 +703,11 @@ async def test_incentive_hotkey_moving_uid_inside_a_scored_epoch_burns_once(env)
     await fwd.forward(self)
 
     assert self.scores.tolist() == [1.0, 0.0, 0.0]
-    assert self.herald_state.last_weight_epoch == epoch - 1
     assert burns(env) == [f"INCENTIVE_BURN epoch={epoch} reason=stale_scores"]
+    # The ledger is untouched: the burn is the latest stored vector, and the block-cadence
+    # submission sends it like any other.
+    assert self.herald_state.last_weight_epoch == epoch
 
-    self.herald_state.last_weight_epoch = epoch  # the burn vector was submitted
     await fwd.forward(self)
     assert self.herald_state.last_weight_epoch == epoch and len(burns(env)) == 1
 
@@ -713,10 +715,10 @@ async def test_incentive_hotkey_moving_uid_inside_a_scored_epoch_burns_once(env)
 # --- release cutover --------------------------------------------------------------------------------
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("submitted_offset, expected_weight_epoch_offset", [(0, -1), (-2, -2)])
-async def test_cutover_discards_per_miner_scores_and_submits_one_burn(env, monkeypatch, tmp_path,
-                                                                      submitted_offset,
-                                                                      expected_weight_epoch_offset):
+@pytest.mark.parametrize("submitted_offset", [0, -2])
+async def test_cutover_discards_per_miner_scores_and_only_ever_submits_the_burn(env, monkeypatch,
+                                                                                tmp_path,
+                                                                                submitted_offset):
     n = 256
     hotkeys = ["hkOwner"] + [f"hk{uid}" for uid in range(1, n)]
     hotkeys[UID_STAR] = STAR
@@ -747,7 +749,9 @@ async def test_cutover_discards_per_miner_scores_and_submits_one_burn(env, monke
     )
     validator.uid = 1
     validator.wallet = SimpleNamespace(hotkey=SimpleNamespace(ss58_address="hk1"))
-    validator.metagraph = SimpleNamespace(hotkeys=list(hotkeys), n=n)
+    # The chain's weight record for this validator's uid is long past the resubmission interval.
+    validator.metagraph = SimpleNamespace(hotkeys=list(hotkeys), n=n,
+                                          last_update=np.zeros(n, dtype=np.int64))
     validator.subtensor = SimpleNamespace(
         network="finney", get_current_block=lambda: env.block, get_timestamp=lambda block: NOW,
         min_allowed_weights=lambda netuid: 1, commit_reveal_enabled=lambda netuid: True,
@@ -773,11 +777,11 @@ async def test_cutover_discards_per_miner_scores_and_submits_one_burn(env, monke
     scores = np.asarray(validator.scores)
     assert np.flatnonzero(scores).tolist() == [0]
     state = validator.herald_state
-    assert (state.last_scored_epoch, state.last_weight_epoch) == (epoch, epoch + expected_weight_epoch_offset)
+    assert (state.last_scored_epoch, state.last_weight_epoch) == (epoch, epoch + submitted_offset)
     assert burns(env) == [f"INCENTIVE_BURN epoch={epoch} reason=stale_scores"]
     assert env.feed_calls == 0 and env.price_calls == 0
 
-    # The next sync submits the burn once.
+    # The next sync submits the burn.
     validator.sync()
     [submitted] = submissions
     assert (submitted["uids"], submitted["weights"]) == ([0], [65535])
@@ -785,8 +789,10 @@ async def test_cutover_discards_per_miner_scores_and_submits_one_burn(env, monke
     assert state.last_weight_epoch == epoch
     assert HeraldState.load(str(tmp_path / "herald_state.json")).last_weight_epoch == epoch
     assert [receipt["epoch"] for receipt in receipts] == [epoch]
+    validator.metagraph.last_update[validator.uid] = env.block  # revealed
 
-    # A restart later in the same epoch keeps the saved burn vector and does not submit again.
+    # A restart later in the same epoch keeps the saved burn vector and does not submit it again
+    # while the chain's record is fresh.
     del validator.herald_state
     validator.scores = np.zeros(n, dtype=np.float32)
     validator.load_state()
@@ -794,3 +800,147 @@ async def test_cutover_discards_per_miner_scores_and_submits_one_burn(env, monke
     await fwd.forward(validator)
     validator.sync()
     assert len(submissions) == 1 and len(burns(env)) == 1
+
+    # Once the record is stale again, the burn, and only the burn, is re-submitted.
+    env.block += 180
+    await fwd.forward(validator)
+    validator.sync()
+    assert [(s["uids"], s["weights"]) for s in submissions] == [([0], [65535]), ([0], [65535])]
+    assert (f"Re-submitting Herald epoch {epoch} weights: the chain record for uid 1 is 180 blocks "
+            f"old (>= 180)") in env.logs
+    assert len(burns(env)) == 1 and env.feed_calls == 0 and env.price_calls == 0
+    assert all(not {3, 157} & set(s["uids"]) for s in submissions)
+
+
+# --- block-cadence weight submission ----------------------------------------------------------------
+
+def chain_validator(env, monkeypatch, tmp_path, hotkeys, *, uid, wallet_hotkey):
+    """The real Validator on a fake chain: forward, sync, the base weight gates and set_weights all
+    run. Every extrinsic and weight receipt is recorded; nothing leaves the process."""
+    chain = SimpleNamespace(submissions=[], receipts=[], pending=False)
+
+    def set_weights(**kwargs):
+        chain.submissions.append(kwargs)
+        return True, "included"
+
+    def timelocked_commits(netuid):
+        return [(wallet_hotkey, env.block, "encrypted", 1)] if chain.pending else []
+
+    validator = object.__new__(Validator)
+    validator.step = 1
+    validator.uid = uid
+    validator.config = SimpleNamespace(
+        netuid=69,
+        neuron=SimpleNamespace(full_path=str(tmp_path), moving_average_alpha=1.0,
+                               disable_set_weights=False, epoch_length=100),
+    )
+    validator.wallet = SimpleNamespace(hotkey=SimpleNamespace(ss58_address=wallet_hotkey))
+    validator.metagraph = SimpleNamespace(hotkeys=list(hotkeys), n=len(hotkeys),
+                                          last_update=np.zeros(len(hotkeys), dtype=np.int64))
+    validator.subtensor = SimpleNamespace(
+        network="finney", get_current_block=lambda: env.block, get_timestamp=lambda block: NOW,
+        min_allowed_weights=lambda netuid: 1, commit_reveal_enabled=lambda netuid: True,
+        get_timelocked_weight_commits=timelocked_commits, set_weights=set_weights,
+    )
+    validator.scores = np.zeros(len(hotkeys), dtype=np.float32)
+    validator.hotkeys = list(hotkeys)
+    validator.check_registered = lambda: None
+    validator.should_sync_metagraph = lambda: False
+    monkeypatch.setattr(Validator, "block", property(lambda self: env.block))
+    monkeypatch.setattr("neurons.validator.publish_weight_receipt",
+                        lambda endpoint, receipt, hotkey: chain.receipts.append(receipt))
+    return validator, chain
+
+
+def vectors(chain):
+    return [(kwargs["uids"], kwargs["weights"]) for kwargs in chain.submissions]
+
+
+def reveal(validator, env):
+    """The chain reveals this validator's commit at the current block."""
+    validator.metagraph.last_update[validator.uid] = env.block
+
+
+@pytest.mark.asyncio
+async def test_scoring_runs_once_per_epoch_while_its_vector_is_resubmitted(env, monkeypatch,
+                                                                           tmp_path):
+    monkeypatch.setattr(fwd, "VALIDATOR_STEPS_INTERVAL", 1)  # every step runs a Herald pass
+    env.rows = [row("sub-1", URL_A)]
+    validator, chain = chain_validator(env, monkeypatch, tmp_path, ["hkOwner", "hkValidator", STAR],
+                                       uid=1, wallet_hotkey="hkValidator")
+    epoch, first_block = epoch_of(env), env.block
+
+    async def loop_step(blocks):
+        env.block += blocks
+        await fwd.forward(validator)
+        validator.sync()
+        validator.step += 1
+
+    await loop_step(0)  # scores the epoch; the chain has no record for this uid yet
+    incentive = ([0, UID_STAR], [65535, 21845])
+    assert vectors(chain) == [incentive]
+    reveal(validator, env)
+
+    for _ in range(3):
+        await loop_step(120)  # fresh record: nothing is submitted
+        chain.pending = True
+        await loop_step(60)   # stale, but a commit is pending reveal
+        chain.pending = False
+        await loop_step(5)    # stale and nothing pending: the same vector again
+        reveal(validator, env)
+
+    assert epoch_of(env) == epoch
+    assert vectors(chain) == [incentive] * 4
+    assert [receipt["epoch"] for receipt in chain.receipts] == [epoch] * 4
+    weight_lines = [line for line in env.logs if line.startswith("INCENTIVE_WEIGHT")]
+    assert len(weight_lines) == 1
+    assert (env.feed_calls, env.price_calls, len(env.snapshots), len(env.results)) == (1, 1, 1, 1)
+    assert validator.herald_state.last_scored_epoch == epoch
+    assert validator.herald_state.last_weight_epoch == epoch
+    record = f"Herald epoch {epoch} weights: the chain record for uid 1 is"
+    assert [line for line in env.logs if line.startswith(("Submitting", "Re-submitting"))] == [
+        f"Submitting {record} {first_block} blocks old (>= 180)",
+    ] + [f"Re-submitting {record} 185 blocks old (>= 180)"] * 3
+    fresh = "Weights for uid 1 are 120 blocks old (< 180); skipping resubmission"
+    assert env.logs.count(fresh) == 3
+    assert env.logs.count("Weight commitment pending automatic reveal; skipping resubmission") == 3
+
+    # The next epoch is scored once, and its vector is submitted under the same rule.
+    next_epoch(env)
+    await loop_step(0)
+    assert (env.feed_calls, env.price_calls, len(env.snapshots)) == (2, 2, 2)
+    assert len(vectors(chain)) == 5 and validator.herald_state.last_weight_epoch == epoch + 1
+
+
+@pytest.mark.asyncio
+async def test_per_miner_scores_kept_by_a_restart_are_only_ever_resubmitted_as_the_burn(
+        env, monkeypatch, tmp_path):
+    # A score checkpoint from THIS spec version still holding per-miner scores (UIDs 3 and 157) is
+    # restored, and the first weight step comes before any Herald pass of this run.
+    n = 256
+    hotkeys = ["hkOwner"] + [f"hk{uid}" for uid in range(1, n)]
+    hotkeys[UID_STAR] = STAR
+    epoch = epoch_of(env)
+    old_scores = np.zeros(n, dtype=np.float32)
+    old_scores[3], old_scores[157] = 0.5, 0.5
+    np.savez(tmp_path / "state.npz", step=4321, scores=old_scores, hotkeys=np.array(hotkeys),
+             spec_version=Validator.spec_version)
+    ledger = HeraldState.fresh()
+    ledger.last_scored_epoch = ledger.last_weight_epoch = epoch
+    ledger.save(str(tmp_path / "herald_state.json"))
+
+    validator, chain = chain_validator(env, monkeypatch, tmp_path, hotkeys, uid=1,
+                                       wallet_hotkey="hk1")
+    validator.load_state()
+    assert np.flatnonzero(validator.scores).tolist() == [3, 157] and validator.step == 4321
+
+    validator.sync()
+    reveal(validator, env)
+    env.block += 180
+    validator.sync()
+
+    assert vectors(chain) == [([0], [65535]), ([0], [65535])]
+    assert sum(line.startswith("WEIGHT_VECTOR_BURN reason=incentive_uid_changed")
+               for line in env.logs) == 2
+    assert all(not {3, 157} & set(uids) for uids, _ in vectors(chain))
+    assert env.feed_calls == 0 and env.price_calls == 0

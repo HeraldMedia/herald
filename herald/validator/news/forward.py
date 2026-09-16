@@ -174,8 +174,8 @@ def _restrict_scored_epoch(self, state: HeraldState):
     """Keep an already scored epoch's scores on UID 0 and the incentive hotkey's current UID.
 
     Scores loaded from an earlier release, or left on a UID the incentive hotkey no longer holds,
-    are replaced by all weight on BURN_UID. When the epoch was already submitted, last_weight_epoch
-    is lowered once so the burn vector replaces the stale one on chain.
+    are replaced by all weight on BURN_UID. The ledger is not touched: the burn becomes the latest
+    stored vector, which the block-cadence weight submission sends in place of the stale one.
     """
     uid_star = incentive_uid(self.metagraph.hotkeys, HERALD_INCENTIVE_HOTKEY)
     allowed = {BURN_UID} if uid_star is None else {BURN_UID, uid_star}
@@ -184,9 +184,6 @@ def _restrict_scored_epoch(self, state: HeraldState):
     if support and support <= allowed:
         return
     _set_burn_scores(self)
-    if state.last_weight_epoch >= state.last_scored_epoch:
-        state.last_weight_epoch = state.last_scored_epoch - 1
-    _save_state(self, state)
     bt.logging.info(f"INCENTIVE_BURN epoch={state.last_scored_epoch} reason=stale_scores")
 
 

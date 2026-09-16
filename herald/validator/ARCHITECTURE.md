@@ -105,8 +105,8 @@ epoch (`HERALD_VEST_EPOCH_LEN` blocks, about one day, lagged behind the chain he
 1. Load the Herald ledger and derive the evaluation epoch. If either fails, log the error and change
    nothing.
 2. For an epoch that is already scored, keep scores only on UID 0 and the incentive hotkey's current
-   UID; any other scores are replaced by all weight on UID 0 (`stale_scores`), and an epoch whose
-   weights were already submitted is submitted once more with that vector.
+   UID; any other scores are replaced by all weight on UID 0 (`stale_scores`), which the next
+   weight submission sends.
 3. Fetch and verify the signed active brief feed. A verified empty feed puts all weight on UID 0
    (`no_briefs`).
 4. Resolve the incentive hotkey's UID: the hotkey must be set, registered, different from this
@@ -122,7 +122,11 @@ epoch (`HERALD_VEST_EPOCH_LEN` blocks, about one day, lagged behind the chain he
 10. Apply prepaid client pools and sum the payable USD.
 11. Build the incentive and burn vector, replace the scores with it, publish result items and a
     signed epoch snapshot, and save the ledger.
-12. Submit that vector once for the scored epoch when Bittensor's chain gate permits it.
+12. Submit the latest vector whenever the chain's weight record for this validator's uid is at
+    least `HERALD_WEIGHT_RESUBMIT_BLOCKS` blocks old (default 180) and no commit of this hotkey is
+    pending reveal, after the base `--neuron.epoch_length` gate. The vector is scored once per epoch
+    but submitted on this block cadence, so the chain's copy stays inside the activity cutoff; with
+    commit-reveal the record is refreshed about once per tempo.
 
 An error in steps 4–11 burns the epoch (`_burn_epoch`): the ledger returns to its state before the
 pass, the scores become all weight on UID 0, the epoch is marked scored so it is not retried, and
@@ -217,9 +221,9 @@ Validator state has two layers:
 
 The score checkpoint is restored before initial sync so startup cannot overwrite it with zeroes.
 Herald state is atomically replaced after scoring or a burn and again after successful weight
-inclusion. The separate submission marker prevents Bittensor's shorter weight-update interval from
-resubmitting one unchanged daily allocation. Compose persists both files under the
-`validator_state` volume.
+inclusion. The submitted-epoch marker is bookkeeping: when the latest vector is submitted again is
+decided from the age of the chain's weight record, not from the marker. Compose persists both files
+under the `validator_state` volume.
 
 ## Supporting service
 

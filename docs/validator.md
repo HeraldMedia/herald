@@ -324,9 +324,12 @@ installments are clawed back; there is no slashing.
 | `HERALD_PUBLISH_BUFFER_DAYS` | `3` | Days before a brief's start date from which publication counts. |
 | `HERALD_MAX_ARTICLE_AGE_DAYS` | `21` | Oldest accepted publication, counted back from the scoring block's chain time. |
 | `HERALD_MAX_SUBMISSIONS_PER_EPOCH` | `500` | New submissions verified per epoch. |
+| `HERALD_WEIGHT_RESUBMIT_BLOCKS` | `180` | Blocks the chain's weight record for this validator's uid must reach before the latest weights are submitted again (§8.5). |
 
-All five are in the consensus fingerprint. Change them only fleet-wide, together with
-`HERALD_EXPECTED_CONSENSUS_FP` on every validator and the backend (§3).
+All but `HERALD_WEIGHT_RESUBMIT_BLOCKS` are in the consensus fingerprint. Change them only
+fleet-wide, together with `HERALD_EXPECTED_CONSENSUS_FP` on every validator and the backend (§3).
+`HERALD_WEIGHT_RESUBMIT_BLOCKS` sets only how often weights are submitted, not what they are, so it
+is not in the fingerprint and may differ between validators.
 
 ### 8.4 Pricing the day's miner emission
 
@@ -378,7 +381,7 @@ All weight goes to UID 0 for the day, logged as `INCENTIVE_BURN epoch=<e> reason
 | `pricing_error (<detail>)` | A pricing input failed (§8.4). |
 | `feed_unavailable` | The submissions feed could not be read (§8.1). |
 | `error (<type>: <detail>)` | Any other error in the shared steps, for example loading the outlet registry or its on-chain anchor. |
-| `stale_scores` | An already scored epoch holds scores on a UID other than 0 and the incentive hotkey's current UID (scores from an earlier release, or the incentive hotkey moved to another UID). The scores are replaced with the burn, and if that epoch's weights were already submitted, the burn is submitted once in their place. |
+| `stale_scores` | An already scored epoch holds scores on a UID other than 0 and the incentive hotkey's current UID (scores from an earlier release, or the incentive hotkey moved to another UID). The scores are replaced with the burn, and the next weight submission sends the burn in their place. |
 
 For every reason except `no_briefs` and `stale_scores`, the pass has failed: every ledger change it
 made is discarded, nothing is published, and the epoch is marked scored so it is not retried.
@@ -386,10 +389,40 @@ Installments not released that day are caught up by the next successful epoch. A
 epoch is known (the ledger or the chain head cannot be read) logs `Error in Herald forward pass`
 and changes nothing.
 
+**Submitting and re-submitting weights.** Scoring runs once per epoch, but the chain's copy of a
+validator's weights ages: once its last update is older than the subnet's activity cutoff (5,000
+blocks on netuid 69), the chain stops counting that validator's weights. So once an epoch has been
+scored or burned, the validator submits the latest vector, incentive and burn or burn only, whenever
+the chain's weight record for its own uid (`LastUpdate`) is at least `HERALD_WEIGHT_RESUBMIT_BLOCKS`
+blocks old (default 180). The stored vector changes only when an epoch is scored or burned, or its
+scores are replaced by the burn (`stale_scores`), and a new vector is submitted under the same rule.
+At each weight-setting step:
+
+- the `--neuron.epoch_length` interval (default 100 blocks) and `--neuron.disable_set_weights`
+  still apply first;
+- nothing is submitted before the first scored epoch or while the scores are empty;
+- a record younger than the interval logs
+  `Weights for uid <uid> are <n> blocks old (< <interval>); skipping resubmission`;
+- a record whose age cannot be read logs `Unable to read the age of this uid's weight record: …` at
+  WARNING and nothing is submitted;
+- a commit of this hotkey still waiting for its automatic reveal logs
+  `Weight commitment pending automatic reveal; skipping resubmission`;
+- otherwise the validator logs `Submitting Herald epoch <e> weights: …` (the first submission of
+  that epoch's vector) or `Re-submitting Herald epoch <e> weights: …` (a later one), followed by the
+  checks of §8.6, which apply to every submission.
+
+With commit-reveal, a commit is revealed at the next tempo boundary, and while it waits no new
+commit is sent. On netuid 69 (tempo 360) the record is therefore refreshed about once per tempo,
+roughly every 72 minutes, whatever the interval is set to, well inside the activity cutoff. Each
+accepted submission records the epoch as submitted and, with `HERALD_RESULTS_ENDPOINT` set, sends a
+signed weight receipt; that record is bookkeeping and does not decide when the next submission
+happens.
+
 ### 8.6 Weight vector checks and MinAllowedWeights
 
-At submission, `set_weights` builds the u16 vector straight from the scores. It is never padded
-with other registered UIDs and never clipped to `MaxWeightsLimit`.
+At every submission, including each re-submission, `set_weights` builds the u16 vector straight
+from the scores. It is never padded with other registered UIDs and never clipped to
+`MaxWeightsLimit`.
 
 - Scores on any UID other than 0 and the incentive hotkey's current UID turn the vector into all
   weight on UID 0: `WEIGHT_VECTOR_BURN reason=incentive_uid_changed: …` at WARNING.
@@ -403,8 +436,8 @@ with other registered UIDs and never clipped to `MaxWeightsLimit`.
     MinAllowedWeights;
   - `read_error (<detail>)` — reading MinAllowedWeights or building the vector failed.
 
-  A refused epoch is not marked as submitted, so the validator tries again at its next
-  weight-setting step.
+  Nothing is marked as submitted, and the validator tries again at its next weight-setting step
+  while the chain's record stays old.
 
 **MinAllowedWeights must be 1.** A burn-only vector has a single entry (UID 0), so on a subnet whose
 MinAllowedWeights is above 1 every burn-only vector is refused and no weights are set. Check
@@ -432,6 +465,12 @@ MinAllowedWeights is above 1 every burn-only vector is refused and no weights ar
 | `LEGACY_VESTING_EXPIRED <n>` | INFO | A pass expired `n` vesting entries that carry no submission id. |
 | `INCENTIVE_WEIGHT epoch=<e> w=<w> payable_usd=<usd> daily_usd=<usd> alpha_tao=<price> tao_usd=<price> daily_miner_alpha=<alpha> uid_star=<uid>` | INFO | A successful scoring pass; `uid_star` is the incentive hotkey's UID. |
 | `INCENTIVE_BURN epoch=<e> reason=<reason>` | INFO for `no_briefs` and `stale_scores`, WARNING otherwise | The day's weight went to UID 0 (§8.5). |
+| `Submitting Herald epoch <e> weights: the chain record for uid <uid> is <n> blocks old (>= <interval>)` | INFO | The first submission of epoch `e`'s vector passed every submission gate (§8.5). |
+| `Re-submitting Herald epoch <e> weights: the chain record for uid <uid> is <n> blocks old (>= <interval>)` | INFO | The same vector is submitted again because the chain's record reached the interval (§8.5). |
+| `Weights for uid <uid> are <n> blocks old (< <interval>); skipping resubmission` | INFO | The chain's record is still fresh; nothing is submitted. |
+| `Weight commitment pending automatic reveal; skipping resubmission` | INFO | A commit of this hotkey awaits its reveal; nothing is submitted. |
+| `No Herald epoch has been scored yet; skipping weight submission` | INFO | No vector exists yet. |
+| `Unable to read the age of this uid's weight record: <error>` | WARNING | The record's age could not be read; nothing is submitted. |
 | `WEIGHT_VECTOR uids=[…] weights=[…]` | INFO | The u16 vector about to be submitted. |
 | `WEIGHT_VECTOR_BURN reason=incentive_uid_changed: …` | WARNING | Scores outside UID 0 and the incentive UID were replaced by the burn at submission. |
 | `WEIGHT_VECTOR_REFUSED reason=<reason>` | ERROR | The vector was refused and no extrinsic was sent (§8.6). |
@@ -520,7 +559,7 @@ endpoint or an unexpected payload exits 2. Without the flag the watchdog runs ex
   only copied aside, so unsetting the override earlier makes the next start refuse again. While
   either override is set the validator logs a WARNING on every start; once the save has happened,
   unset it and recreate the container.
-- **`WEIGHT_SUBMISSION_STALLED`** — the validator had an epoch to submit, but the pending
+- **`WEIGHT_SUBMISSION_STALLED`** — the validator had weights to submit, but the pending
   weight-commit check kept failing, so it is deliberately not setting weights (it will not risk a
   duplicate commit). Set `HERALD_WEIGHT_CHECK_FALLBACK_ENDPOINT` to a second finney node and recreate
   the container; it is used only for this check. Keep `SUBTENSOR_NETWORK=finney`, as production
