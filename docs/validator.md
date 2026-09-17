@@ -147,6 +147,11 @@ DISABLE_AUTO_UPDATE=true
 # Poll for scoring every N steps (~N*60s). Scoring itself stays once per epoch and is NOT in the
 # fingerprint; the default (240) can delay the first snapshot by hours, so 10 is a sensible start.
 HERALD_VALIDATOR_STEPS_INTERVAL=10
+# Re-submit the latest weights once the chain's record for this uid is this many blocks old, so the
+# chain's copy does not age out between daily scoring passes. Submission cadence only: not scoring,
+# not consensus, not in the fingerprint. Commit-reveal still lands a commit at the next tempo
+# boundary, so the effective cadence is never shorter than one tempo.
+HERALD_WEIGHT_RESUBMIT_BLOCKS=180
 # Compute with `python -m herald.production fingerprint`; set the SAME value here AND on the backend:
 HERALD_EXPECTED_CONSENSUS_FP=
 ```

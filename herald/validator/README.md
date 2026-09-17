@@ -165,9 +165,10 @@ raw dendrite response before the bounded `ClaimSynapse` model parses it.
 
 The score checkpoint records the producing spec version; a mismatch discards old scores instead
 of publishing an old emission model under a new version key. The Herald ledger separately records
-the last scored and last successfully submitted weight epochs, preventing one daily allocation
-from being resubmitted at each shorter Bittensor weight-update interval. Back up and restore both
-state files together.
+the last scored and last successfully submitted weight epochs; the submitted one is bookkeeping,
+because resubmission is decided from the age of the chain's own weight record for this validator's
+uid (`HERALD_WEIGHT_RESUBMIT_BLOCKS`, default 180 blocks). Back up and restore both state files
+together.
 
 Set `AXON_EXTERNAL_IP` when automatic public-address discovery is not reliable. If the public port
 differs from the listen port, also set `AXON_EXTERNAL_PORT`.

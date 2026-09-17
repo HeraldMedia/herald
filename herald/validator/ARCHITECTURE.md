@@ -157,8 +157,10 @@ Validator state has two layers:
 
 The score checkpoint is restored before initial sync so startup cannot overwrite it with zeroes.
 Herald state is atomically replaced after successful scoring and again after successful weight
-inclusion. The separate submission marker prevents Bittensor's shorter weight-update interval from
-resubmitting one unchanged daily allocation. Compose persists both files under the
+inclusion. The submission marker records which allocation is on chain; the latest vector is
+re-submitted whenever the chain's weight record for this uid is at least
+`HERALD_WEIGHT_RESUBMIT_BLOCKS` blocks old (default 180), so the chain's copy never ages out
+between daily passes. Compose persists both files under the
 `validator_state` volume.
 
 Miner `claims.json` contains commitment nonces and is written atomically with mode `0600`.

@@ -9,7 +9,7 @@ import numpy as np
 from herald.base.validator import BaseValidatorNeuron
 from herald.validator.news.forward import _state, _state_path, forward
 from herald.validator.news.publish import publish_weight_receipt
-from herald.validator.utils.config import __version__, WANDB_PROJECT
+from herald.validator.utils.config import __version__, WANDB_PROJECT, WEIGHT_RESUBMIT_BLOCKS
 from herald.utils.cloudwatch_logging import get_cloudwatch_handler
 from core.auto_update import run_auto_update
 
@@ -60,18 +60,24 @@ class Validator(BaseValidatorNeuron):
         """
         return await forward(self)
 
+    def _weight_record_age(self):
+        """Age, in blocks, of the chain's weight record for this validator's own uid.
+
+        None when it cannot be read; the caller then skips rather than submitting blind.
+        """
+        try:
+            return max(0, int(self.block) - int(self.metagraph.last_update[self.uid]))
+        except Exception as e:
+            bt.logging.warning(f"Unable to read the age of this uid's weight record: {e}")
+            return None
+
     def should_set_weights(self) -> bool:
+        # The base class enforces the block interval, the pending-commit skip and the
+        # disable_set_weights switch, and logs its own reason when it declines.
         if not super().should_set_weights():
             return False
 
         state = _state(self)
-        if state.last_weight_epoch >= state.last_scored_epoch:
-            bt.logging.info(
-                f"Herald epoch {state.last_scored_epoch} was already submitted; "
-                "waiting for the next daily evaluation"
-            )
-            return False
-
         scores = np.asarray(self.scores)
         if not np.any(np.isfinite(scores) & (scores > 0)):
             bt.logging.info(
@@ -79,6 +85,24 @@ class Validator(BaseValidatorNeuron):
                 "skipping weight submission"
             )
             return False
+
+        # Scoring stays daily, but the chain's copy of the vector ages out, so the LATEST scores are
+        # re-submitted on a block cadence. last_weight_epoch is bookkeeping only and no longer gates
+        # this: a vector already submitted in this Herald epoch is submitted again once it is stale.
+        age = self._weight_record_age()
+        if age is None:
+            return False
+        if age < WEIGHT_RESUBMIT_BLOCKS:
+            bt.logging.info(
+                f"Weights for uid {self.uid} are {age} blocks old "
+                f"(< {WEIGHT_RESUBMIT_BLOCKS}); skipping resubmission"
+            )
+            return False
+
+        bt.logging.info(
+            f"Re-submitting Herald epoch {state.last_scored_epoch} weights: the chain record for "
+            f"uid {self.uid} is {age} blocks old (>= {WEIGHT_RESUBMIT_BLOCKS})"
+        )
         return True
 
     def set_weights(self) -> bool:
