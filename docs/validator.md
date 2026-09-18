@@ -302,7 +302,7 @@ logs `SUBMISSION_RESULT <submission_id> <reason>`:
 | `url_not_live` | The page could not be fetched as a live article. |
 | `publication_date_unverifiable` | The page gives no publication time. |
 | `published_outside_window` | Published after chain time or more than `HERALD_MAX_ARTICLE_AGE_DAYS` before it; or, for a brief with an end date, outside start date minus `HERALD_PUBLISH_BUFFER_DAYS` (00:00 UTC) through end date (23:59:59 UTC). Standing briefs have no brief window. |
-| `published_before_upload` | The UTC publication day is earlier than the UTC day of the upload. |
+| `published_before_upload` | The page states an exact publication time (a time of day with `Z` or an explicit UTC offset) earlier than the upload. Otherwise, the UTC publication day is earlier than the UTC day of the upload: a date alone, or a time with no offset, is not exact. |
 | `draft_mismatch` | Less than `HERALD_DRAFT_MATCH_THRESHOLD` of the uploaded text's five-word shingles (lower-cased, punctuation removed) appear in the fetched article body. |
 | `paid_not_real_news` | Generic or outlet-specific paid-content rules match. |
 | `topic_mismatch` | The article does not match the brief's topic (§6). |

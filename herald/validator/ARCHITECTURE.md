@@ -18,7 +18,7 @@ Token-gated submissions feed: submission id, brief, link, uploaded text, upload 
     │ read once per daily evaluation epoch
     ▼
 Validator oracle verifies each new article on the outlet's own page: registry outlet,
-supported fetch, live page, publication inside the brief window and after the upload day,
+supported fetch, live page, publication inside the brief window and not before the upload,
 uploaded text present, not paid content, on topic, search presence
     │
     ▼
@@ -152,7 +152,10 @@ first failure. The brief must be active before it is called (`brief_not_active`)
    `HERALD_MAX_ARTICLE_AGE_DAYS` before it; for a brief with an end date that is not a standing
    brief, from start date minus `HERALD_PUBLISH_BUFFER_DAYS` at 00:00 UTC through end date
    23:59:59 UTC
-6. Published on or after the UTC day of the upload (`published_before_upload`)
+6. Published no earlier than the upload (`published_before_upload`): at or after the upload time
+   when the page states an exact publication time (a time of day with `Z` or an explicit UTC
+   offset), otherwise on or after the upload's UTC day. A date alone, or a time with no offset, is
+   not exact. The evidence records `published_exact`.
 7. Draft match (`draft_mismatch`): the share of the uploaded text's normalized five-word shingles
    found in the fetched article body must be at least `HERALD_DRAFT_MATCH_THRESHOLD`
 8. Generic and outlet-specific paid-content detection (`paid_not_real_news`)

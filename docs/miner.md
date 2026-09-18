@@ -47,7 +47,7 @@ Checks run in order and stop at the first failure. Every submitted article must 
 | **Link live** | The article is reachable and not a thin or challenge page. | `url_not_live` |
 | **Publication date** | The page states when the article was published. | `publication_date_unverifiable` |
 | **Inside the window** | For a brief with an end date: published from 3 days before the start date (00:00 UTC) through the end date (23:59:59 UTC). Always: no more than 21 days before validators score it. | `published_outside_window` |
-| **After the upload** | The article's UTC publication day is the day of your upload or later. | `published_before_upload` |
+| **After the upload** | The article was not published before your upload. When the page states its publication time with a time zone, your upload must be at or before that time; when it gives only a date, or a time with no time zone, the article's UTC publication day must be the day of your upload or later. | `published_before_upload` |
 | **Uploaded text present** | Most of the text you uploaded (at least 60% of it) appears in the published article. | `draft_mismatch` |
 | **Real news** | It is editorial, **not** a paid, sponsored or press-release page. | `paid_not_real_news` |
 | **Topic match** | The article is on the brief's topic. | `topic_mismatch` |
@@ -91,7 +91,8 @@ and is claimed to the wallet connected on the website.
 
 ## 4. Rules & common pitfalls
 
-- **Upload before you publish.** An article published on a UTC day before your upload is rejected.
+- **Upload before you publish.** An article published before your upload is rejected: to the second
+  when the page states its publication time with a time zone, otherwise by UTC day.
 - **Publish what you uploaded.** Editing is expected, but most of the uploaded text must appear in
   the published article.
 - **Listed outlets only.** Off-registry domains earn nothing. Higher tiers are worth more.

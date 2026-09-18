@@ -67,11 +67,15 @@ def _utc_day(ts: float) -> date:
     return datetime.fromtimestamp(float(ts), tz=timezone.utc).date()
 
 
-def published_after_upload(published_ts: float, uploaded_ts: float) -> bool:
-    """The article's UTC publication day is the draft upload's UTC day or later.
+def published_after_upload(published_ts: float, uploaded_ts: float, exact: bool = False) -> bool:
+    """The article was published no earlier than the draft upload.
 
-    Days, not seconds, because many outlets state only a publication date.
+    With an exact publication time (a time of day and an explicit UTC offset) the upload must be at or
+    before it. Otherwise the article's UTC publication day must be the upload's UTC day or later:
+    many outlets state only a publication date, or a time with no offset.
     """
+    if exact:
+        return float(uploaded_ts) <= float(published_ts)
     return _utc_day(published_ts) >= _utc_day(uploaded_ts)
 
 
@@ -95,9 +99,10 @@ def verify_article(
     """Verify one submitted article against its brief and the draft uploaded before publication.
 
     Checks, in order: listed outlet, supported fetch strategy, live page, publication date present and
-    inside the window, published on or after the upload's UTC day, the uploaded draft found in the
-    article body (at least HERALD_DRAFT_MATCH_THRESHOLD), not paid content, on topic. A passing article
-    is valued by its outlet tier and search presence. The draft itself is never added to the evidence.
+    inside the window, published after the upload (at or after the upload time when the page states an
+    exact time, otherwise on or after the upload's UTC day), the uploaded draft found in the article
+    body (at least HERALD_DRAFT_MATCH_THRESHOLD), not paid content, on topic. A passing article is
+    valued by its outlet tier and search presence. The draft itself is never added to the evidence.
     """
     brief_id = str(brief.get("id", ""))
     evidence: Dict[str, Any] = {}
@@ -120,12 +125,14 @@ def verify_article(
         return reject("url_not_live")
 
     published_ts = getattr(fr, "published_ts", None)
+    published_exact = getattr(fr, "published_exact", False) is True
     evidence["published_ts"] = published_ts
+    evidence["published_exact"] = published_exact
     if published_ts is None:
         return reject("publication_date_unverifiable")
     if not published_in_window(float(published_ts), brief, float(now_ts)):
         return reject("published_outside_window")
-    if not published_after_upload(float(published_ts), uploaded_ts):
+    if not published_after_upload(float(published_ts), uploaded_ts, exact=published_exact):
         return reject("published_before_upload")
 
     article_text = getattr(fr, "article_text", None) or fr.text

@@ -21,7 +21,10 @@ For every new submission, the validator checks, in order:
 4. Publication is no later than chain time, at most `HERALD_MAX_ARTICLE_AGE_DAYS` before it, and,
    for a brief with an end date, inside the brief window (start date minus
    `HERALD_PUBLISH_BUFFER_DAYS` through end date).
-5. The article was published on or after the UTC day the contributor uploaded their text.
+5. The article was not published before the contributor uploaded their text. When the page states an
+   exact publication time (a time of day with `Z` or an explicit UTC offset), the upload must be at
+   or before it; a date alone, or a time with no offset, only has to fall on or after the upload's
+   UTC day.
 6. At least `HERALD_DRAFT_MATCH_THRESHOLD` of the uploaded text appears in the article the
    validator fetched.
 7. The URL and article do not match generic or outlet-specific paid-content rules.

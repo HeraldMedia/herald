@@ -201,22 +201,40 @@ _PUBLISHED_PATTERNS = [
 ]
 
 
-def _parse_published_ts(html: str):
+def _parse_published_value(raw: str):
+    """(unix seconds, exact) for one publication-time value, or None when it does not parse.
+
+    Exact means the value states a time of day and an explicit UTC offset (`Z`, `+02:00`, `-0400`).
+    A date alone, or a time with no offset, is read as UTC on every validator but is not exact: a
+    time with no offset may be hours off.
+    """
+    raw = raw.strip().rstrip(".,;").replace("Z", "+00:00")
+    if re.fullmatch(r"\d{4}/\d{1,2}/\d{1,2}", raw):
+        raw = raw.replace("/", "-")
+    try:
+        dt = datetime.fromisoformat(raw)
+    except ValueError:
+        return None
+    exact = dt.tzinfo is not None  # an offset parses only after a time of day
+    if not exact:
+        dt = dt.replace(tzinfo=timezone.utc)  # naive dates are UTC for ALL validators
+    return dt.timestamp(), exact
+
+
+def _parse_published(html: str):
+    """(unix seconds, exact) from the first pattern whose value parses, or (None, False)."""
     for pattern in _PUBLISHED_PATTERNS:
         m = pattern.search(html)
         if not m:
             continue
-        raw = m.group(1).strip().rstrip(".,;").replace("Z", "+00:00")
-        if re.fullmatch(r"\d{4}/\d{1,2}/\d{1,2}", raw):
-            raw = raw.replace("/", "-")
-        try:
-            dt = datetime.fromisoformat(raw)
-        except ValueError:
-            continue
-        if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=timezone.utc)  # naive dates are UTC for ALL validators
-        return dt.timestamp()
-    return None
+        parsed = _parse_published_value(m.group(1))
+        if parsed is not None:
+            return parsed
+    return None, False
+
+
+def _parse_published_ts(html: str):
+    return _parse_published(html)[0]
 
 
 # Byline, for the attribution level-1 check. JSON-LD author first (article-scoped), then the
@@ -252,6 +270,9 @@ class FetchResult:
     article_text: str = None
     providers_live: int = 0
     published_ts: float = None
+    # True when the publication time states a time of day and an explicit UTC offset; a date alone,
+    # or a time with no offset, is not exact and the oracle compares UTC days instead.
+    published_exact: bool = False
     author: str = None
     # "full" = `text` is the whole article body (direct/proxy fetch). "excerpt" = `text` is a short
     # AUTHORITATIVE excerpt (e.g. a publisher API's lead paragraph); the full body must come from the
@@ -396,6 +417,7 @@ def fetch(url: str, epoch=None, proxy_only: bool = False, proxy_profile: str = "
         status, final_url, body = results[0] if results else (0, canon, b"")
 
     html = body.decode("utf-8", "ignore")
+    published_ts, published_exact = _parse_published(html)
     result = FetchResult(
         ok=ok,
         status=status,
@@ -405,7 +427,8 @@ def fetch(url: str, epoch=None, proxy_only: bool = False, proxy_profile: str = "
         text=_extract_text(html),
         article_text=_extract_article_text(html) or None,
         providers_live=len(live),
-        published_ts=_parse_published_ts(html),
+        published_ts=published_ts,
+        published_exact=published_exact,
         author=_parse_author(html),
     )
     if epoch is not None:

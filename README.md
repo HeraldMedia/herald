@@ -16,8 +16,8 @@ UID 0 and is burned.
 3. **Add the link.** Once the article is live, the contributor adds its link on the same page.
 4. **Verify.** Once per daily epoch each validator reads the new submissions from the backend and
    checks every article on the outlet's own page: the outlet is in the signed outlet registry, the
-   article was published inside the brief window and on or after the day of the upload, most of the
-   uploaded text appears in it, it is not paid content, and it is on the brief's topic.
+   article was published inside the brief window and not before the upload, most of the uploaded
+   text appears in it, it is not paid content, and it is on the brief's topic.
 5. **Vest.** A verified article is valued by its outlet tier and search presence. The value releases
    in daily installments over a 30-day persistence window while the article stays live. A
    confirmed removal, or a change to paid content, forfeits the remaining installments.

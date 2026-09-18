@@ -13,13 +13,12 @@ A FetchResult with body_kind="excerpt" signals the oracle to flip the snapshot a
 """
 
 import os
-from datetime import datetime
 from urllib.parse import urlsplit
 
 import httpx
 
 from herald.validator.utils.config import HERALD_NYT_API_BASE
-from .fetch import FetchResult, _cache, _cache_put
+from .fetch import FetchResult, _cache, _cache_put, _parse_published_value
 from .url import canonicalize
 
 _NYT_SEARCH = HERALD_NYT_API_BASE  # real Article Search API by default; overridable for a localhost sim
@@ -61,20 +60,19 @@ def _from_nyt_doc(url: str, doc: dict) -> FetchResult:
     keywords = " ".join(k.get("value", "") for k in (doc.get("keywords") or []) if isinstance(k, dict))
     byline = ((doc.get("byline") or {}).get("original") or "").strip()
     author = byline[3:].strip() if byline[:3].lower() == "by " else (byline or None)
-    published_ts = None
+    # Read like a page's publication time: exact only with a time of day and an explicit offset.
+    published_ts, published_exact = None, False
     pub = doc.get("pub_date")
-    if pub:
-        try:
-            published_ts = datetime.fromisoformat(pub.replace("Z", "+00:00")).timestamp()
-        except (ValueError, TypeError):
-            pass
+    parsed = _parse_published_value(pub) if isinstance(pub, str) else None
+    if parsed is not None:
+        published_ts, published_exact = parsed
     # The anchor target is the lead paragraph (a distinctive, verbatim slice of the real article).
     excerpt = lead or abstract or headline
     topic_text = " ".join(t for t in (headline, abstract, lead, keywords, section) if t)
     return FetchResult(
         ok=bool(excerpt), status=200, final_url=url, text_hash="", body_len=len(excerpt),
-        text=excerpt, published_ts=published_ts, author=author or None,
-        body_kind="excerpt", topic_text=topic_text,
+        text=excerpt, published_ts=published_ts, published_exact=published_exact,
+        author=author or None, body_kind="excerpt", topic_text=topic_text,
     )
 
 

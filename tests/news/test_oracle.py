@@ -5,7 +5,7 @@ from types import SimpleNamespace
 import pytest
 
 from herald.validator.news import oracle
-from herald.validator.news.oracle import verify_article
+from herald.validator.news.oracle import published_after_upload, verify_article
 from herald.validator.news.registry import OutletRegistry
 from herald.validator.news.topic_match import topic_matched
 from herald.validator.news.url import article_id
@@ -56,9 +56,11 @@ UNRELATED_ON_TOPIC = (
 )
 
 
-def page(published=ts(2026, 9, 8, 9, 0, 0), text=BODY, article_text=None, status=200, ok=True):
+def page(published=ts(2026, 9, 8, 9, 0, 0), text=BODY, article_text=None, status=200, ok=True,
+         exact=False):
     return lambda url: SimpleNamespace(ok=ok, status=status, final_url=url, text_hash="h", text=text,
-                                       article_text=article_text, published_ts=published)
+                                       article_text=article_text, published_ts=published,
+                                       published_exact=exact)
 
 
 def indexed(url):
@@ -234,6 +236,56 @@ def test_publication_on_the_upload_utc_day_or_later_passes(uploaded, published):
 def test_publication_the_utc_day_before_the_upload_is_rejected(uploaded, published):
     r = verify(fetch_fn=page(published=published), uploaded_ts=int(uploaded), search_fn=must_not_run)
     assert not r.passed and r.reason == "published_before_upload" and r.usd == 0.0
+
+
+@pytest.mark.parametrize("uploaded, published, exact, passes", [
+    # An exact publication time is compared with the upload time.
+    (ts(2026, 9, 8, 9, 0, 0), ts(2026, 9, 8, 9, 0, 0), True, True),
+    (ts(2026, 9, 8, 8, 59, 59), ts(2026, 9, 8, 9, 0, 0), True, True),
+    (ts(2026, 9, 7, 23, 0, 0), ts(2026, 9, 8, 9, 0, 0), True, True),
+    (ts(2026, 9, 8, 9, 0, 1), ts(2026, 9, 8, 9, 0, 0), True, False),
+    (ts(2026, 9, 8, 23, 59, 59), ts(2026, 9, 8, 9, 0, 0), True, False),
+    (ts(2026, 9, 9, 0, 0, 0), ts(2026, 9, 8, 9, 0, 0), True, False),
+    # Otherwise the UTC days are compared.
+    (ts(2026, 9, 8, 9, 0, 1), ts(2026, 9, 8, 9, 0, 0), False, True),
+    (ts(2026, 9, 8, 23, 59, 59), ts(2026, 9, 8, 0, 0, 0), False, True),
+    (ts(2026, 9, 9, 0, 0, 0), ts(2026, 9, 8, 23, 59, 59), False, False),
+])
+def test_published_after_upload_uses_the_time_when_exact_and_the_day_otherwise(uploaded, published,
+                                                                              exact, passes):
+    assert published_after_upload(published, int(uploaded), exact=exact) is passes
+    if not exact:
+        assert published_after_upload(published, int(uploaded)) is passes  # the default
+
+
+def test_same_day_upload_after_an_exact_publication_time_is_rejected():
+    r = verify(fetch_fn=page(published=ts(2026, 9, 8, 9, 0, 0), exact=True),
+               uploaded_ts=int(ts(2026, 9, 8, 15, 0, 0)), search_fn=must_not_run)
+    assert not r.passed and r.reason == "published_before_upload" and r.usd == 0.0
+    assert r.evidence["published_exact"] is True and "draft_match" not in r.evidence
+
+
+def test_same_day_upload_passes_the_day_rule_when_the_publication_time_is_not_exact():
+    r = verify(fetch_fn=page(published=ts(2026, 9, 8, 9, 0, 0), exact=False),
+               uploaded_ts=int(ts(2026, 9, 8, 15, 0, 0)))
+    assert r.passed and r.reason == "ok"
+    assert r.evidence["published_exact"] is False
+
+
+def test_upload_before_an_exact_publication_time_passes():
+    r = verify(fetch_fn=page(published=ts(2026, 9, 8, 9, 0, 0), exact=True),
+               uploaded_ts=int(ts(2026, 9, 8, 8, 59, 59)))
+    assert r.passed and r.evidence["published_exact"] is True
+    assert r.evidence["published_ts"] == ts(2026, 9, 8, 9, 0, 0)
+
+
+def test_page_without_an_exactness_flag_uses_the_day_rule():
+    def dated(url):
+        return SimpleNamespace(ok=True, status=200, final_url=url, text_hash="h", text=BODY,
+                               article_text=None, published_ts=ts(2026, 9, 8, 9, 0, 0))
+
+    r = verify(fetch_fn=dated, uploaded_ts=int(ts(2026, 9, 8, 15, 0, 0)))
+    assert r.passed and r.evidence["published_exact"] is False
 
 
 def test_publication_window_is_checked_before_the_upload_day():
