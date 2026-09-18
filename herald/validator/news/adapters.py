@@ -60,7 +60,8 @@ def _from_nyt_doc(url: str, doc: dict) -> FetchResult:
     keywords = " ".join(k.get("value", "") for k in (doc.get("keywords") or []) if isinstance(k, dict))
     byline = ((doc.get("byline") or {}).get("original") or "").strip()
     author = byline[3:].strip() if byline[:3].lower() == "by " else (byline or None)
-    # Read like a page's publication time: exact only with a time of day and an explicit offset.
+    # Read like a page's publication time: exact only with an explicit offset and a local time of day
+    # other than exactly midnight.
     published_ts, published_exact = None, False
     pub = doc.get("pub_date")
     parsed = _parse_published_value(pub) if isinstance(pub, str) else None

@@ -163,8 +163,9 @@ first failure. The brief must be active before it is called (`brief_not_active`)
    23:59:59 UTC
 6. Published no earlier than the upload (`published_before_upload`): at or after the upload time
    when the page states an exact publication time (a time of day with `Z` or an explicit UTC
-   offset), otherwise on or after the upload's UTC day. A date alone, or a time with no offset, is
-   not exact. The evidence records `published_exact`.
+   offset), otherwise on or after the upload's UTC day. A date alone, a time with no offset, or
+   exactly 00:00:00 in the stated offset (how many sites render a date alone) is not exact. The
+   evidence records `published_exact`.
 7. Draft match (`draft_mismatch`): the share of the uploaded text's normalized five-word shingles
    found in the fetched article body must be at least `HERALD_DRAFT_MATCH_THRESHOLD`
 8. Generic and outlet-specific paid-content detection (`paid_not_real_news`)

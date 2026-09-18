@@ -5,6 +5,7 @@ from types import SimpleNamespace
 import pytest
 
 from herald.validator.news import oracle
+from herald.validator.news.fetch import _parse_published_value
 from herald.validator.news.oracle import published_after_upload, verify_article
 from herald.validator.news.registry import OutletRegistry
 from herald.validator.news.topic_match import topic_matched
@@ -277,6 +278,25 @@ def test_upload_before_an_exact_publication_time_passes():
                uploaded_ts=int(ts(2026, 9, 8, 8, 59, 59)))
     assert r.passed and r.evidence["published_exact"] is True
     assert r.evidence["published_ts"] == ts(2026, 9, 8, 9, 0, 0)
+
+
+@pytest.mark.parametrize("stated, passes", [
+    # A midnight placeholder for a date: the day rule accepts an upload later that day.
+    ("2026-09-08T00:00:00Z", True),
+    ("2026-09-08T00:00:00.000Z", True),
+    ("2026-09-08T00:00:00-04:00", True),
+    # A real morning time: an upload later the same day is rejected.
+    ("2026-09-08T07:30:00Z", False),
+    ("2026-09-08T03:30:00-04:00", False),
+])
+def test_same_day_upload_after_a_midnight_placeholder_passes_and_after_a_real_time_does_not(stated,
+                                                                                           passes):
+    published, exact = _parse_published_value(stated)
+    r = verify(fetch_fn=page(published=published, exact=exact), uploaded_ts=int(ts(2026, 9, 8, 8, 0, 0)))
+    assert r.passed is passes
+    assert r.evidence["published_exact"] is not passes
+    if not passes:
+        assert r.reason == "published_before_upload"
 
 
 def test_page_without_an_exactness_flag_uses_the_day_rule():

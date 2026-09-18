@@ -298,7 +298,15 @@ def test_published_ts_parses_lancet_citation_online_date(monkeypatch):
     ("2026-09-08", datetime(2026, 9, 8, tzinfo=timezone.utc), False),
     ("2026-09-08T10:15:00", datetime(2026, 9, 8, 10, 15, tzinfo=timezone.utc), False),
     ("2026/09/08", datetime(2026, 9, 8, tzinfo=timezone.utc), False),
-], ids=["z", "offset", "offset-without-colon", "date-only", "time-without-offset", "slash-date"])
+    # Exactly midnight in the stated offset is how many sites render a date alone.
+    ("2026-09-08T00:00:00Z", datetime(2026, 9, 8, tzinfo=timezone.utc), False),
+    ("2026-09-08T00:00:00-04:00", datetime(2026, 9, 8, 4, 0, tzinfo=timezone.utc), False),
+    ("2026-09-08T00:00:00.000+02:00", datetime(2026, 9, 7, 22, 0, tzinfo=timezone.utc), False),
+    ("2026-09-08T00:00:01+02:00", datetime(2026, 9, 7, 22, 0, 1, tzinfo=timezone.utc), True),
+    ("2026-09-07T20:00:00-04:00", datetime(2026, 9, 8, tzinfo=timezone.utc), True),
+], ids=["z", "offset", "offset-without-colon", "date-only", "time-without-offset", "slash-date",
+        "midnight-z", "midnight-negative-offset", "midnight-fractional-zeros",
+        "one-second-past-midnight", "utc-midnight-local-evening"])
 def test_publication_time_is_exact_only_with_a_time_of_day_and_an_explicit_offset(monkeypatch, raw,
                                                                                   published, exact):
     html = b'<script>{"datePublished":"' + raw.encode() + b'"}</script>' + b"x" * 600

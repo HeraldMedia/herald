@@ -204,9 +204,10 @@ _PUBLISHED_PATTERNS = [
 def _parse_published_value(raw: str):
     """(unix seconds, exact) for one publication-time value, or None when it does not parse.
 
-    Exact means the value states a time of day and an explicit UTC offset (`Z`, `+02:00`, `-0400`).
-    A date alone, or a time with no offset, is read as UTC on every validator but is not exact: a
-    time with no offset may be hours off.
+    Exact means the value states a time of day and an explicit UTC offset (`Z`, `+02:00`, `-0400`),
+    and that time is not exactly midnight in its own offset. A date alone, or a time with no offset,
+    is read as UTC on every validator but is not exact: a time with no offset may be hours off.
+    Exactly 00:00:00 local is how many sites render a date alone, so it is not exact either.
     """
     raw = raw.strip().rstrip(".,;").replace("Z", "+00:00")
     if re.fullmatch(r"\d{4}/\d{1,2}/\d{1,2}", raw):
@@ -215,8 +216,10 @@ def _parse_published_value(raw: str):
         dt = datetime.fromisoformat(raw)
     except ValueError:
         return None
-    exact = dt.tzinfo is not None  # an offset parses only after a time of day
-    if not exact:
+    # An offset parses only after a time of day; the local time is read before converting to UTC.
+    midnight = (dt.hour, dt.minute, dt.second, dt.microsecond) == (0, 0, 0, 0)
+    exact = dt.tzinfo is not None and not midnight
+    if dt.tzinfo is None:
         dt = dt.replace(tzinfo=timezone.utc)  # naive dates are UTC for ALL validators
     return dt.timestamp(), exact
 
@@ -270,8 +273,9 @@ class FetchResult:
     article_text: str = None
     providers_live: int = 0
     published_ts: float = None
-    # True when the publication time states a time of day and an explicit UTC offset; a date alone,
-    # or a time with no offset, is not exact and the oracle compares UTC days instead.
+    # True when the publication time states a time of day and an explicit UTC offset, other than
+    # exactly midnight in that offset; a date alone, a time with no offset or a midnight placeholder
+    # is not exact and the oracle compares UTC days instead.
     published_exact: bool = False
     author: str = None
     # "full" = `text` is the whole article body (direct/proxy fetch). "excerpt" = `text` is a short

@@ -39,6 +39,9 @@ def test_nyt_adapter_builds_authoritative_excerpt(monkeypatch):
     ("2026-07-02T08:00:00+02:00", datetime(2026, 7, 2, 6, 0, tzinfo=timezone.utc), True),
     ("2026-07-02T06:00:00", datetime(2026, 7, 2, 6, 0, tzinfo=timezone.utc), False),
     ("2026-07-02", datetime(2026, 7, 2, tzinfo=timezone.utc), False),
+    ("2026-07-02T00:00:00+0000", datetime(2026, 7, 2, tzinfo=timezone.utc), False),
+    ("2026-07-02T00:00:00-04:00", datetime(2026, 7, 2, 4, 0, tzinfo=timezone.utc), False),
+    ("2026-07-02T00:00:01Z", datetime(2026, 7, 2, 0, 0, 1, tzinfo=timezone.utc), True),
 ])
 def test_nyt_publication_time_is_exact_only_with_an_explicit_offset(pub_date, published, exact):
     fr = adapters._from_nyt_doc(DOC["web_url"], {**DOC, "pub_date": pub_date})
