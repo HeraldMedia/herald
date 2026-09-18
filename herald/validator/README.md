@@ -24,7 +24,8 @@ For every new submission, the validator checks, in order:
 5. The article was not published before the contributor uploaded their text. When the page states an
    exact publication time (a time of day with `Z` or an explicit UTC offset), the upload must be at
    or before it. A date alone, a time with no offset, or exactly midnight in the stated offset (how
-   many sites render a date alone) only has to fall on or after the upload's UTC day.
+   many sites render a date alone) only has to fall on or after the upload's UTC day, and is judged
+   by the date the outlet states, in its own offset; the brief window uses that date too.
 6. At least `HERALD_DRAFT_MATCH_THRESHOLD` of the uploaded text appears in the article the
    validator fetched.
 7. The URL and article do not match generic or outlet-specific paid-content rules.

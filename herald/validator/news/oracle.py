@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta, timezone
-from typing import Any, Callable, Dict
+from typing import Any, Callable, Dict, Optional
 
 from herald.validator.utils.config import (
     HERALD_DRAFT_MATCH_THRESHOLD,
@@ -40,26 +40,31 @@ def _utc_midnight(day: date) -> float:
     return datetime.combine(day, time.min, tzinfo=timezone.utc).timestamp()
 
 
-def published_in_window(published_ts: float, brief: dict, now_ts: float) -> bool:
+def published_in_window(published_ts: float, brief: dict, now_ts: float,
+                        published_day: date = None) -> bool:
     """The publication-time rule.
 
     Always: published no later than chain time `now_ts` and at most HERALD_MAX_ARTICLE_AGE_DAYS before
     it. A brief with an end_date (standing briefs excepted) also requires publication from start_date
     minus HERALD_PUBLISH_BUFFER_DAYS at 00:00 UTC through end_date 23:59:59 UTC; a brief without a
-    start_date has no lower brief bound.
+    start_date has no lower brief bound. A publication time that is not exact passes `published_day`,
+    the date the page states, and that date must fall from start_date minus the buffer through
+    end_date.
     """
     if published_ts > now_ts or published_ts < now_ts - HERALD_MAX_ARTICLE_AGE_DAYS * _DAY_SECONDS:
         return False
     end = brief.get("end_date")
     if brief.get("kind") == "standing" or not end:
         return True
-    if published_ts >= _utc_midnight(_brief_day(end) + timedelta(days=1)):
-        return False
+    last_day = _brief_day(end)
     start = brief.get("start_date")
-    if start:
-        earliest = _utc_midnight(_brief_day(start) - timedelta(days=HERALD_PUBLISH_BUFFER_DAYS))
-        if published_ts < earliest:
-            return False
+    first_day = _brief_day(start) - timedelta(days=HERALD_PUBLISH_BUFFER_DAYS) if start else None
+    if published_day is not None:
+        return published_day <= last_day and (first_day is None or published_day >= first_day)
+    if published_ts >= _utc_midnight(last_day + timedelta(days=1)):
+        return False
+    if first_day is not None and published_ts < _utc_midnight(first_day):
+        return False
     return True
 
 
@@ -67,16 +72,29 @@ def _utc_day(ts: float) -> date:
     return datetime.fromtimestamp(float(ts), tz=timezone.utc).date()
 
 
-def published_after_upload(published_ts: float, uploaded_ts: float, exact: bool = False) -> bool:
+def published_after_upload(published_ts: float, uploaded_ts: float, exact: bool = False,
+                           published_day: date = None) -> bool:
     """The article was published no earlier than the draft upload.
 
     With an exact publication time (a time of day and an explicit UTC offset) the upload must be at or
-    before it. Otherwise the article's UTC publication day must be the upload's UTC day or later:
-    many outlets state only a publication date, or a time with no offset.
+    before it. Otherwise the publication day must be the upload's UTC day or later: many outlets state
+    only a publication date, or a time with no offset. The publication day is `published_day`, the
+    date the page states, when given, and the UTC day of `published_ts` otherwise.
     """
     if exact:
         return float(uploaded_ts) <= float(published_ts)
-    return _utc_day(published_ts) >= _utc_day(uploaded_ts)
+    day = published_day if published_day is not None else _utc_day(published_ts)
+    return day >= _utc_day(uploaded_ts)
+
+
+def _stated_day(value) -> Optional[date]:
+    """The YYYY-MM-DD date a page states for a publication time that is not exact, or None."""
+    if not isinstance(value, str):
+        return None
+    try:
+        return datetime.strptime(value, "%Y-%m-%d").date()
+    except ValueError:
+        return None
 
 
 def draft_match(draft_text: str, article_text: str) -> float:
@@ -101,8 +119,10 @@ def verify_article(
     Checks, in order: listed outlet, supported fetch strategy, live page, publication date present and
     inside the window, published after the upload (at or after the upload time when the page states an
     exact time, otherwise on or after the upload's UTC day), the uploaded draft found in the article
-    body (at least HERALD_DRAFT_MATCH_THRESHOLD), not paid content, on topic. A passing article is
-    valued by its outlet tier and search presence. The draft itself is never added to the evidence.
+    body (at least HERALD_DRAFT_MATCH_THRESHOLD), not paid content, on topic. A publication time that
+    is not exact is placed by the date the page states, for both the window and the upload day. A
+    passing article is valued by its outlet tier and search presence. The draft itself is never added
+    to the evidence.
     """
     brief_id = str(brief.get("id", ""))
     evidence: Dict[str, Any] = {}
@@ -126,13 +146,17 @@ def verify_article(
 
     published_ts = getattr(fr, "published_ts", None)
     published_exact = getattr(fr, "published_exact", False) is True
+    # A publication time that is not exact is placed by the date the page states, in both day rules.
+    published_day = None if published_exact else _stated_day(getattr(fr, "published_date", None))
     evidence["published_ts"] = published_ts
     evidence["published_exact"] = published_exact
+    evidence["published_date"] = published_day.isoformat() if published_day is not None else None
     if published_ts is None:
         return reject("publication_date_unverifiable")
-    if not published_in_window(float(published_ts), brief, float(now_ts)):
+    if not published_in_window(float(published_ts), brief, float(now_ts), published_day=published_day):
         return reject("published_outside_window")
-    if not published_after_upload(float(published_ts), uploaded_ts, exact=published_exact):
+    if not published_after_upload(float(published_ts), uploaded_ts, exact=published_exact,
+                                  published_day=published_day):
         return reject("published_before_upload")
 
     article_text = getattr(fr, "article_text", None) or fr.text

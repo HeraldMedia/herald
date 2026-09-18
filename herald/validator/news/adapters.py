@@ -61,19 +61,20 @@ def _from_nyt_doc(url: str, doc: dict) -> FetchResult:
     byline = ((doc.get("byline") or {}).get("original") or "").strip()
     author = byline[3:].strip() if byline[:3].lower() == "by " else (byline or None)
     # Read like a page's publication time: exact only with an explicit offset and a local time of day
-    # other than exactly midnight.
-    published_ts, published_exact = None, False
+    # other than exactly midnight; otherwise the date it states is carried for the day rules.
+    published_ts, published_exact, published_date = None, False, None
     pub = doc.get("pub_date")
     parsed = _parse_published_value(pub) if isinstance(pub, str) else None
     if parsed is not None:
-        published_ts, published_exact = parsed
+        published_ts, published_exact, published_date = parsed
     # The anchor target is the lead paragraph (a distinctive, verbatim slice of the real article).
     excerpt = lead or abstract or headline
     topic_text = " ".join(t for t in (headline, abstract, lead, keywords, section) if t)
     return FetchResult(
         ok=bool(excerpt), status=200, final_url=url, text_hash="", body_len=len(excerpt),
         text=excerpt, published_ts=published_ts, published_exact=published_exact,
-        author=author or None, body_kind="excerpt", topic_text=topic_text,
+        published_date=published_date, author=author or None, body_kind="excerpt",
+        topic_text=topic_text,
     )
 
 

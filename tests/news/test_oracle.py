@@ -58,10 +58,16 @@ UNRELATED_ON_TOPIC = (
 
 
 def page(published=ts(2026, 9, 8, 9, 0, 0), text=BODY, article_text=None, status=200, ok=True,
-         exact=False):
+         exact=False, date=None):
     return lambda url: SimpleNamespace(ok=ok, status=status, final_url=url, text_hash="h", text=text,
                                        article_text=article_text, published_ts=published,
-                                       published_exact=exact)
+                                       published_exact=exact, published_date=date)
+
+
+def stated(raw):
+    """A live page whose publication time is `raw`, read by the page parser."""
+    published, exact, date = _parse_published_value(raw)
+    return page(published=published, exact=exact, date=date)
 
 
 def indexed(url):
@@ -280,7 +286,7 @@ def test_upload_before_an_exact_publication_time_passes():
     assert r.evidence["published_ts"] == ts(2026, 9, 8, 9, 0, 0)
 
 
-@pytest.mark.parametrize("stated, passes", [
+@pytest.mark.parametrize("raw, passes", [
     # A midnight placeholder for a date: the day rule accepts an upload later that day.
     ("2026-09-08T00:00:00Z", True),
     ("2026-09-08T00:00:00.000Z", True),
@@ -289,14 +295,75 @@ def test_upload_before_an_exact_publication_time_passes():
     ("2026-09-08T07:30:00Z", False),
     ("2026-09-08T03:30:00-04:00", False),
 ])
-def test_same_day_upload_after_a_midnight_placeholder_passes_and_after_a_real_time_does_not(stated,
+def test_same_day_upload_after_a_midnight_placeholder_passes_and_after_a_real_time_does_not(raw,
                                                                                            passes):
-    published, exact = _parse_published_value(stated)
-    r = verify(fetch_fn=page(published=published, exact=exact), uploaded_ts=int(ts(2026, 9, 8, 8, 0, 0)))
+    r = verify(fetch_fn=stated(raw), uploaded_ts=int(ts(2026, 9, 8, 8, 0, 0)))
     assert r.passed is passes
     assert r.evidence["published_exact"] is not passes
     if not passes:
         assert r.reason == "published_before_upload"
+
+
+AT_08_UTC = int(ts(2026, 9, 8, 8, 0, 0))
+ENDS_09_07 = {**BRIEF, "start_date": "2026-09-01", "end_date": "2026-09-07"}
+STARTS_09_08 = {**BRIEF, "start_date": "2026-09-08", "end_date": "2026-09-10"}
+
+
+@pytest.fixture
+def no_buffer(monkeypatch):
+    """Publication windows open on the brief's start date itself."""
+    monkeypatch.setattr(oracle, "HERALD_PUBLISH_BUFFER_DAYS", 0)
+
+
+def test_positive_offset_midnight_is_judged_by_the_date_the_page_states(no_buffer):
+    raw = "2026-09-08T00:00:00+02:00"  # 22:00 UTC on 7 September
+    r = verify(fetch_fn=stated(raw), uploaded_ts=AT_08_UTC)
+    assert r.passed and r.evidence["published_date"] == "2026-09-08"
+    assert r.evidence["published_exact"] is False
+    # The window reads the same day: after a window ending 7 September, inside one opening on the 8th.
+    r = verify(brief=ENDS_09_07, fetch_fn=stated(raw), uploaded_ts=UPLOADED)
+    assert r.reason == "published_outside_window"
+    assert verify(brief=STARTS_09_08, fetch_fn=stated(raw), uploaded_ts=AT_08_UTC).passed
+    # Without the stated date, the UTC day (7 September) would have decided both checks.
+    utc_only = page(published=ts(2026, 9, 7, 22, 0, 0))
+    assert verify(fetch_fn=utc_only, uploaded_ts=AT_08_UTC).reason == "published_before_upload"
+    assert verify(brief=STARTS_09_08, fetch_fn=utc_only).reason == "published_outside_window"
+    assert verify(brief=ENDS_09_07, fetch_fn=utc_only).passed
+
+
+@pytest.mark.parametrize("raw", ["2026-09-08T00:00:00-04:00", "2026-09-08T00:00:00Z"])
+def test_negative_offset_and_utc_midnights_keep_their_day(no_buffer, raw):
+    assert verify(fetch_fn=stated(raw), uploaded_ts=AT_08_UTC).passed
+    r = verify(fetch_fn=stated(raw), uploaded_ts=int(ts(2026, 9, 9, 0, 0, 0)))
+    assert r.reason == "published_before_upload"
+    assert verify(brief=ENDS_09_07, fetch_fn=stated(raw)).reason == "published_outside_window"
+    assert verify(brief=STARTS_09_08, fetch_fn=stated(raw)).passed
+
+
+@pytest.mark.parametrize("raw", ["2026-09-08", "2026/09/08", "2026-09-08T23:30:00"])
+def test_a_date_or_a_time_without_offset_is_judged_by_the_date_it_names(no_buffer, raw):
+    assert verify(fetch_fn=stated(raw), uploaded_ts=int(ts(2026, 9, 8, 23, 59, 59))).passed
+    r = verify(fetch_fn=stated(raw), uploaded_ts=int(ts(2026, 9, 9, 0, 0, 0)))
+    assert r.reason == "published_before_upload" and r.evidence["published_date"] == "2026-09-08"
+    assert verify(brief=ENDS_09_07, fetch_fn=stated(raw)).reason == "published_outside_window"
+    assert verify(brief={**STARTS_09_08, "end_date": "2026-09-08"}, fetch_fn=stated(raw)).passed
+
+
+def test_exact_times_still_compare_instants(no_buffer):
+    raw = "2026-09-08T00:30:00+02:00"  # exact: 22:30 UTC on 7 September
+    r = verify(fetch_fn=stated(raw), uploaded_ts=int(ts(2026, 9, 7, 22, 0, 0)))
+    assert r.passed and r.evidence["published_exact"] is True and r.evidence["published_date"] is None
+    r = verify(fetch_fn=stated(raw), uploaded_ts=int(ts(2026, 9, 7, 22, 30, 1)))
+    assert r.reason == "published_before_upload"
+    # The window places it on its UTC day, 7 September.
+    assert verify(brief=ENDS_09_07, fetch_fn=stated(raw)).passed
+    assert verify(brief=STARTS_09_08, fetch_fn=stated(raw)).reason == "published_outside_window"
+
+
+def test_a_stated_date_is_ignored_for_an_exact_time():
+    r = verify(fetch_fn=page(published=ts(2026, 9, 8, 9, 0, 0), exact=True, date="2026-09-09"),
+               uploaded_ts=int(ts(2026, 9, 8, 15, 0, 0)))
+    assert r.reason == "published_before_upload" and r.evidence["published_date"] is None
 
 
 def test_page_without_an_exactness_flag_uses_the_day_rule():

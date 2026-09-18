@@ -160,12 +160,14 @@ first failure. The brief must be active before it is called (`brief_not_active`)
 5. Publication window (`published_outside_window`): no later than chain time and at most
    `HERALD_MAX_ARTICLE_AGE_DAYS` before it; for a brief with an end date that is not a standing
    brief, from start date minus `HERALD_PUBLISH_BUFFER_DAYS` at 00:00 UTC through end date
-   23:59:59 UTC
+   23:59:59 UTC; a publication time that is not exact counts on the date the page states
 6. Published no earlier than the upload (`published_before_upload`): at or after the upload time
    when the page states an exact publication time (a time of day with `Z` or an explicit UTC
    offset), otherwise on or after the upload's UTC day. A date alone, a time with no offset, or
-   exactly 00:00:00 in the stated offset (how many sites render a date alone) is not exact. The
-   evidence records `published_exact`.
+   exactly 00:00:00 in the stated offset (how many sites render a date alone) is not exact, and is
+   judged by the date the page states, in its own offset (`published_date`): for example
+   `2026-09-08T00:00:00+02:00` is 8 September. The evidence records `published_exact` and
+   `published_date`.
 7. Draft match (`draft_mismatch`): the share of the uploaded text's normalized five-word shingles
    found in the fetched article body must be at least `HERALD_DRAFT_MATCH_THRESHOLD`
 8. Generic and outlet-specific paid-content detection (`paid_not_real_news`)

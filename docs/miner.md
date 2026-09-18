@@ -46,8 +46,8 @@ Checks run in order and stop at the first failure. Every submitted article must 
 | **Outlet supported** | Validators read the outlet's page themselves, directly or through their fetch provider. | `outlet_not_supported` |
 | **Link live** | The article is reachable and not a thin or challenge page. | `url_not_live` |
 | **Publication date** | The page states when the article was published. | `publication_date_unverifiable` |
-| **Inside the window** | For a brief with an end date: published from 3 days before the start date (00:00 UTC) through the end date (23:59:59 UTC). Always: no more than 21 days before validators score it. | `published_outside_window` |
-| **After the upload** | The article was not published before your upload. When the page states its publication time with a time zone, your upload must be at or before that time; when it gives only a date, a time with no time zone, or exactly midnight (how many sites show a date alone), the article's UTC publication day must be the day of your upload or later. | `published_before_upload` |
+| **Inside the window** | For a brief with an end date: published from 3 days before the start date (00:00 UTC) through the end date (23:59:59 UTC); an article that gives only a date counts on the date the outlet states. Always: no more than 21 days before validators score it. | `published_outside_window` |
+| **After the upload** | The article was not published before your upload. When the page states its publication time with a time zone, your upload must be at or before that time; when it gives only a date, a time with no time zone, or exactly midnight (how many sites show a date alone), the date the outlet states must be the UTC day of your upload or later. | `published_before_upload` |
 | **Uploaded text present** | Most of the text you uploaded (at least 60% of it) appears in the published article. | `draft_mismatch` |
 | **Real news** | It is editorial, **not** a paid, sponsored or press-release page. | `paid_not_real_news` |
 | **Topic match** | The article is on the brief's topic. | `topic_mismatch` |
@@ -95,7 +95,7 @@ and is claimed to the wallet connected on the website.
 
 - **Upload before you publish.** An article published before your upload is rejected: to the second
   when the page states its publication time with a time zone (other than exactly midnight),
-  otherwise by UTC day.
+  otherwise by the date the outlet states against the UTC day of your upload.
 - **Publish what you uploaded.** Editing is expected, but most of the uploaded text must appear in
   the published article.
 - **Listed outlets only.** Off-registry domains earn nothing. Higher tiers are worth more.
