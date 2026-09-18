@@ -40,7 +40,7 @@ def test_live_params_cover_the_consensus_surface():
     assert p["price_source"] == "chain_spot_alpha_x_coingecko_tao_usd_v1" == pricing.PRICE_SOURCE
     assert p["miner_emission_share"] == 0.41
     assert p["blocks_per_day"] == 7200
-    assert p["intake"] == "backend_submissions_draft_match_v1"
+    assert p["intake"] == "backend_submissions_draft_match_v2"
     assert p["draft_match_threshold"] == cfg.HERALD_DRAFT_MATCH_THRESHOLD
     assert p["publish_buffer_days"] == cfg.HERALD_PUBLISH_BUFFER_DAYS
     assert p["max_article_age_days"] == cfg.HERALD_MAX_ARTICLE_AGE_DAYS
@@ -74,3 +74,11 @@ def test_the_per_epoch_and_per_article_caps_move_the_fingerprint(monkeypatch):
     assert with_candidates != fp
     monkeypatch.setattr(cfg, "HERALD_MAX_SUBMISSIONS_PER_EPOCH", cfg.HERALD_MAX_SUBMISSIONS_PER_EPOCH + 1)
     assert consensus_fingerprint() != with_candidates
+
+
+def test_intake_rules_version_moves_the_fingerprint():
+    current = consensus_params()
+    previous = {key: value for key, value in current.items() if key != "max_candidates_per_article"}
+    previous["intake"] = "backend_submissions_draft_match_v1"
+    assert consensus_fingerprint(previous) != consensus_fingerprint(current)
+    assert consensus_fingerprint({**current, "intake": previous["intake"]}) != consensus_fingerprint(current)

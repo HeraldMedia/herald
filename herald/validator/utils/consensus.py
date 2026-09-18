@@ -37,8 +37,10 @@ def consensus_params() -> dict:
         "price_source": pricing.PRICE_SOURCE,
         "miner_emission_share": pricing.MINER_EMISSION_SHARE,
         "blocks_per_day": pricing.BLOCKS_PER_DAY,
-        # submission intake and verification
-        "intake": "backend_submissions_draft_match_v1",
+        # submission intake and verification. v2: exact publication times are compared with the
+        # upload time, the earliest matching draft of an article is credited, and articles are
+        # verified in order of their earliest upload.
+        "intake": "backend_submissions_draft_match_v2",
         "draft_match_threshold": cfg.HERALD_DRAFT_MATCH_THRESHOLD,
         "publish_buffer_days": cfg.HERALD_PUBLISH_BUFFER_DAYS,
         "max_article_age_days": cfg.HERALD_MAX_ARTICLE_AGE_DAYS,
