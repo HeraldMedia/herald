@@ -12,7 +12,7 @@ from herald.validator.news import state as statemod
 from herald.validator.news.pricing import PricingError
 from herald.validator.news.registry import OutletRegistry
 from herald.validator.news.state import HeraldState
-from herald.validator.news.url import article_id
+from herald.validator.news.url import article_id, canonicalize
 from neurons.validator import Validator
 
 STAR = "hkStar"
@@ -452,6 +452,199 @@ async def test_rejected_article_logs_its_reason_and_does_not_vest(env):
     self = make_validator(env)
     await fwd.forward(self)
     assert "SUBMISSION_RESULT sub-1 url_not_live" in env.logs
+    assert self.herald_state.vesting.to_dict()["entries"] == {}
+
+
+# --- contested articles and backlog order ---------------------------------------------------------
+
+EARLY = UPLOADED - 3600
+LATE = UPLOADED + 3600
+
+
+def tried(env):
+    return [line for line in env.logs if line.startswith("SUBMISSION_RESULT")]
+
+
+def credited(env):
+    return [line for line in env.logs if line.startswith("SUBMISSION_CREDITED")]
+
+
+def counting_fetch(env, monkeypatch):
+    calls = []
+
+    def fetch(url, registry=None, epoch=None):
+        calls.append(url)
+        return env.pages.get(url, live_page)(url)
+
+    monkeypatch.setattr(fwd, "fetch_article", fetch)
+    return calls
+
+
+@pytest.mark.asyncio
+async def test_the_earliest_matching_draft_wins_a_contested_article(env):
+    env.rows = [row("sub-linked-first", URL_A, uploaded_ts=LATE),
+                row("sub-drafted-first", URL_A + "?utm_source=feed", uploaded_ts=EARLY)]
+    self = make_validator(env)
+
+    await fwd.forward(self)
+
+    entry = self.herald_state.vesting.entry(article_id(URL_A))
+    assert entry.reveal == {"submission_id": "sub-drafted-first"}
+    assert "Submissions feed: 2 row(s), 2 valid, 1 to verify" in env.logs
+    assert tried(env) == ["SUBMISSION_RESULT sub-drafted-first ok"]
+    assert credited(env) == ["SUBMISSION_CREDITED sub-drafted-first candidate=1/2"]
+    assert [item["reveal"] for item in env.results[0]] == [{"submission_id": "sub-drafted-first"}]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("earlier, reason", [
+    ({"draft_text": OTHER_DRAFT}, "draft_mismatch"),
+    ({"brief_id": "closed-brief"}, "brief_not_active"),
+])
+async def test_an_earlier_draft_that_fails_does_not_block_a_later_matching_one(env, earlier, reason):
+    env.rows = [row("sub-match", URL_A, uploaded_ts=LATE),
+                row("sub-earlier", URL_A, uploaded_ts=EARLY, **earlier)]
+    self = make_validator(env)
+
+    await fwd.forward(self)
+
+    assert tried(env) == [f"SUBMISSION_RESULT sub-earlier {reason}", "SUBMISSION_RESULT sub-match ok"]
+    assert credited(env) == ["SUBMISSION_CREDITED sub-match candidate=2/2"]
+    assert self.herald_state.vesting.entry(article_id(URL_A)).reveal == {"submission_id": "sub-match"}
+
+
+@pytest.mark.asyncio
+async def test_drafts_uploaded_at_the_same_time_go_to_the_lower_submission_id(env):
+    env.rows = [row("sub-b", URL_A), row("sub-a", URL_A + "/")]
+    self = make_validator(env)
+
+    await fwd.forward(self)
+
+    assert tried(env) == ["SUBMISSION_RESULT sub-a ok"]
+    assert credited(env) == ["SUBMISSION_CREDITED sub-a candidate=1/2"]
+    assert self.herald_state.vesting.entry(article_id(URL_A)).reveal == {"submission_id": "sub-a"}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("cap", [3, 4])
+async def test_only_the_earliest_candidates_up_to_the_cap_are_tried(env, monkeypatch, cap):
+    monkeypatch.setattr(fwd, "HERALD_MAX_CANDIDATES_PER_ARTICLE", cap)
+    env.rows = [row("sub-4", URL_A, uploaded_ts=UPLOADED + 4)] + [
+        row(f"sub-{i}", URL_A, draft_text=OTHER_DRAFT, uploaded_ts=UPLOADED + i) for i in (3, 2, 1)]
+    self = make_validator(env)
+
+    await fwd.forward(self)
+
+    assert [line.split()[1] for line in tried(env)] == [f"sub-{i}" for i in range(1, cap + 1)]
+    vesting = self.herald_state.vesting
+    if cap == 3:
+        assert credited(env) == [] and not vesting.has(article_id(URL_A))
+    else:
+        assert credited(env) == ["SUBMISSION_CREDITED sub-4 candidate=4/4"]
+        assert vesting.entry(article_id(URL_A)).reveal == {"submission_id": "sub-4"}
+
+
+@pytest.mark.asyncio
+async def test_each_url_is_fetched_once_per_pass_whatever_the_number_of_candidates(env, monkeypatch):
+    calls = counting_fetch(env, monkeypatch)
+    env.rows = [row("sub-1", URL_A, draft_text=OTHER_DRAFT, uploaded_ts=EARLY),
+                row("sub-2", URL_A + "/", draft_text=OTHER_DRAFT),
+                row("sub-3", URL_A + "?utm_source=feed", uploaded_ts=LATE),
+                row("sub-4", URL_B)]
+    self = make_validator(env)
+
+    await fwd.forward(self)
+
+    assert tried(env) == ["SUBMISSION_RESULT sub-1 draft_mismatch",
+                          "SUBMISSION_RESULT sub-2 draft_mismatch",
+                          "SUBMISSION_RESULT sub-3 ok", "SUBMISSION_RESULT sub-4 ok"]
+    assert credited(env) == ["SUBMISSION_CREDITED sub-3 candidate=3/3",
+                             "SUBMISSION_CREDITED sub-4 candidate=1/1"]
+    # Verification and the liveness check of both new entries share one fetch per article.
+    assert calls == [URL_A, URL_B]
+
+    next_epoch(env)
+    await fwd.forward(self)
+    assert [canonicalize(url) for url in calls[2:]] == [URL_A, URL_B]  # a new pass fetches again
+
+
+@pytest.mark.asyncio
+async def test_a_fetch_that_raises_is_not_repeated_for_later_candidates(env, monkeypatch):
+    calls = []
+
+    def broken(url, registry=None, epoch=None):
+        calls.append(url)
+        raise RuntimeError("page parser failed")
+
+    monkeypatch.setattr(fwd, "fetch_article", broken)
+    env.rows = [row("sub-1", URL_A), row("sub-2", URL_A + "/")]
+    self = make_validator(env)
+
+    await fwd.forward(self)
+
+    assert tried(env) == ["SUBMISSION_RESULT sub-1 verify_error", "SUBMISSION_RESULT sub-2 verify_error"]
+    assert calls == [URL_A]
+    assert not self.herald_state.vesting.has(article_id(URL_A))
+    assert self.herald_state.last_scored_epoch == epoch_of(env)
+
+
+@pytest.mark.asyncio
+async def test_an_article_already_vesting_is_skipped_whatever_its_candidates(env):
+    env.rows = [row("sub-1", URL_A)]
+    self = make_validator(env)
+    await fwd.forward(self)
+
+    next_epoch(env)
+    env.rows = [row("sub-0", URL_A + "/", uploaded_ts=EARLY), row("sub-1", URL_A), row("sub-2", URL_B)]
+    await fwd.forward(self)
+
+    assert "Submissions feed: 3 row(s), 3 valid, 1 to verify" in env.logs
+    assert tried(env) == ["SUBMISSION_RESULT sub-1 ok", "SUBMISSION_RESULT sub-2 ok"]
+    assert self.herald_state.vesting.entry(article_id(URL_A)).reveal == {"submission_id": "sub-1"}
+
+
+@pytest.mark.asyncio
+async def test_a_backlog_is_verified_in_upload_order_and_the_cap_counts_articles(env, monkeypatch):
+    monkeypatch.setattr(fwd, "HERALD_MAX_SUBMISSIONS_PER_EPOCH", 2)
+    urls = [f"https://www.theguardian.com/world/2026/sep/10/story-{i}" for i in range(5)]
+    # The feed lists the latest upload first; the earliest article also has an earlier, non-matching
+    # draft, and both its rows count as one article against the cap.
+    env.rows = [row(f"sub-{i}", url, uploaded_ts=UPLOADED + i * 60)
+                for i, url in reversed(list(enumerate(urls)))]
+    env.rows.append(row("sub-0b", urls[0] + "/", draft_text=OTHER_DRAFT, uploaded_ts=UPLOADED - 60))
+    self = make_validator(env)
+
+    passes = []
+    for _ in range(3):
+        before = len(tried(env))
+        await fwd.forward(self)
+        passes.append([line.split(" ", 1)[1] for line in tried(env)[before:]])
+        next_epoch(env)
+
+    assert passes == [["sub-0b draft_mismatch", "sub-0 ok", "sub-1 ok"],
+                      ["sub-2 ok", "sub-3 ok"],
+                      ["sub-4 ok"]]
+    assert [line for line in env.logs if line.startswith("Submissions feed")] == [
+        "Submissions feed: 6 row(s), 6 valid, 2 to verify",
+        "Submissions feed: 6 row(s), 6 valid, 2 to verify",
+        "Submissions feed: 6 row(s), 6 valid, 1 to verify",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_an_upload_after_an_exact_publication_time_on_the_same_day_does_not_vest(env):
+    def exactly_timed(url):
+        return SimpleNamespace(ok=True, status=200, final_url=url, text_hash="h", text=BODY,
+                               article_text=None, published_ts=PUBLISHED, published_exact=True)
+
+    env.pages[URL_A] = exactly_timed
+    # Uploaded on the same UTC day as publication, an hour after the exact publication time.
+    env.rows = [row("sub-late-upload", URL_A, uploaded_ts=int(PUBLISHED) + 3600)]
+    self = make_validator(env)
+
+    await fwd.forward(self)
+
+    assert tried(env) == ["SUBMISSION_RESULT sub-late-upload published_before_upload"]
     assert self.herald_state.vesting.to_dict()["entries"] == {}
 
 

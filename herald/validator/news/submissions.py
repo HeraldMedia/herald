@@ -3,18 +3,22 @@
 ``GET /api/v4/validator/submissions`` returns rows ``{submission_id, network, netuid, brief_id, url,
 draft_text, uploaded_ts}``: the text the contributor uploaded before publishing, and the unix time (UTC
 seconds) of that upload. Every row is validated here, and each chosen article is verified by the oracle
-before anything vests. Draft text is used only for verification; it is never published, stored or
-logged.
+before anything vests. Several contributors may submit the same article: its submissions are tried
+earliest upload first, and the first that passes every check is credited. Draft text is used only for
+verification; it is never published, stored or logged.
 """
 
 import re
-from typing import List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 from urllib.parse import urlsplit
 
 import bittensor as bt
 import httpx
 
-from herald.validator.utils.config import HERALD_MAX_SUBMISSIONS_PER_EPOCH
+from herald.validator.utils.config import (
+    HERALD_MAX_CANDIDATES_PER_ARTICLE,
+    HERALD_MAX_SUBMISSIONS_PER_EPOCH,
+)
 from .publish import RESULTS_READ_TOKEN_ENV, results_headers
 from .url import article_id, canonicalize
 
@@ -103,25 +107,28 @@ def validate_rows(rows: list, network: str, netuid: int, now_ts: float) -> List[
     return valid
 
 
-def select_new(rows: List[dict], vesting, limit: int = None) -> List[Tuple[str, dict]]:
-    """Choose the validated rows to verify this epoch, as ``(article_id, row)`` pairs.
+def select_new(rows: List[dict], vesting, limit: int = None,
+               candidates: int = None) -> List[Tuple[str, List[dict]]]:
+    """Choose the articles to verify this epoch, as ``(article_id, candidate rows)`` pairs.
 
-    Rows are ordered by (article_id, submission_id); the first row of each article_id is kept (the
-    lowest submission_id as a string); articles the vesting ledger already holds, in any status, are
-    skipped; then at most `limit` rows (HERALD_MAX_SUBMISSIONS_PER_EPOCH by default) are returned.
+    Validated rows are grouped by article_id. Articles the vesting ledger already holds, in any
+    status, are skipped whatever their rows. An article's candidates are ordered by (uploaded_ts,
+    submission_id), and only the first `candidates` (HERALD_MAX_CANDIDATES_PER_ARTICLE by default)
+    are kept. Articles are ordered by their earliest candidate's upload time, then article_id, and at
+    most `limit` articles (HERALD_MAX_SUBMISSIONS_PER_EPOCH by default) are returned.
     """
     limit = HERALD_MAX_SUBMISSIONS_PER_EPOCH if limit is None else limit
-    keyed = sorted(((article_id(row["url"]), row["submission_id"], row) for row in rows),
-                   key=lambda item: (item[0], item[1]))
-    selected: List[Tuple[str, dict]] = []
-    seen = set()
-    for aid, _submission_id, row in keyed:
-        if aid in seen:
-            continue
-        seen.add(aid)
+    candidates = HERALD_MAX_CANDIDATES_PER_ARTICLE if candidates is None else candidates
+    by_article: Dict[str, List[dict]] = {}
+    for row in rows:
+        by_article.setdefault(article_id(row["url"]), []).append(row)
+    selected: List[Tuple[str, List[dict]]] = []
+    for aid, group in by_article.items():
         if vesting.has(aid):
             continue
-        if len(selected) >= limit:
-            break
-        selected.append((aid, row))
-    return selected
+        group = sorted(group, key=lambda row: (row["uploaded_ts"], row["submission_id"]))
+        group = group[:max(0, candidates)]
+        if group:
+            selected.append((aid, group))
+    selected.sort(key=lambda item: (item[1][0]["uploaded_ts"], item[0]))
+    return selected[:max(0, limit)]

@@ -200,8 +200,11 @@ HERALD_INCENTIVE_HOTKEY = os.getenv('HERALD_INCENTIVE_HOTKEY', '')
 HERALD_PUBLISH_BUFFER_DAYS = int(os.getenv('HERALD_PUBLISH_BUFFER_DAYS', '3'))
 # An article published more than this many days before the scoring block's chain time is rejected.
 HERALD_MAX_ARTICLE_AGE_DAYS = int(os.getenv('HERALD_MAX_ARTICLE_AGE_DAYS', '21'))
-# At most this many new submissions are verified in one evaluation epoch.
+# At most this many new articles are verified in one evaluation epoch, taken in order of their
+# earliest submission's upload time.
 HERALD_MAX_SUBMISSIONS_PER_EPOCH = int(os.getenv('HERALD_MAX_SUBMISSIONS_PER_EPOCH', '500'))
+# At most this many submissions of one article, the earliest uploads, are tried in one epoch.
+HERALD_MAX_CANDIDATES_PER_ARTICLE = int(os.getenv('HERALD_MAX_CANDIDATES_PER_ARTICLE', '10'))
 # Share of the uploaded draft's word shingles that must appear in the published article body. The
 # default is the attribution text threshold's default, so every validator applies the same rule.
 HERALD_DRAFT_MATCH_THRESHOLD = float(os.getenv('HERALD_DRAFT_MATCH_THRESHOLD', '0.6'))

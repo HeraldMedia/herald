@@ -1,4 +1,5 @@
 import json
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -32,8 +33,8 @@ def kept_ids(rows):
     return [r["submission_id"] for r in validate_rows(rows, NETWORK, NETUID, NOW_TS)]
 
 
-def selected_ids(selected):
-    return [r["submission_id"] for _aid, r in selected]
+def candidate_ids(selected):
+    return [[r["submission_id"] for r in candidates] for _aid, candidates in selected]
 
 
 def test_fixture_row_has_exactly_the_feed_keys_and_validates():
@@ -137,13 +138,51 @@ def test_only_the_first_feed_rows_are_read(monkeypatch):
 
 
 @pytest.mark.parametrize("reverse", [False, True])
-def test_duplicate_articles_keep_the_lowest_submission_id(reverse):
-    rows = [row("sub-2", url=STORY + "?utm_source=feed"), row("sub-1", url=STORY + "/")]
+def test_rows_of_one_article_are_its_candidates_earliest_upload_first(reverse):
+    rows = [row("sub-1", url=STORY + "?utm_source=feed", uploaded_ts=UPLOADED + 60),
+            row("sub-9", url=STORY + "/", uploaded_ts=UPLOADED),
+            row("sub-5", url=STORY, uploaded_ts=UPLOADED + 30)]
     if reverse:
         rows.reverse()
     selected = select_new(rows, VestingLedger(vest_epochs=30), limit=10)
-    assert selected_ids(selected) == ["sub-1"]
+    assert candidate_ids(selected) == [["sub-9", "sub-5", "sub-1"]]
     assert selected[0][0] == article_id(STORY)
+
+
+@pytest.mark.parametrize("reverse", [False, True])
+def test_candidates_uploaded_at_the_same_time_are_ordered_by_submission_id(reverse):
+    rows = [row("sub-9"), row("sub-10", url=STORY + "/"), row("sub-2", uploaded_ts=UPLOADED + 1)]
+    if reverse:
+        rows.reverse()
+    # submission ids compare as strings
+    assert candidate_ids(select_new(rows, VestingLedger(vest_epochs=30), limit=10)) == [
+        ["sub-10", "sub-9", "sub-2"]]
+
+
+def test_candidates_per_article_are_capped_to_the_earliest_uploads(monkeypatch):
+    # Higher submission ids were uploaded earlier, so the cap follows upload time, not the id.
+    rows = [row(f"sub-{i:02d}", uploaded_ts=UPLOADED + 100 - i) for i in range(12)]
+    ledger = VestingLedger(vest_epochs=30)
+    by_upload = [f"sub-{i:02d}" for i in range(11, -1, -1)]
+
+    assert candidate_ids(select_new(rows, ledger, limit=5, candidates=10)) == [by_upload[:10]]
+    assert candidate_ids(select_new(rows, ledger, limit=5, candidates=3)) == [by_upload[:3]]
+    monkeypatch.setattr(submissions, "HERALD_MAX_CANDIDATES_PER_ARTICLE", 2)
+    assert candidate_ids(select_new(rows, ledger, limit=5)) == [by_upload[:2]]
+
+
+def test_default_candidate_cap_is_ten():
+    if os.getenv("HERALD_MAX_CANDIDATES_PER_ARTICLE"):
+        pytest.skip("the cap is set in the environment")
+    assert submissions.HERALD_MAX_CANDIDATES_PER_ARTICLE == 10
+
+
+def test_an_article_already_in_the_ledger_is_skipped_whatever_its_candidates():
+    ledger = VestingLedger(vest_epochs=30)
+    ledger.start(article_id(STORY), uid=2, total_usd=10.0, reveal={"submission_id": "sub-late"})
+    rows = [row("sub-early", uploaded_ts=UPLOADED - 3600), row("sub-late", url=STORY + "/"),
+            row("sub-other", url=STORY + "-2", uploaded_ts=UPLOADED + 3600)]
+    assert candidate_ids(select_new(rows, ledger, limit=10)) == [["sub-other"]]
 
 
 def test_articles_already_in_the_ledger_are_skipped_in_any_status():
@@ -159,7 +198,7 @@ def test_articles_already_in_the_ledger_are_skipped_in_any_status():
 
     rows = [row(f"sub-{status}", url=url) for status, url in urls.items()]
     rows.append(row("sub-new", url=f"{STORY}-new"))
-    assert selected_ids(select_new(rows, ledger, limit=10)) == ["sub-new"]
+    assert candidate_ids(select_new(rows, ledger, limit=10)) == [["sub-new"]]
 
 
 def test_limit_applies_after_known_articles_are_skipped():
@@ -168,13 +207,59 @@ def test_limit_applies_after_known_articles_are_skipped():
     ledger = VestingLedger(vest_epochs=30)
     ledger.start(article_id(ordered[0]["url"]), uid=2, total_usd=10.0)
     selected = select_new(rows, ledger, limit=2)
-    assert selected_ids(selected) == [ordered[1]["submission_id"], ordered[2]["submission_id"]]
+    assert candidate_ids(selected) == [[ordered[1]["submission_id"]], [ordered[2]["submission_id"]]]
 
 
 def test_default_limit_is_the_per_epoch_cap(monkeypatch):
     monkeypatch.setattr(submissions, "HERALD_MAX_SUBMISSIONS_PER_EPOCH", 1)
     rows = [row(f"sub-{i}", url=f"{STORY}-{i}") for i in range(3)]
     assert len(select_new(rows, VestingLedger(vest_epochs=30))) == 1
+
+
+def test_articles_are_taken_in_order_of_their_earliest_upload():
+    rows = [row("c-1", url=STORY + "-c", uploaded_ts=UPLOADED + 300),
+            row("a-2", url=STORY + "-a", uploaded_ts=UPLOADED + 900),
+            row("b-1", url=STORY + "-b", uploaded_ts=UPLOADED + 600),
+            row("a-1", url=STORY + "-a", uploaded_ts=UPLOADED + 100)]
+    selected = select_new(rows, VestingLedger(vest_epochs=30), limit=10)
+    assert [aid for aid, _candidates in selected] == [
+        article_id(STORY + "-a"), article_id(STORY + "-c"), article_id(STORY + "-b")]
+    assert candidate_ids(selected) == [["a-1", "a-2"], ["c-1"], ["b-1"]]
+
+
+def test_articles_uploaded_at_the_same_time_are_ordered_by_article_id():
+    urls = [f"{STORY}-{i}" for i in range(5)]
+    rows = [row(f"sub-{i}", url=url) for i, url in enumerate(urls)]
+    selected = select_new(list(reversed(rows)), VestingLedger(vest_epochs=30), limit=10)
+    assert [aid for aid, _candidates in selected] == sorted(article_id(url) for url in urls)
+
+
+def test_a_backlog_over_the_cap_is_verified_first_come_first_served():
+    # Six articles, the latest uploaded first in the feed; the cap is two articles per epoch.
+    rows = [row(f"sub-{i}", url=f"{STORY}-{i}", uploaded_ts=UPLOADED + i * 60) for i in range(5, -1, -1)]
+    # The earliest article has two more candidates; the cap counts articles, not rows.
+    rows += [row("sub-0b", url=f"{STORY}-0/", uploaded_ts=UPLOADED + 3600),
+             row("sub-0c", url=f"{STORY}-0?utm_source=feed", uploaded_ts=UPLOADED + 7200)]
+    ledger = VestingLedger(vest_epochs=30)
+
+    batches = []
+    while True:
+        selected = select_new(rows, ledger, limit=2)
+        if not selected:
+            break
+        batches.append(candidate_ids(selected))
+        for aid, _candidates in selected:
+            ledger.start(aid, uid=2, total_usd=10.0)  # verified this epoch
+
+    assert batches == [[["sub-0", "sub-0b", "sub-0c"], ["sub-1"]],
+                       [["sub-2"], ["sub-3"]],
+                       [["sub-4"], ["sub-5"]]]
+
+
+@pytest.mark.parametrize("limit, candidates", [(0, 10), (-1, 10), (10, 0), (10, -1)])
+def test_a_cap_of_zero_or_less_selects_nothing(limit, candidates):
+    rows = [row("sub-1"), row("sub-2", url=STORY + "-2")]
+    assert select_new(rows, VestingLedger(vest_epochs=30), limit=limit, candidates=candidates) == []
 
 
 class FakeResponse:

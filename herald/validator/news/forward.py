@@ -12,6 +12,7 @@ from herald.validator.utils.config import (
     HERALD_DEAD_CONFIRM_EPOCHS,
     HERALD_EPOCH_LAG,
     HERALD_INCENTIVE_HOTKEY,
+    HERALD_MAX_CANDIDATES_PER_ARTICLE,
     HERALD_MAX_SUBMISSIONS_PER_EPOCH,
     HERALD_REF_MODEL_ID,
     HERALD_USE_LLM_JUDGE,
@@ -32,6 +33,7 @@ from .registry import load_registry
 from .search import in_index
 from .state import HeraldState, _json_np_safe
 from .submissions import fetch_submissions, select_new, validate_rows
+from .url import canonicalize
 from .vesting import settle_liveness
 
 # Short hash of every consensus-critical tunable. Validators MUST show the same value; compare
@@ -47,7 +49,7 @@ class _EpochBurn(Exception):
         self.reason = reason
 
 
-def _persistence_status(entry, briefs_by_id, epoch, judge_fn, registry=None) -> str:
+def _persistence_status(entry, briefs_by_id, epoch, judge_fn, registry=None, fetch_fn=None) -> str:
     """alive (release), dead (counts toward clawback), or hold (unconfirmed: change nothing).
 
     Gates the per-epoch installment on LIVENESS ONLY: a reachable, non-thin page that hasn't
@@ -59,7 +61,7 @@ def _persistence_status(entry, briefs_by_id, epoch, judge_fn, registry=None) -> 
     """
     if entry.brief_id not in briefs_by_id:
         return "hold"  # brief closed/defunded: withhold its installment
-    fr = fetch_article(entry.url, registry, epoch)
+    fr = fetch_fn(entry.url) if fetch_fn is not None else fetch_article(entry.url, registry, epoch)
     if fr.status in (404, 410):
         return "dead"
     if not fr.ok:
@@ -144,7 +146,30 @@ def _judge_fn(briefs):
     return judge_fn
 
 
-def _verify_submission(row, briefs_by_id, registry, epoch, judge_fn, now_ts):
+def _pass_fetch(registry, epoch):
+    """fetch_article for one scoring pass: each canonical URL is fetched at most once.
+
+    Every submission of an article, and the article's liveness check, reads the same page. A fetch
+    that raised raises again for its URL without another request.
+    """
+    fetched = {}
+
+    def fetch_fn(url):
+        key = canonicalize(url)
+        if key not in fetched:
+            try:
+                fetched[key] = (fetch_article(url, registry, epoch), None)
+            except Exception as exc:
+                fetched[key] = (None, exc)
+        result, error = fetched[key]
+        if error is not None:
+            raise error
+        return result
+
+    return fetch_fn
+
+
+def _verify_submission(row, briefs_by_id, registry, fetch_fn, epoch, judge_fn, now_ts):
     """(ArticleResult or None, reason) for one feed row. An error verifying the row rejects only it."""
     brief = briefs_by_id.get(row["brief_id"])
     if brief is None:
@@ -152,7 +177,7 @@ def _verify_submission(row, briefs_by_id, registry, epoch, judge_fn, now_ts):
     try:
         result = verify_article(
             row["url"], brief, registry,
-            fetch_fn=lambda u: fetch_article(u, registry, epoch),
+            fetch_fn=fetch_fn,
             search_fn=lambda u: in_index(u, epoch),
             judge_fn=judge_fn,
             now_ts=now_ts,
@@ -247,23 +272,33 @@ def _score_epoch(self, state: HeraldState, epoch: int, block: int):
     briefs_by_id = {b["id"]: b for b in briefs}
 
     # New submissions: each verified article starts one vesting entry on the incentive hotkey.
+    # Articles are taken earliest upload first; within an article the candidates are tried earliest
+    # upload first, and the first that passes every check is credited.
     valid_rows = validate_rows(rows, network, self.config.netuid, now_ts)
-    selected = select_new(valid_rows, vesting, HERALD_MAX_SUBMISSIONS_PER_EPOCH)
+    selected = select_new(valid_rows, vesting, HERALD_MAX_SUBMISSIONS_PER_EPOCH,
+                          HERALD_MAX_CANDIDATES_PER_ARTICLE)
     bt.logging.info(
         f"Submissions feed: {len(rows)} row(s), {len(valid_rows)} valid, {len(selected)} to verify"
     )
-    for aid, row in selected:
-        result, reason = _verify_submission(row, briefs_by_id, registry, epoch, judge_fn, now_ts)
-        bt.logging.info(f"SUBMISSION_RESULT {row['submission_id']} {reason}")
-        if result is None or not result.passed:
-            continue
-        outlet = registry.lookup(row["url"])
-        vesting.start(
-            aid, uid_star, result.usd, row["url"],
-            incentive_hotkey, row["brief_id"], commit_epoch=epoch, start_epoch=epoch,
-            outlet_id=outlet.outlet_id, tier=outlet.tier, attribution=0,
-            reveal={"submission_id": row["submission_id"]},
-        )
+    fetch_fn = _pass_fetch(registry, epoch)
+    for aid, candidates in selected:
+        for position, row in enumerate(candidates, start=1):
+            result, reason = _verify_submission(row, briefs_by_id, registry, fetch_fn, epoch, judge_fn,
+                                                now_ts)
+            bt.logging.info(f"SUBMISSION_RESULT {row['submission_id']} {reason}")
+            if result is None or not result.passed:
+                continue
+            outlet = registry.lookup(row["url"])
+            vesting.start(
+                aid, uid_star, result.usd, row["url"],
+                incentive_hotkey, row["brief_id"], commit_epoch=epoch, start_epoch=epoch,
+                outlet_id=outlet.outlet_id, tier=outlet.tier, attribution=0,
+                reveal={"submission_id": row["submission_id"]},
+            )
+            bt.logging.info(
+                f"SUBMISSION_CREDITED {row['submission_id']} candidate={position}/{len(candidates)}"
+            )
+            break
 
     # Pass 1: expiry, then liveness for every vesting article. There is no slashing.
     pending = []
@@ -281,7 +316,8 @@ def _score_epoch(self, state: HeraldState, epoch: int, block: int):
                 legacy_expired += 1
             continue
         try:
-            status = _persistence_status(entry, briefs_by_id, epoch, judge_fn, registry=registry)
+            status = _persistence_status(entry, briefs_by_id, epoch, judge_fn, registry=registry,
+                                         fetch_fn=fetch_fn)
         except Exception as exc:
             bt.logging.warning(f"Liveness check for {entry.url} raised: {exc}; holding")
             status = "hold"

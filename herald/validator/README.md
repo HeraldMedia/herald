@@ -30,6 +30,12 @@ For every new submission, the validator checks, in order:
 7. The URL and article do not match generic or outlet-specific paid-content rules.
 8. The article matches the brief's topic. Search-index presence then sets the value multiplier.
 
+Several contributors may submit the same article. Its submissions are tried in order of upload
+time, then submission id (at most `HERALD_MAX_CANDIDATES_PER_ARTICLE` of the earliest), and the first
+that passes every check is credited: the earliest matching draft wins. An article already credited
+is not verified again. New articles are verified first come, first served, in order of their
+earliest upload, at most `HERALD_MAX_SUBMISSIONS_PER_EPOCH` per epoch.
+
 Rewards vest over the configured persistence window while the article stays live. Confirmed
 removal or conversion to paid content claws back the remaining vest. There is no slashing.
 
@@ -177,8 +183,8 @@ HERALD_RESULTS_READ_TOKEN=<READ_TOKEN>
 - Uploaded draft text is used only for verification. The validator never publishes, stores or logs
   it.
 - `HERALD_DRAFT_MATCH_THRESHOLD` (default `0.6`), `HERALD_PUBLISH_BUFFER_DAYS` (`3`),
-  `HERALD_MAX_ARTICLE_AGE_DAYS` (`21`) and `HERALD_MAX_SUBMISSIONS_PER_EPOCH` (`500`) are consensus
-  values.
+  `HERALD_MAX_ARTICLE_AGE_DAYS` (`21`), `HERALD_MAX_SUBMISSIONS_PER_EPOCH` (`500`) and
+  `HERALD_MAX_CANDIDATES_PER_ARTICLE` (`10`) are consensus values.
 
 ## Run
 
@@ -245,8 +251,8 @@ pm2 logs herald_validator
 curl -fsS https://herald-api.example/public/articles
 ```
 
-Watch for `SUBMISSION_RESULT`, `INCENTIVE_WEIGHT`, `INCENTIVE_BURN` and `WEIGHT_VECTOR_REFUSED`
-lines; [docs/validator.md](../../docs/validator.md) §8.8 lists every tag.
+Watch for `SUBMISSION_RESULT`, `SUBMISSION_CREDITED`, `INCENTIVE_WEIGHT`, `INCENTIVE_BURN` and
+`WEIGHT_VECTOR_REFUSED` lines; [docs/validator.md](../../docs/validator.md) §8.8 lists every tag.
 
 Before mainnet, rehearse with at least two validators and several submissions. Confirm identical
 fingerprints, restart recovery, persistence checks, `INCENTIVE_WEIGHT` and `INCENTIVE_BURN` lines,

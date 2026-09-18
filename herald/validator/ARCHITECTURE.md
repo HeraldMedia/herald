@@ -113,10 +113,11 @@ epoch (`HERALD_VEST_EPOCH_LEN` blocks, about one day, lagged behind the chain he
    validator's hotkey, and not at UID 0.
 5. Read the scoring block's chain time and price one day of miner emission (`pricing.py`).
 6. Load the outlet registry and verify it against the authority anchor.
-7. Read the submissions feed, validate its rows, and select new articles.
-8. Verify each selected article (`oracle.py`). A passing article starts a vesting entry on the
-   incentive hotkey that records its submission id. An error verifying one article rejects only
-   that article (`verify_error`).
+7. Read the submissions feed, validate its rows, and select new articles with their candidate
+   submissions.
+8. Verify each selected article's candidates in upload order (`oracle.py`). The first that passes
+   starts a vesting entry on the incentive hotkey that records its submission id. An error
+   verifying one candidate rejects only that candidate (`verify_error`).
 9. Expire entries past their maximum age and entries without a submission id; check the rest for
    liveness and collect released installments.
 10. Apply prepaid client pools and sum the payable USD.
@@ -135,9 +136,17 @@ epoch.
 
 ## Selection
 
-`select_new()` orders validated rows by canonical article id, then submission id, keeps the first
-row for each article, skips articles the vesting ledger already holds in any status, and returns at
-most `HERALD_MAX_SUBMISSIONS_PER_EPOCH` rows. Each article vests at most once.
+`select_new()` groups validated rows by canonical article id and skips articles the vesting ledger
+already holds in any status, whatever their rows. An article's rows are its candidates, ordered by
+upload time, then submission id; at most `HERALD_MAX_CANDIDATES_PER_ARTICLE` of the earliest uploads
+are kept. Articles are ordered by their earliest candidate's upload time, then article id, and at
+most `HERALD_MAX_SUBMISSIONS_PER_EPOCH` articles are returned, so a backlog is verified first come,
+first served.
+
+The scoring pass walks each article's candidates in order through the whole oracle and credits the
+first that passes: the earliest matching draft wins, and an earlier draft that fails does not block
+a later one. Each canonical URL is fetched at most once per pass, shared by every candidate and the
+liveness check. Each article vests at most once.
 
 ## Verification oracle
 
@@ -162,8 +171,10 @@ first failure. The brief must be active before it is called (`brief_not_active`)
 9. Rules-first topic matching (`topic_mismatch`)
 10. Search-index check and USD value
 
-Each selected row logs `SUBMISSION_RESULT <submission_id> <reason>`, where the reason is `ok` or
-the first failed check. The uploaded text is never added to the evidence.
+Each candidate tried logs `SUBMISSION_RESULT <submission_id> <reason>`, where the reason is `ok` or
+the first failed check, and the credited candidate logs
+`SUBMISSION_CREDITED <submission_id> candidate=<i>/<n>`. The uploaded text is never added to the
+evidence.
 
 ## Vesting and liveness
 

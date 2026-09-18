@@ -55,7 +55,9 @@ Checks run in order and stop at the first failure. Every submitted article must 
 Search-index presence is checked last. It does not reject an article; it sets part of its value.
 
 The link must be an `https` address of at most 2,048 characters with no query string once tracking
-parameters (such as `utm_*`) are removed. Each article is verified and credited once.
+parameters (such as `utm_*`) are removed. Each article is credited once. If several contributors
+submit the same article, validators check the submissions in the order their texts were uploaded
+and credit the first that passes every check: the earliest matching upload wins.
 
 ---
 
@@ -99,7 +101,7 @@ and is claimed to the wallet connected on the website.
 - **Real editorial only.** Paid, sponsored and advertorial pages fail the real-news check.
 - **Stay on topic** and **inside the brief window**.
 - **Add the link promptly.** An article published more than 21 days before validators score it is
-  rejected.
+  rejected, and once an article is credited to a contributor it is not checked again.
 - **Keep it live for the full vesting window (about 30 days).** A take-down forfeits the remaining
   installments.
 

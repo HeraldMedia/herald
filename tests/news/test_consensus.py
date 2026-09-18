@@ -15,7 +15,7 @@ def test_any_param_change_changes_fingerprint():
     fp = consensus_fingerprint(base)
     for key in ("vest_epoch_len", "no_search_floor", "quorum_threshold", "incentive_hotkey",
                 "miner_emission_share", "blocks_per_day", "price_source", "intake",
-                "draft_match_threshold"):
+                "draft_match_threshold", "max_submissions_per_epoch", "max_candidates_per_article"):
         changed = dict(base)
         changed[key] = "DIFFERENT"
         assert consensus_fingerprint(changed) != fp, key
@@ -27,7 +27,7 @@ def test_live_params_cover_the_consensus_surface():
                 "no_search_floor", "emission_mode", "burn_uid", "incentive_hotkey", "price_source",
                 "miner_emission_share", "blocks_per_day", "intake", "draft_match_threshold",
                 "publish_buffer_days", "max_article_age_days", "max_submissions_per_epoch",
-                "use_llm_judge", "llm_provider", "llm_provider_ready",
+                "max_candidates_per_article", "use_llm_judge", "llm_provider", "llm_provider_ready",
                 "quorum_threshold", "providers", "search_top_n", "min_body_bytes",
                 "max_body_bytes", "briefs_pubkey", "briefs_max_age",
                 "require_signed_briefs", "registry_pubkey", "require_signed_registry",
@@ -45,6 +45,7 @@ def test_live_params_cover_the_consensus_surface():
     assert p["publish_buffer_days"] == cfg.HERALD_PUBLISH_BUFFER_DAYS
     assert p["max_article_age_days"] == cfg.HERALD_MAX_ARTICLE_AGE_DAYS
     assert p["max_submissions_per_epoch"] == cfg.HERALD_MAX_SUBMISSIONS_PER_EPOCH
+    assert p["max_candidates_per_article"] == cfg.HERALD_MAX_CANDIDATES_PER_ARTICLE
 
 
 def test_keys_for_removed_rules_are_absent():
@@ -64,3 +65,12 @@ def test_incentive_hotkey_and_draft_match_threshold_move_the_fingerprint(monkeyp
     assert with_hotkey != fp
     monkeypatch.setattr(cfg, "HERALD_DRAFT_MATCH_THRESHOLD", cfg.HERALD_DRAFT_MATCH_THRESHOLD + 0.1)
     assert consensus_fingerprint() != with_hotkey
+
+
+def test_the_per_epoch_and_per_article_caps_move_the_fingerprint(monkeypatch):
+    fp = consensus_fingerprint()
+    monkeypatch.setattr(cfg, "HERALD_MAX_CANDIDATES_PER_ARTICLE", cfg.HERALD_MAX_CANDIDATES_PER_ARTICLE + 1)
+    with_candidates = consensus_fingerprint()
+    assert with_candidates != fp
+    monkeypatch.setattr(cfg, "HERALD_MAX_SUBMISSIONS_PER_EPOCH", cfg.HERALD_MAX_SUBMISSIONS_PER_EPOCH + 1)
+    assert consensus_fingerprint() != with_candidates

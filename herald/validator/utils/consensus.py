@@ -43,6 +43,7 @@ def consensus_params() -> dict:
         "publish_buffer_days": cfg.HERALD_PUBLISH_BUFFER_DAYS,
         "max_article_age_days": cfg.HERALD_MAX_ARTICLE_AGE_DAYS,
         "max_submissions_per_epoch": cfg.HERALD_MAX_SUBMISSIONS_PER_EPOCH,
+        "max_candidates_per_article": cfg.HERALD_MAX_CANDIDATES_PER_ARTICLE,
         # judgement tier (must be enabled identically or weights diverge)
         "use_llm_judge": cfg.HERALD_USE_LLM_JUDGE,
         "ref_model_id": cfg.HERALD_REF_MODEL_ID,

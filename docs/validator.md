@@ -61,9 +61,9 @@ Weights only agree if every validator uses an **identical** scoring configuratio
 hashed into a short **consensus fingerprint**, logged at startup and attached to every published
 result. The set that must match fleet-wide includes: the **search provider(s)**, ScrapingBee on/off,
 any `api:*` adapters, the LLM-judge setting + pinned model, all scoring tunables (epoch lengths,
-payout, floors, the publication window, the draft-match threshold, the per-epoch submission cap),
-the incentive hotkey and pricing constants (§8), and the trust anchors (pubkeys, authority
-hotkey). Release `0.2.0` changes the fingerprint (§8.7).
+payout, floors, the publication window, the draft-match threshold, the per-epoch article cap and
+the per-article candidate cap), the incentive hotkey and pricing constants (§8), and the trust
+anchors (pubkeys, authority hotkey). Release `0.2.0` changes the fingerprint (§8.7).
 
 Derive it and pin it on the validator **and** give it to the backend operator
 (`HERALD_EXPECTED_CONSENSUS_FP` on both):
@@ -279,10 +279,19 @@ Registered miner hotkeys receive no weight, and the validator sends no queries t
     parameters are removed;
   - `draft_text` is 300–40,000 characters after trimming surrounding whitespace;
   - `uploaded_ts` is a positive integer no later than the scoring block's chain time.
-- Valid rows are ordered by canonical article, then submission id. Each article is verified once,
-  articles already in the vesting ledger (in any status) are skipped, and at most
-  `HERALD_MAX_SUBMISSIONS_PER_EPOCH` are verified per epoch. The pass logs
-  `Submissions feed: <n> row(s), <m> valid, <k> to verify`.
+- Valid rows are grouped by canonical article. Several contributors may submit the same article:
+  its rows are its candidates, ordered by upload time (`uploaded_ts`), then submission id, and at
+  most `HERALD_MAX_CANDIDATES_PER_ARTICLE` of the earliest uploads are kept. An article already in
+  the vesting ledger (in any status) is skipped whatever its candidates: credit, once decided, is
+  final.
+- Articles are verified first come, first served: in order of their earliest candidate's upload
+  time, then canonical article id, at most `HERALD_MAX_SUBMISSIONS_PER_EPOCH` articles per epoch.
+  The rest wait for a later epoch. The pass logs
+  `Submissions feed: <n> row(s), <m> valid, <k> to verify`, where `<k>` counts articles.
+- An article's candidates go through every check (§8.2) in that order, and the first that passes is
+  credited: the earliest matching draft wins, and an earlier draft that fails any check does not
+  block a later one. The remaining candidates are not credited. Each article's page is fetched at
+  most once per pass, however many candidates it has.
 - The uploaded text is used only for verification. The validator never publishes, stores or logs
   it.
 - A feed that cannot be read (unset endpoint, HTTP or JSON error, or a body that is not a list)
@@ -291,8 +300,9 @@ Registered miner hotkeys receive no weight, and the validator sends no queries t
 
 ### 8.2 What each article must pass
 
-`verify_article()` runs these checks in order and stops at the first failure. Each selected row
-logs `SUBMISSION_RESULT <submission_id> <reason>`:
+`verify_article()` runs these checks in order and stops at the first failure. Each candidate tried
+logs `SUBMISSION_RESULT <submission_id> <reason>`, and the one credited then logs
+`SUBMISSION_CREDITED <submission_id> candidate=<i>/<n>`:
 
 | Reason | Check |
 |---|---|
@@ -306,7 +316,7 @@ logs `SUBMISSION_RESULT <submission_id> <reason>`:
 | `draft_mismatch` | Less than `HERALD_DRAFT_MATCH_THRESHOLD` of the uploaded text's five-word shingles (lower-cased, punctuation removed) appear in the fetched article body. |
 | `paid_not_real_news` | Generic or outlet-specific paid-content rules match. |
 | `topic_mismatch` | The article does not match the brief's topic (§6). |
-| `verify_error` | Verifying this row raised an error; only this row is rejected. |
+| `verify_error` | Verifying this candidate raised an error; only this candidate is rejected. |
 | `ok` | Passed. |
 
 A passing article is valued at `HERALD_BASE_PAYOUT_USD` × tier multiplier × search factor (1.0 when
@@ -323,7 +333,8 @@ installments are clawed back; there is no slashing.
 | `HERALD_DRAFT_MATCH_THRESHOLD` | `0.6` | Share of the uploaded text that must appear in the published article. |
 | `HERALD_PUBLISH_BUFFER_DAYS` | `3` | Days before a brief's start date from which publication counts. |
 | `HERALD_MAX_ARTICLE_AGE_DAYS` | `21` | Oldest accepted publication, counted back from the scoring block's chain time. |
-| `HERALD_MAX_SUBMISSIONS_PER_EPOCH` | `500` | New submissions verified per epoch. |
+| `HERALD_MAX_SUBMISSIONS_PER_EPOCH` | `500` | New articles verified per epoch, earliest upload first. |
+| `HERALD_MAX_CANDIDATES_PER_ARTICLE` | `10` | Submissions of one article tried per epoch, earliest upload first. |
 | `HERALD_WEIGHT_RESUBMIT_BLOCKS` | `180` | Blocks the chain's weight record for this validator's uid must reach before the latest weights are submitted again (§8.5). |
 
 All but `HERALD_WEIGHT_RESUBMIT_BLOCKS` are in the consensus fingerprint. Change them only
@@ -461,7 +472,8 @@ MinAllowedWeights is above 1 every burn-only vector is refused and no weights ar
 | Line | Level | When |
 |---|---|---|
 | `OWNER_VALIDATOR_CHECK wallet_hotkey_is_uid0=<True\|False>` | INFO | At startup: whether this validator's wallet hotkey is the hotkey registered at UID 0. `OWNER_VALIDATOR_CHECK unavailable: <error>` at WARNING if it cannot be read. |
-| `SUBMISSION_RESULT <submission_id> <reason>` | INFO | Once per selected feed row (§8.2). |
+| `SUBMISSION_RESULT <submission_id> <reason>` | INFO | Once per candidate tried (§8.1, §8.2). |
+| `SUBMISSION_CREDITED <submission_id> candidate=<i>/<n>` | INFO | The candidate credited with its article: the `i`-th of the article's `n` candidates in upload order. |
 | `LEGACY_VESTING_EXPIRED <n>` | INFO | A pass expired `n` vesting entries that carry no submission id. |
 | `INCENTIVE_WEIGHT epoch=<e> w=<w> payable_usd=<usd> daily_usd=<usd> alpha_tao=<price> tao_usd=<price> daily_miner_alpha=<alpha> uid_star=<uid>` | INFO | A successful scoring pass; `uid_star` is the incentive hotkey's UID. |
 | `INCENTIVE_BURN epoch=<e> reason=<reason>` | INFO for `no_briefs` and `stale_scores`, WARNING otherwise | The day's weight went to UID 0 (§8.5). |
