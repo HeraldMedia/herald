@@ -19,7 +19,7 @@ bound (web fetches, search-API calls, chain RPC). The optional LLM judge is a *r
 | RAM | 8 GB | **8–16 GB** |
 | Disk | — | **50 GB SSD** |
 | GPU | none | **none** |
-| Network | — | static public IP, inbound axon **8092**, ≥100 Mbps, generous egress |
+| Network | — | outbound only (no inbound port), ≥100 Mbps, generous egress |
 | OS | — | Ubuntu 22.04 / 24.04 |
 | TAO | — | registration burn **+ stake for a validator permit** (or weights don't count) |
 
@@ -91,10 +91,10 @@ curl -s https://api.heraldmedia.ai/registry/outlets.json -o /secure/herald/outle
 ```
 Copy `deploy/validator.env.production.example` to `.env` and fill the blanks. It is the exact
 template below — the public trust anchors (endpoint + pubkeys) are baked in; you supply your
-wallet/IP and the operator-provided secrets (results token, API keys):
+wallet and the operator-provided secrets (results token, API keys):
 ```ini
 # Herald validator — production .env (Bittensor netuid 69, finney).
-# Copy to .env, fill the blanks (your wallet/IP + operator-provided secrets), then: chmod 600 .env
+# Copy to .env, fill the blanks (your wallet + operator-provided secrets), then: chmod 600 .env
 # For every available setting (incl. the consensus-critical scoring tunables), see root .env.example.
 HERALD_PRODUCTION=true
 HERALD_PRODUCTION_NETUID=69
@@ -107,9 +107,7 @@ SUBTENSOR_NETWORK=finney
 # ── Wallet: registered on netuid 69 with stake for a validator permit ──
 WALLET_NAME=
 HOTKEY_NAME=
-# This host's public IP (announced to the chain):
-AXON_EXTERNAL_IP=
-VALIDATOR_AXON_PORT=8092
+# No axon settings: a validator serves nothing and announces no address.
 
 # ── Canonical subnet backend + trust anchors (the pubkeys are public) ──
 HERALD_BRIEFS_ENDPOINT=https://api.heraldmedia.ai/api/v2/validator/briefs

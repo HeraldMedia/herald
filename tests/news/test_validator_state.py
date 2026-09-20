@@ -23,7 +23,7 @@ def test_constructor_restores_scores_before_initial_sync(tmp_path, monkeypatch):
         hotkeys=np.array(["hk0", "hk1"]),
         spec_version=BaseValidatorNeuron.spec_version,
     )
-    config = SimpleNamespace(neuron=SimpleNamespace(full_path=str(tmp_path), axon_off=True))
+    config = SimpleNamespace(neuron=SimpleNamespace(full_path=str(tmp_path)))
     metagraph = SimpleNamespace(hotkeys=["hk0", "hk1"], n=2)
 
     def fake_base_init(self, config=None):
