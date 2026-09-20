@@ -159,7 +159,12 @@ def add_miner_args(cls, parser):
 
 
 def add_validator_args(cls, parser):
-    """Add validator specific arguments to the parser."""
+    """Add validator specific arguments to the parser.
+
+    A Herald validator serves nothing: it answers no requests and makes only outbound calls, so it
+    has no axon to switch on or off and takes no inbound port. The --axon.* arguments bittensor adds
+    belong to the miner.
+    """
 
     parser.add_argument(
         "--neuron.name",
@@ -201,16 +206,6 @@ def add_validator_args(cls, parser):
         type=float,
         help="Moving average alpha parameter, how much to add of the new observation.",
         default=0.6,
-    )
-
-    parser.add_argument(
-        "--neuron.axon_off",
-        "--axon_off",
-        action="store_true",
-        # Note: the validator needs to serve an Axon with their IP or they may
-        #   be blacklisted by the firewall of serving peers on the network.
-        help="Set this flag to not attempt to serve an Axon.",
-        default=False,
     )
 
     parser.add_argument(

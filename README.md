@@ -42,7 +42,7 @@ pip install --no-build-isolation -e .
 
 # Validator
 python neurons/validator.py --netuid 69 --wallet.name <w> --wallet.hotkey <hk> \
-  --axon.external_ip <public-ip> --neuron.disable_auto_update
+  --neuron.disable_auto_update
 
 # Miner: commit to an outlet, then attach the URL once published
 python -m herald.miner.cli commit --brief <id> --outlet <outlet_id>

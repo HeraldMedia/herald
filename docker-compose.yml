@@ -39,12 +39,11 @@ services:
       "--wallet.hotkey", "${HOTKEY_NAME:-default}",
       "--netuid", "${NETUID:-69}",
       "--subtensor.network", "${SUBTENSOR_NETWORK:-finney}",
-      "--axon.port", "8092",
       "--neuron.disable_auto_update",
       "${HERALD_VALIDATOR_LOGGING:---logging.info}",
     ]
-    ports:
-      - "${VALIDATOR_AXON_PORT:-8092}:8092"
+    # No ports: a validator serves no axon and answers nothing. It only makes outbound calls
+    # (chain RPC, the Herald backend, article and price fetches), so it needs no inbound port.
     environment:
       PYTHONUNBUFFERED: "1"
       # core/ and neurons/ are COPYed after `pip install -e .` in the Dockerfile, so they aren't
@@ -54,7 +53,6 @@ services:
       # Disable it (optional telemetry only); set a real key + WANDB_MODE=online to re-enable.
       WANDB_MODE: "${WANDB_MODE:-disabled}"
       HERALD_PRODUCTION: "${HERALD_PRODUCTION:-false}"
-      AXON_EXTERNAL_PORT: "${VALIDATOR_AXON_PORT:-8092}"
     env_file: "${VALIDATOR_ENV_FILE:-.env}"
     volumes:
       - validator_state:/root/.bittensor

@@ -147,11 +147,10 @@ class BaseValidatorNeuron(BaseNeuron):
         # Init sync with the network. Updates the metagraph.
         self.sync()
 
-        # Serve axon to enable external connections.
-        if not self.config.neuron.axon_off:
-            self.serve_axon()
-        else:
-            bt.logging.warning("axon off, not serving ip to chain.")
+        # No axon. A Herald validator answers no requests: nothing attaches a handler here, so
+        # there is no inbound port to open and no address worth publishing on chain. Every call it
+        # makes is outbound: chain RPC, the Herald backend, article and price fetches. Miners still
+        # serve an axon.
 
         # Create asyncio event loop to manage async tasks.
         self.loop = asyncio.get_event_loop()
@@ -161,31 +160,6 @@ class BaseValidatorNeuron(BaseNeuron):
         self.is_running: bool = False
         self.thread: Union[threading.Thread, None] = None
         self.lock = asyncio.Lock()
-
-    def serve_axon(self):
-        """Serve axon to enable external connections."""
-
-        bt.logging.info("serving ip to chain...")
-        try:
-            self.axon = bt.Axon(wallet=self.wallet, config=self.config)
-
-            try:
-                self.subtensor.serve_axon(
-                    netuid=self.config.netuid,
-                    axon=self.axon,
-                )
-                bt.logging.info(
-                    f"Running validator {self.axon} on network: {self.config.subtensor.chain_endpoint} with netuid: {self.config.netuid}"
-                )
-            except Exception as e:
-                bt.logging.error(f"Failed to serve Axon with exception: {e}")
-                pass
-
-        except Exception as e:
-            bt.logging.error(
-                f"Failed to create Axon initialize with exception: {e}"
-            )
-            pass
 
     async def concurrent_forward(self):
         coroutines = [
@@ -207,7 +181,8 @@ class BaseValidatorNeuron(BaseNeuron):
 
         Note:
             - The function leverages the global configurations set during the initialization of the miner.
-            - The miner's axon serves as its interface to the Bittensor network, handling incoming and outgoing requests.
+            - A validator serves no axon; it only makes outbound calls (chain RPC, the Herald
+              backend, article and price fetches).
 
         Raises:
             KeyboardInterrupt: If the miner is stopped by a manual interruption.
@@ -241,7 +216,6 @@ class BaseValidatorNeuron(BaseNeuron):
 
             # If someone intentionally stops the validator, it'll safely terminate operations.
             except KeyboardInterrupt:
-                self.axon.stop()
                 bt.logging.success("Validator killed by keyboard interrupt.")
                 exit()
 
