@@ -55,7 +55,7 @@ pip install --no-build-isolation -e .
 
 # Validator
 python neurons/validator.py --netuid 69 --wallet.name <w> --wallet.hotkey <hk> \
-  --axon.external_ip <public-ip> --neuron.disable_auto_update
+  --neuron.disable_auto_update
 ```
 
 The current release is `0.2.0` (spec version 20). Validators verify the outlet registry's ed25519

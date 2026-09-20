@@ -49,7 +49,7 @@ submissions feed, settings, pricing inputs, weight vector checks and log tags.
 
 - Linux, Python 3.11 or 3.12
 - A registered validator hotkey with subnet-69 alpha stake
-- A publicly routable axon address
+- Outbound HTTPS and chain RPC only: a validator serves no axon and takes no inbound traffic
 - The same consensus-affecting configuration as every other Herald validator, including
   `HERALD_INCENTIVE_HOTKEY`
 - The offline-signed production outlet registry
@@ -67,7 +67,7 @@ Copy the root configuration template:
 cp .env.example .env
 ```
 
-At minimum, configure the wallet, network, axon address, brief endpoint, registry trust anchors,
+At minimum, configure the wallet, network, brief endpoint, registry trust anchors,
 fetch/search providers, results endpoint and credentials, and the incentive hotkey. Keep provider
 availability and every `HERALD_*` consensus value identical across the fleet.
 
@@ -223,8 +223,9 @@ record for this validator's uid is at least `HERALD_WEIGHT_RESUBMIT_BLOCKS` bloc
 pending-commit skip and the vector checks. With commit-reveal the record is refreshed about once
 per tempo. See `docs/validator.md` §8.5.
 
-Set `AXON_EXTERNAL_IP` when automatic public-address discovery is not reliable. If the public port
-differs from the listen port, also set `AXON_EXTERNAL_PORT`.
+A validator publishes no address on chain and listens on no port: it reads briefs and
+contributor submissions from the Herald backend, reads the chain over RPC and fetches article
+and price pages, all outbound. `AXON_EXTERNAL_IP` and `AXON_EXTERNAL_PORT` are miner settings.
 
 ## Several validators
 
