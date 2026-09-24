@@ -25,6 +25,18 @@ class Validator(BaseValidatorNeuron):
     def __init__(self, config=None):
         super(Validator, self).__init__(config=config)
 
+        # Load the Herald ledger here, outside forward()'s catch-all: a state file that exists but
+        # cannot be read raises HeraldStateLoadError and stops the process, rather than being logged
+        # and retried every step while the validator runs without its ledger.
+        _state(self)
+
+        # Shows whether this validator signs with the hotkey registered at UID 0.
+        try:
+            is_uid0 = self.wallet.hotkey.ss58_address == self.metagraph.hotkeys[0]
+            bt.logging.info(f"OWNER_VALIDATOR_CHECK wallet_hotkey_is_uid0={is_uid0}")
+        except Exception as e:
+            bt.logging.warning(f"OWNER_VALIDATOR_CHECK unavailable: {e}")
+
         try:
             cw_handler = get_cloudwatch_handler(
                 log_group="/herald/validator",
@@ -71,13 +83,15 @@ class Validator(BaseValidatorNeuron):
             bt.logging.warning(f"Unable to read the age of this uid's weight record: {e}")
             return None
 
-    def should_set_weights(self) -> bool:
-        # The base class enforces the block interval, the pending-commit skip and the
-        # disable_set_weights switch, and logs its own reason when it declines.
-        if not super().should_set_weights():
+    def _has_weights_to_submit(self) -> bool:
+        # Herald's own gates. The base should_set_weights asks them after its --neuron.epoch_length
+        # interval and before it reads the chain for a pending weight commit, so a failing RPC check
+        # is retried, counted and alerted on only when this validator would actually submit.
+        state = _state(self)
+        if state.last_scored_epoch < 0:
+            bt.logging.info("No Herald epoch has been scored yet; skipping weight submission")
             return False
 
-        state = _state(self)
         scores = np.asarray(self.scores)
         if not np.any(np.isfinite(scores) & (scores > 0)):
             bt.logging.info(
@@ -86,9 +100,9 @@ class Validator(BaseValidatorNeuron):
             )
             return False
 
-        # Scoring stays daily, but the chain's copy of the vector ages out, so the LATEST scores are
-        # re-submitted on a block cadence. last_weight_epoch is bookkeeping only and no longer gates
-        # this: a vector already submitted in this Herald epoch is submitted again once it is stale.
+        # Scoring stays once per Herald epoch, but the chain's copy of the vector ages out, so the
+        # LATEST stored vector (incentive and burn, or burn only) is submitted again on a block
+        # cadence. last_weight_epoch is bookkeeping only and does not gate this.
         age = self._weight_record_age()
         if age is None:
             return False
@@ -98,10 +112,21 @@ class Validator(BaseValidatorNeuron):
                 f"(< {WEIGHT_RESUBMIT_BLOCKS}); skipping resubmission"
             )
             return False
+        self._weight_record_age_blocks = age
+        return True
 
+    def should_set_weights(self) -> bool:
+        # The base class enforces the --neuron.epoch_length interval, the disable_set_weights
+        # switch, the gates above and the pending-commit skip, and logs its reason when it declines.
+        self._weight_record_age_blocks = None
+        if not super().should_set_weights():
+            return False
+        state = _state(self)
+        submitted = state.last_weight_epoch >= state.last_scored_epoch
         bt.logging.info(
-            f"Re-submitting Herald epoch {state.last_scored_epoch} weights: the chain record for "
-            f"uid {self.uid} is {age} blocks old (>= {WEIGHT_RESUBMIT_BLOCKS})"
+            f"{'Re-submitting' if submitted else 'Submitting'} Herald epoch "
+            f"{state.last_scored_epoch} weights: the chain record for uid {self.uid} is "
+            f"{self._weight_record_age_blocks} blocks old (>= {WEIGHT_RESUBMIT_BLOCKS})"
         )
         return True
 
@@ -111,6 +136,9 @@ class Validator(BaseValidatorNeuron):
             return False
 
         state = _state(self)
+        # The only writer of last_weight_epoch: set once the chain accepted the extrinsic. It is
+        # bookkeeping (the last epoch whose vector was accepted), not a submission gate and not a
+        # liveness signal; watch on-chain LastUpdate instead (scripts/watchdog.py).
         state.last_weight_epoch = state.last_scored_epoch
         path = _state_path(self)
         if path:

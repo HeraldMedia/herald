@@ -4,6 +4,10 @@ import pytest
 
 from herald.validator.news.registry_signing import generate_keypair, sign
 
+# Public development addresses (//Alice and //Bob).
+ALICE = "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+BOB = "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+
 
 def _registry(tmp_path):
     private_key, public_key = generate_keypair()
@@ -31,6 +35,7 @@ def _valid_env(tmp_path):
         "HERALD_REGISTRY_PATH": str(path),
         "HERALD_REGISTRY_PUBKEY": public_key,
         "HERALD_REGISTRY_AUTHORITY_HOTKEY": "5Authority",
+        "HERALD_INCENTIVE_HOTKEY": ALICE,
         "HERALD_REQUIRE_SIGNED_REGISTRY": "true",
         "HERALD_REQUIRE_SIGNED_BRIEFS": "true",
         "HERALD_BRIEFS_PUBKEY": "11" * 32,
@@ -129,3 +134,59 @@ def test_production_registry_anchor_check_verifies_the_live_edition(tmp_path):
         "require_anchor": True, "current_block": 120,
         "network": "finney", "netuid": 69,
     })]
+
+
+def test_validator_production_environment_accepts_scoped_results_tokens(tmp_path):
+    from herald.production import validator_environment_errors
+
+    env = _valid_env(tmp_path)
+    env.pop("HERALD_RESULTS_TOKEN")
+    env.update({"HERALD_RESULTS_WRITE_TOKEN": "write-token",
+                "HERALD_RESULTS_READ_TOKEN": "read-token"})
+
+    assert validator_environment_errors(env, actual_consensus="expected-fingerprint") == []
+
+
+def test_validator_production_environment_needs_a_results_credential_for_each_scope(tmp_path):
+    from herald.production import validator_environment_errors
+
+    env = _valid_env(tmp_path)
+    env.pop("HERALD_RESULTS_TOKEN")
+    env["HERALD_RESULTS_WRITE_TOKEN"] = "write-token"
+    errors = validator_environment_errors(env, actual_consensus="expected-fingerprint")
+
+    assert any("HERALD_RESULTS_READ_TOKEN" in error for error in errors)
+    assert not any("HERALD_RESULTS_WRITE_TOKEN" in error for error in errors)
+    assert not any("write-token" in error for error in errors)
+
+
+@pytest.mark.parametrize("value, message", [
+    (None, "HERALD_INCENTIVE_HOTKEY is required"),
+    ("", "HERALD_INCENTIVE_HOTKEY is required"),
+    ("5Incentive", "HERALD_INCENTIVE_HOTKEY must be a valid SS58 address"),
+    (ALICE[:-1] + "Z", "HERALD_INCENTIVE_HOTKEY must be a valid SS58 address"),
+])
+def test_validator_production_environment_requires_a_valid_incentive_hotkey(tmp_path, value, message):
+    from herald.production import validator_environment_errors
+
+    env = _valid_env(tmp_path)
+    if value is None:
+        env.pop("HERALD_INCENTIVE_HOTKEY")
+    else:
+        env["HERALD_INCENTIVE_HOTKEY"] = value
+
+    assert validator_environment_errors(env, actual_consensus="expected-fingerprint") == [message]
+
+
+def test_incentive_hotkey_must_differ_from_the_registry_authority(tmp_path):
+    from herald.production import validator_environment_errors
+
+    env = _valid_env(tmp_path)
+    env["HERALD_REGISTRY_AUTHORITY_HOTKEY"] = ALICE
+    env["HERALD_INCENTIVE_HOTKEY"] = ALICE
+    assert validator_environment_errors(env, actual_consensus="expected-fingerprint") == [
+        "HERALD_INCENTIVE_HOTKEY must differ from HERALD_REGISTRY_AUTHORITY_HOTKEY"
+    ]
+
+    env["HERALD_INCENTIVE_HOTKEY"] = BOB
+    assert validator_environment_errors(env, actual_consensus="expected-fingerprint") == []

@@ -3,6 +3,8 @@
 from dataclasses import asdict, dataclass, field
 from typing import Dict, List, Tuple
 
+from .persisted import rebuild_records
+
 VESTING = "VESTING"
 COMPLETED = "COMPLETED"
 CLAWBACK = "CLAWBACK"
@@ -33,9 +35,11 @@ class VestEntry:
 class VestingLedger:
     def __init__(self, vest_epochs: int, entries: Dict[str, dict] = None):
         self.vest_epochs = vest_epochs
-        self._entries: Dict[str, VestEntry] = {
-            k: VestEntry(**v) for k, v in (entries or {}).items()
-        }
+        # Filter, never splat: a field a newer release added must not crash (or, behind a catch-all,
+        # silently empty) this ledger after a rollback. Dropped keys are logged at WARNING.
+        self._entries: Dict[str, VestEntry] = rebuild_records(
+            VestEntry, entries, label="vesting entry"
+        )
 
     def start(self, article_id, uid, total_usd, url="", hotkey="", brief_id="",
               commit_epoch=0, start_epoch=0, outlet_id="", tier=0, attribution=0,
@@ -118,6 +122,10 @@ class VestingLedger:
     def status(self, article_id: str) -> str:
         return self._entries[article_id].status
 
+    def has(self, article_id: str) -> bool:
+        """True when the ledger holds this article, whatever its status."""
+        return article_id in self._entries
+
     def active_article_ids(self) -> List[str]:
         return [aid for aid, e in self._entries.items() if e.status == VESTING]
 
@@ -128,3 +136,24 @@ class VestingLedger:
     @classmethod
     def from_dict(cls, data: dict) -> "VestingLedger":
         return cls(vest_epochs=data["vest_epochs"], entries=data.get("entries", {}))
+
+
+def settle_liveness(article_id, entry, status, epoch, *, vesting, dead_confirm) -> float:
+    """Apply one epoch's liveness verdict to a vesting article and return the USD it releases.
+
+      dead  -> counts once per epoch; after `dead_confirm` consecutive dead epochs the article is
+               clawed back and releases nothing more.
+      alive -> resets the dead streak and releases every installment accrued since the last release.
+      hold  -> releases nothing and changes nothing.
+    """
+    if status == "dead":
+        if epoch > entry.last_dead_epoch:  # rerunning the same epoch does not count it twice
+            entry.dead_streak += 1
+            entry.last_dead_epoch = epoch
+        if entry.dead_streak >= dead_confirm:
+            vesting.clawback(article_id)
+        return 0.0
+    if status == "alive":
+        entry.dead_streak = 0
+        return vesting.release(article_id, epoch)
+    return 0.0

@@ -136,7 +136,9 @@ def cmd_publish_anchor(args):
     if not args.yes:
         raise SystemExit("refusing on-chain write without --yes")
 
-    wallet = bt.Wallet(name=args.wallet_name, hotkey=args.wallet_hotkey)
+    wallet = bt.Wallet(name=args.wallet_name, hotkey=args.wallet_hotkey,
+                       path=args.wallet_path) if args.wallet_path else \
+        bt.Wallet(name=args.wallet_name, hotkey=args.wallet_hotkey)
     subtensor = bt.Subtensor(network=args.network)
     subtensor.set_commitment(
         wallet,
@@ -224,6 +226,12 @@ def build_parser():
     publish.add_argument("--effective-block", dest="effective_block", type=int, required=True)
     publish.add_argument("--wallet-name", required=True)
     publish.add_argument("--wallet-hotkey", required=True)
+
+    publish.add_argument("--wallet-path", default=None,
+
+                        help="the wallet directory, when it is not bittensor's default "
+
+                             "(a container mounts it elsewhere)")
     publish.add_argument("--netuid", type=int, default=69)
     publish.add_argument("--network", default="finney",
                          help="Bittensor network name or websocket endpoint")

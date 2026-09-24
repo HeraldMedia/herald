@@ -42,7 +42,6 @@ fi
 NETUID=${NETUID:-69}
 SUBTENSOR_NETWORK=${SUBTENSOR_NETWORK:-"finney"}
 SUBTENSOR_CHAIN_ENDPOINT=${SUBTENSOR_CHAIN_ENDPOINT:-"wss://entrypoint-finney.opentensor.ai:443"}
-PORT=${PORT:-8092}
 LOGGING=${LOGGING:-"--logging.debug"}
 DISABLE_AUTO_UPDATE=${DISABLE_AUTO_UPDATE:-true}
 
@@ -79,16 +78,8 @@ if pm2 list | grep -q "$PM2_PROCESS_NAME"; then
   pm2 delete "$PM2_PROCESS_NAME"
 fi
 
-AXON_ARGS=(--axon.port "$PORT")
-if [ -n "${AXON_EXTERNAL_IP:-}" ]; then
-  AXON_ARGS+=(--axon.external_ip "$AXON_EXTERNAL_IP")
-fi
-if [ -n "${AXON_EXTERNAL_PORT:-}" ]; then
-  AXON_ARGS+=(--axon.external_port "$AXON_EXTERNAL_PORT")
-fi
-
 pm2 start python --name "$PM2_PROCESS_NAME" -- neurons/validator.py \
   --netuid "$NETUID" --subtensor.chain_endpoint "$SUBTENSOR_CHAIN_ENDPOINT" \
   --subtensor.network "$SUBTENSOR_NETWORK" --wallet.name "$WALLET_NAME" \
-  --wallet.hotkey "$HOTKEY_NAME" "${AXON_ARGS[@]}" $LOGGING \
+  --wallet.hotkey "$HOTKEY_NAME" $LOGGING \
   $DISABLE_AUTO_UPDATE_FLAG --neuron.disable_set_weights

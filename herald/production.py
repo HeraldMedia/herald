@@ -29,6 +29,15 @@ def _load_registry(env) -> tuple[dict | None, str | None]:
         return None, "HERALD_REGISTRY_PATH must point to a readable registry"
 
 
+def _valid_ss58(address: str) -> bool:
+    from bittensor_wallet import Keypair
+    try:
+        Keypair(ss58_address=address)
+    except Exception:
+        return False
+    return True
+
+
 def validator_environment_errors(
     env=None, *, network: str = None, netuid: int = None,
     actual_consensus: str = None,
@@ -66,6 +75,13 @@ def validator_environment_errors(
         errors.append("HERALD_REGISTRY_PUBKEY is required")
     if not env.get("HERALD_REGISTRY_AUTHORITY_HOTKEY"):
         errors.append("HERALD_REGISTRY_AUTHORITY_HOTKEY is required")
+    incentive_hotkey = env.get("HERALD_INCENTIVE_HOTKEY", "")
+    if not incentive_hotkey:
+        errors.append("HERALD_INCENTIVE_HOTKEY is required")
+    elif not _valid_ss58(incentive_hotkey):
+        errors.append("HERALD_INCENTIVE_HOTKEY must be a valid SS58 address")
+    elif incentive_hotkey == env.get("HERALD_REGISTRY_AUTHORITY_HOTKEY"):
+        errors.append("HERALD_INCENTIVE_HOTKEY must differ from HERALD_REGISTRY_AUTHORITY_HOTKEY")
     registry, registry_error = _load_registry(env)
     if registry_error:
         errors.append(registry_error)
@@ -88,8 +104,12 @@ def validator_environment_errors(
             errors.append(f"{name} is required")
         elif _local_url(value):
             errors.append(f"{name} cannot use localhost in production")
-    if not env.get("HERALD_RESULTS_TOKEN"):
-        errors.append("HERALD_RESULTS_TOKEN is required")
+    from herald.validator.news.publish import (
+        RESULTS_READ_TOKEN_ENV, RESULTS_TOKEN_ENV, RESULTS_WRITE_TOKEN_ENV, results_token,
+    )
+    for scoped in (RESULTS_WRITE_TOKEN_ENV, RESULTS_READ_TOKEN_ENV):
+        if not results_token(scoped, env):
+            errors.append(f"{scoped} or the shared {RESULTS_TOKEN_ENV} is required")
 
     strategies = [str(outlet.get("fetch", "direct")) for outlet in (registry or {}).get("outlets", [])]
     if any(strategy == "proxy" or strategy.startswith("proxy:") for strategy in strategies):
@@ -170,6 +190,12 @@ def main() -> None:
 
     parser = argparse.ArgumentParser(prog="python -m herald.production")
     parser.add_argument("command", choices=("fingerprint", "check-validator"))
+    # The validator's own target flags. Importing herald already applied the mainnet settings for
+    # them (herald/network_profile.py), so the fingerprint printed here is the one the validator
+    # computes when started with the same flags. Each falls back to NETUID / SUBTENSOR_NETWORK, and
+    # the network to finney as in bittensor.
+    parser.add_argument("--netuid", type=int, default=None)
+    parser.add_argument("--subtensor.network", dest="network", default=None)
     args = parser.parse_args()
     if args.command == "fingerprint":
         from herald.validator.utils.consensus import consensus_fingerprint
@@ -177,8 +203,8 @@ def main() -> None:
         return
     validate_neuron_environment(
         "ValidatorNeuron",
-        os.environ.get("SUBTENSOR_NETWORK", ""),
-        int(os.environ.get("NETUID", "-1")),
+        args.network or os.environ.get("SUBTENSOR_NETWORK") or "finney",
+        args.netuid if args.netuid is not None else int(os.environ.get("NETUID", "-1")),
     )
     print("production validator preflight passed")
 

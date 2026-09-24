@@ -1,4 +1,6 @@
-from herald.validator.news.vesting import VestingLedger
+from dataclasses import asdict
+
+from herald.validator.news.vesting import VestingLedger, settle_liveness
 
 
 def test_start_and_release_installments():
@@ -119,3 +121,52 @@ def test_expire_terminates_held_entry():
     assert v.status("a") == "EXPIRED"
     assert v.active_article_ids() == []
     assert v.release("a", epoch=5) == 0.0  # terminal: no further pay
+
+
+def test_has_reports_articles_in_any_status():
+    v = VestingLedger(vest_epochs=2)
+    for aid in ("vesting", "clawed", "expired"):
+        v.start(aid, uid=2, total_usd=100.0)
+    v.clawback("clawed")
+    v.expire("expired")
+    assert all(v.has(aid) for aid in ("vesting", "clawed", "expired"))
+    assert not v.has("unknown")
+
+
+def _submission_ledger():
+    v = VestingLedger(vest_epochs=4)
+    v.start("art1", uid=2, total_usd=400.0, hotkey="hkStar", brief_id="b1", start_epoch=10,
+            reveal={"submission_id": "sub-1"})
+    return v, v.entry("art1")
+
+
+def test_settle_liveness_dead_streak_counts_once_per_epoch():
+    v, entry = _submission_ledger()
+    assert settle_liveness("art1", entry, "dead", 11, vesting=v, dead_confirm=2) == 0.0
+    assert settle_liveness("art1", entry, "dead", 11, vesting=v, dead_confirm=2) == 0.0
+    assert entry.dead_streak == 1 and entry.last_dead_epoch == 11
+    assert v.status("art1") == "VESTING"
+
+
+def test_settle_liveness_claws_back_at_dead_confirm():
+    v, entry = _submission_ledger()
+    settle_liveness("art1", entry, "dead", 11, vesting=v, dead_confirm=2)
+    assert settle_liveness("art1", entry, "dead", 12, vesting=v, dead_confirm=2) == 0.0
+    assert v.status("art1") == "CLAWBACK"
+    assert settle_liveness("art1", entry, "alive", 13, vesting=v, dead_confirm=2) == 0.0
+
+
+def test_settle_liveness_alive_releases_and_resets_the_dead_streak():
+    v, entry = _submission_ledger()
+    assert settle_liveness("art1", entry, "alive", 10, vesting=v, dead_confirm=2) == 100.0
+    settle_liveness("art1", entry, "dead", 11, vesting=v, dead_confirm=2)
+    assert settle_liveness("art1", entry, "alive", 12, vesting=v, dead_confirm=2) == 200.0
+    assert entry.dead_streak == 0 and v.status("art1") == "VESTING"
+
+
+def test_settle_liveness_hold_releases_nothing_and_changes_nothing():
+    v, entry = _submission_ledger()
+    settle_liveness("art1", entry, "alive", 10, vesting=v, dead_confirm=2)
+    before = asdict(entry)
+    assert settle_liveness("art1", entry, "hold", 11, vesting=v, dead_confirm=2) == 0.0
+    assert asdict(entry) == before
