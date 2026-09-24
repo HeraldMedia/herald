@@ -270,13 +270,13 @@ class HeraldState:
         # Persisted so a restart inside an already-scored epoch doesn't re-score it: the vesting
         # ledger already released that epoch's installments, so a re-run would lose that day's vector.
         self.last_scored_epoch = last_scored_epoch
-        # The Herald epoch whose allocation this validator last got accepted on chain. Its only
-        # writer is neurons/validator.py Validator.set_weights, after the extrinsic is included; its
-        # only reader is Validator._has_weights_to_submit, which uses it so Bittensor's short
-        # weight-update interval never resubmits an unchanged daily allocation. -1 means no accepted
-        # submission is recorded in THIS file (a fresh or replaced file reads -1 too). It is not
-        # evidence about on-chain weight-setting either way: watch the chain's LastUpdate for the
-        # hotkey instead (scripts/watchdog.py).
+        # The Herald epoch whose allocation this validator last got accepted on chain. It is written
+        # only by neurons/validator.py Validator.set_weights, after the extrinsic is included.
+        # Bookkeeping only: it does not gate submission. How often the latest vector is submitted
+        # again is decided from the age of the chain's own weight record for this validator's uid
+        # (HERALD_WEIGHT_RESUBMIT_BLOCKS). -1 means no accepted submission is recorded in THIS file
+        # (a fresh or replaced file reads -1 too). It is not evidence about on-chain weight-setting
+        # either way: watch the chain's LastUpdate for the hotkey instead (scripts/watchdog.py).
         self.last_weight_epoch = last_weight_epoch
 
     @classmethod

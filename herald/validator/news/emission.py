@@ -1,9 +1,23 @@
-"""Convert each epoch's payable placement installments into participant weights."""
+"""Turn each epoch's payable installments into the incentive and burn weight vector."""
 
 import math
 from typing import Dict, List, Tuple
 
+import bittensor as bt
 import numpy as np
+
+from herald.base.utils.weight_utils import convert_weights_and_uids_for_emit
+
+# UID 0 receives the share of the day's miner emission that verified value does not cover.
+BURN_UID = 0
+
+
+class WeightVectorRefused(Exception):
+    """The weight vector breaks the submission rules and must not be sent to the chain."""
+
+    def __init__(self, reason: str):
+        super().__init__(reason)
+        self.reason = reason
 
 
 def apply_reward_pools(
@@ -18,8 +32,8 @@ def apply_reward_pools(
     left) pays nothing. Standing placements contribute their full installment value. ``pool_spent``
     is mutated with this epoch's actual client payouts.
 
-    Order-independent per-brief scaling ensures every validator computes the same participant
-    proportions from the same signed briefs and persisted state.
+    Order-independent per-brief scaling ensures every validator computes the same payable totals
+    from the same signed briefs and persisted state.
     """
     usd_by_uid: Dict[int, float] = {}
     by_id = {b["id"]: b for b in briefs}
@@ -53,21 +67,69 @@ def apply_reward_pools(
     return usd_by_uid
 
 
-def compute_weights(
-    usd_by_uid: Dict[int, float],
-    uids: List[int],
-) -> np.ndarray:
-    weights = np.zeros(len(uids), dtype=np.float32)
-    pos = {uid: i for i, uid in enumerate(uids)}
+def incentive_uid(hotkeys, incentive_hotkey: str):
+    """The incentive hotkey's UID, or None when it is unset, unregistered or holds UID 0."""
+    hotkeys = list(hotkeys)
+    if not incentive_hotkey or incentive_hotkey not in hotkeys:
+        return None
+    uid = hotkeys.index(incentive_hotkey)
+    return None if uid == BURN_UID else uid
 
-    payable = {uid: max(0.0, usd) for uid, usd in usd_by_uid.items() if uid in pos}
-    total = math.fsum(payable[uid] for uid in sorted(payable))
-    if total <= 0:
-        return weights
 
-    for uid in sorted(payable):
-        usd = payable[uid]
-        if usd > 0:
-            weights[pos[uid]] = usd / total
+def incentive_burn_vector(payable_usd, daily_usd, uid_star) -> Tuple[List[int], np.ndarray]:
+    """([0, uid_star], [1 - w, w]) with w = min(1, payable_usd / daily_usd); zero entries dropped.
 
-    return weights
+    Everything goes to UID 0 ([0], [1.0]) when there is no incentive UID, nothing is payable, or the
+    USD value of the day's miner emission is not a finite positive number.
+    """
+    burn = ([BURN_UID], np.array([1.0], dtype=np.float32))
+    if uid_star is None or int(uid_star) <= BURN_UID:
+        return burn
+    payable = float(payable_usd)
+    daily = float(daily_usd)
+    if not math.isfinite(payable) or payable <= 0 or not math.isfinite(daily) or daily <= 0:
+        return burn
+    w = min(1.0, payable / daily)
+    pairs = [(uid, share) for uid, share in ((BURN_UID, 1.0 - w), (int(uid_star), w)) if share > 0]
+    return [uid for uid, _ in pairs], np.array([share for _, share in pairs], dtype=np.float32)
+
+
+def allowed_emit_vector(scores, hotkeys, incentive_hotkey: str,
+                        min_allowed_weights) -> Tuple[List[int], List[int]]:
+    """The u16 (uids, weights) to submit, or WeightVectorRefused.
+
+    Only UID 0 and the incentive hotkey's current UID may receive weight. Scores on any other UID
+    (for example after the incentive hotkey moved to a new UID) put all weight on UID 0. Weights are
+    max-upscaled to u16 with zero entries dropped; they are never padded with other UIDs or clipped
+    to a maximum weight. The vector is refused when it is empty, reaches another UID, or is shorter
+    than MinAllowedWeights (refused as well when MinAllowedWeights is unknown).
+    """
+    values = np.asarray(scores, dtype=np.float64).reshape(-1)
+    uid_star = incentive_uid(hotkeys, incentive_hotkey)
+    allowed = {BURN_UID} if uid_star is None else {BURN_UID, uid_star}
+    support = [int(uid) for uid in np.flatnonzero(np.isfinite(values) & (values > 0))]
+    if not support or not set(support) <= allowed:
+        bt.logging.warning(
+            f"WEIGHT_VECTOR_BURN reason=incentive_uid_changed: scores on UIDs {support[:10]} are not "
+            f"limited to UID {BURN_UID} and the incentive hotkey's UID {uid_star}"
+        )
+        support_uids, shares = [BURN_UID], np.array([1.0])
+    else:
+        support_uids = support
+        shares = values[support] / math.fsum(values[support])
+    uids, weights = convert_weights_and_uids_for_emit(
+        uids=np.asarray(support_uids, dtype=np.int64), weights=shares,
+    )
+    uids = [int(uid) for uid in uids]
+    weights = [int(weight) for weight in weights]
+    if not uids:
+        raise WeightVectorRefused("empty_vector")
+    if not set(uids) <= allowed:
+        raise WeightVectorRefused(f"uid_not_allowed uids={uids} allowed={sorted(allowed)}")
+    if min_allowed_weights is None:
+        raise WeightVectorRefused("min_allowed_weights_unknown")
+    if len(uids) < int(min_allowed_weights):
+        raise WeightVectorRefused(
+            f"below_min_allowed_weights uids={uids} min_allowed_weights={int(min_allowed_weights)}"
+        )
+    return uids, weights

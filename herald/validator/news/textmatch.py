@@ -67,8 +67,8 @@ def grade_evidence(evidence: dict, fetch_result, brief: dict, article_text: str 
     """Grade revealed evidence against the fetched article. Returns (level, detail dict).
 
     The caller has already verified evidence_hash(evidence) == the committed pre_hash, so
-    everything here was fixed before publication. `article_text` overrides the fetched text
-    (the oracle passes the anchored claim snapshot so every validator grades identical bytes).
+    everything here was fixed before publication. `article_text` overrides the fetched page text
+    (the oracle passes the article body it extracted from its own fetch).
     """
     if not evidence:
         return 0, {}

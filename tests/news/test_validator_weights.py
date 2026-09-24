@@ -8,6 +8,7 @@ from herald.base import validator as base_validator
 from herald.base.validator import BaseValidatorNeuron
 
 UNKNOWN_BLOCK = "UnknownBlock: Header was not found in the database"
+INCENTIVE_HOTKEY = "incentive-hotkey"
 ENDPOINT = "wss://entrypoint-finney.opentensor.ai:443"
 FALLBACK = "wss://fallback.example:443"
 
@@ -28,6 +29,16 @@ def _weight_check_env(monkeypatch):
         monkeypatch.delenv(name, raising=False)
 
 
+@pytest.fixture(autouse=True)
+def _submission_rules(monkeypatch):
+    monkeypatch.setattr(base_validator.validator_config, "HERALD_INCENTIVE_HOTKEY", INCENTIVE_HOTKEY)
+
+    def never(**kwargs):
+        raise AssertionError("the SDK weight processing must not be used")
+
+    monkeypatch.setattr("herald.base.utils.weight_utils.process_weights_for_netuid", never)
+
+
 def _validator(monkeypatch, *, pending=False):
     validator = object.__new__(ConcreteValidator)
     monkeypatch.setattr(ConcreteValidator, "block", property(lambda self: 200))
@@ -41,6 +52,7 @@ def _validator(monkeypatch, *, pending=False):
         n=2,
         uids=np.array([0, 1]),
         last_update=np.array([0, 100]),
+        hotkeys=["owner-hotkey", INCENTIVE_HOTKEY],
     )
     validator.wallet = SimpleNamespace(
         hotkey=SimpleNamespace(ss58_address="validator-hotkey")
@@ -50,6 +62,8 @@ def _validator(monkeypatch, *, pending=False):
         get_timelocked_weight_commits=lambda netuid: (
             [("validator-hotkey", 190, "encrypted", 123)] if pending else []
         ),
+        min_allowed_weights=lambda netuid: 1,
+        max_weight_limit=lambda netuid: 0.1,
     )
     return validator
 
@@ -77,18 +91,11 @@ def test_crv4_submission_waits_for_inclusion_and_reports_pending_reveal(monkeypa
         return True, "included"
 
     validator.subtensor.set_weights = submit
-    monkeypatch.setattr(
-        "herald.base.validator.process_weights_for_netuid",
-        lambda **kwargs: (np.array([0, 1]), np.array([0.833333, 0.166667])),
-    )
-    monkeypatch.setattr(
-        "herald.base.validator.convert_weights_and_uids_for_emit",
-        lambda **kwargs: ([0, 1], [65535, 13107]),
-    )
     monkeypatch.setattr("herald.base.validator.bt.logging.info", messages.append)
 
     assert validator.set_weights() is True
 
+    assert (calls[0]["uids"], calls[0]["weights"]) == ([0, 1], [65535, 13107])
     assert calls[0]["wait_for_inclusion"] is True
     assert calls[0]["wait_for_finalization"] is False
     assert calls[0]["wait_for_revealed_execution"] is False
@@ -108,6 +115,113 @@ def test_zero_scores_skip_weight_submission(monkeypatch):
 
     assert calls == []
     assert any("no rewarded miners" in message.lower() for message in messages)
+
+
+# --- weight vector rules --------------------------------------------------------------------------
+
+def _wide_validator(monkeypatch, scores, *, incentive_uid=2, min_allowed=1, limit=0.1):
+    """Four registered UIDs, the incentive hotkey at ``incentive_uid``; records every extrinsic."""
+    validator = _validator(monkeypatch)
+    hotkeys = ["owner-hotkey", "hk1", "hk2", "hk3"]
+    hotkeys[incentive_uid] = INCENTIVE_HOTKEY
+    validator.metagraph = SimpleNamespace(n=4, uids=np.arange(4), last_update=np.zeros(4),
+                                          hotkeys=hotkeys)
+    validator.scores = np.asarray(scores, dtype=np.float32)
+    if callable(min_allowed):
+        validator.subtensor.min_allowed_weights = min_allowed
+    else:
+        validator.subtensor.min_allowed_weights = lambda netuid: min_allowed
+    validator.subtensor.max_weight_limit = lambda netuid: limit
+    events = []
+    validator.subtensor.set_weights = lambda **kwargs: events.append(("submit", kwargs)) or (True, "ok")
+    for level in ("info", "warning", "error"):
+        monkeypatch.setattr(base_validator.bt.logging, level,
+                            lambda msg="", *a, _level=level, **k: events.append((_level, str(msg))))
+    return validator, events
+
+
+def _submitted(events):
+    return [kwargs for kind, kwargs in events if kind == "submit"]
+
+
+def _refusals(events):
+    return [msg for kind, msg in events if kind == "error" and msg.startswith("WEIGHT_VECTOR_REFUSED")]
+
+
+def test_vector_shorter_than_min_allowed_weights_is_refused_without_an_extrinsic(monkeypatch):
+    validator, events = _wide_validator(monkeypatch, [0.9, 0.0, 0.1, 0.0], min_allowed=3, limit=0.1)
+
+    assert validator.set_weights() is False
+
+    assert _submitted(events) == []
+    assert _refusals(events) == ["WEIGHT_VECTOR_REFUSED reason=below_min_allowed_weights uids=[0, 2] "
+                                 "min_allowed_weights=3"]
+
+
+@pytest.mark.parametrize("limit", [0.1, 0.5])
+def test_submitted_weights_are_not_reshaped_by_max_weight_limit(monkeypatch, limit):
+    validator, events = _wide_validator(monkeypatch, [0.9, 0.0, 0.1, 0.0], min_allowed=1, limit=limit)
+
+    assert validator.set_weights() is True
+
+    [submitted] = _submitted(events)
+    assert set(submitted["uids"]) <= {0, 2}
+    assert (submitted["uids"], submitted["weights"]) == ([0, 2], [65535, 7282])
+    assert submitted["version_key"] == 20
+    assert ("info", "WEIGHT_VECTOR uids=[0, 2] weights=[65535, 7282]") in events
+    assert events.index(("info", "WEIGHT_VECTOR uids=[0, 2] weights=[65535, 7282]")) < [
+        kind for kind, _ in events].index("submit")
+    assert validator._last_submitted_weight_vector == [[0, 65535], [2, 7282]]
+
+
+def test_scores_on_other_uids_submit_only_uid_zero(monkeypatch):
+    validator, events = _wide_validator(monkeypatch, [0.0, 0.6, 0.1, 0.3], min_allowed=1)
+
+    assert validator.set_weights() is True
+
+    [submitted] = _submitted(events)
+    assert (submitted["uids"], submitted["weights"]) == ([0], [65535])
+    assert _refusals(events) == []
+
+
+def test_burn_only_vector_below_min_allowed_weights_is_refused_not_padded(monkeypatch):
+    validator, events = _wide_validator(monkeypatch, [1.0, 0.0, 0.0, 0.0], min_allowed=2)
+
+    assert validator.set_weights() is False
+
+    assert _submitted(events) == []
+    assert _refusals(events) == ["WEIGHT_VECTOR_REFUSED reason=below_min_allowed_weights uids=[0] "
+                                 "min_allowed_weights=2"]
+
+
+def test_unknown_min_allowed_weights_is_refused(monkeypatch):
+    validator, events = _wide_validator(monkeypatch, [0.9, 0.0, 0.1, 0.0], min_allowed=None)
+
+    assert validator.set_weights() is False
+
+    assert _submitted(events) == []
+    assert _refusals(events) == ["WEIGHT_VECTOR_REFUSED reason=min_allowed_weights_unknown"]
+
+
+def test_min_allowed_weights_read_error_is_refused_with_the_endpoint_scrubbed(monkeypatch):
+    secret_endpoint = "wss://rpc.example/ws/SECRETKEY"
+
+    def unreachable(netuid):
+        raise ConnectionError(f"cannot reach {secret_endpoint}")
+
+    validator, events = _wide_validator(monkeypatch, [0.9, 0.0, 0.1, 0.0], min_allowed=unreachable)
+    validator.subtensor.chain_endpoint = secret_endpoint
+
+    assert validator.set_weights() is False
+
+    assert _submitted(events) == []
+    [refusal] = _refusals(events)
+    assert refusal.startswith("WEIGHT_VECTOR_REFUSED reason=read_error")
+    assert "SECRETKEY" not in refusal
+
+
+def test_set_weights_module_no_longer_imports_the_sdk_weight_processing():
+    assert not hasattr(base_validator, "process_weights_for_netuid")
 
 
 # --- pending-commit check failures ----------------------------------------------------------------

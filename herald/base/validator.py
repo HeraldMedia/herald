@@ -16,11 +16,9 @@ from traceback import print_exception
 from urllib.parse import urlsplit
 
 from herald.base.neuron import BaseNeuron
-from herald.base.utils.weight_utils import (
-    process_weights_for_netuid,
-    convert_weights_and_uids_for_emit,
-)
 from herald.utils.config import add_validator_args
+from herald.validator.news.emission import WeightVectorRefused, allowed_emit_vector
+from herald.validator.utils import config as validator_config
 
 # Operational knobs for the pending weight-commit check. None of them is a consensus parameter.
 WEIGHT_CHECK_ATTEMPTS_ENV = "HERALD_WEIGHT_CHECK_ATTEMPTS"
@@ -147,10 +145,10 @@ class BaseValidatorNeuron(BaseNeuron):
         # Init sync with the network. Updates the metagraph.
         self.sync()
 
-        # No axon. A Herald validator answers no requests: nothing attaches a handler here, so
-        # there is no inbound port to open and no address worth publishing on chain. Every call it
-        # makes is outbound: chain RPC, the Herald backend, article and price fetches. Miners still
-        # serve an axon.
+        # No axon. A Herald validator answers no requests: it reads contributor submissions from the
+        # Herald backend and queries no miner axons, so there is no handler to attach, no inbound
+        # port to open and no address to publish on chain. Every call it makes is outbound (chain
+        # RPC, the Herald backend, article and price fetches). Miners still serve an axon.
 
         # Create asyncio event loop to manage async tasks.
         self.loop = asyncio.get_event_loop()
@@ -446,8 +444,12 @@ class BaseValidatorNeuron(BaseNeuron):
         self._suppressed_weight_submissions = 0
 
     def set_weights(self):
-        """
-        Sets the validator weights to the metagraph hotkeys based on the scores it has received from the miners. The weights determine the trust and incentive level the validator assigns to miner nodes on the network.
+        """Submit the scores as weights on UID 0 and the incentive hotkey's UID only.
+
+        The u16 vector is built from the scores directly: it is never padded with other registered
+        UIDs and never clipped to MaxWeightsLimit. A vector that would reach any other UID, or is
+        shorter than MinAllowedWeights, is refused: WEIGHT_VECTOR_REFUSED is logged at ERROR and no
+        extrinsic is sent.
         """
 
         # Check if self.scores contains any NaN values and log a warning if it does.
@@ -456,8 +458,6 @@ class BaseValidatorNeuron(BaseNeuron):
                 f"Scores contain NaN values. This may be due to a lack of responses from miners, or a bug in your reward functions."
             )
 
-        # Calculate the average reward for each uid across non-zero values.
-        # Replace any NaN values with 0.
         # Compute the norm of the scores
         norm = np.linalg.norm(self.scores, ord=1, axis=0, keepdims=True)
 
@@ -465,38 +465,23 @@ class BaseValidatorNeuron(BaseNeuron):
             bt.logging.info("No rewarded miners in the current epoch; skipping weight submission")
             return False
 
-        # Check if the norm contains NaN values
-        if np.isnan(norm).any():
-            norm = np.ones_like(norm)
-
-        # Compute raw_weights safely
-        raw_weights = self.scores / norm
-
-        bt.logging.debug("raw_weights", raw_weights)
-        bt.logging.debug("raw_weight_uids", str(self.metagraph.uids.tolist()))
-        # Process the raw weights to final_weights via subtensor limitations.
-        (
-            processed_weight_uids,
-            processed_weights,
-        ) = process_weights_for_netuid(
-            uids=self.metagraph.uids,
-            weights=raw_weights,
-            netuid=self.config.netuid,
-            subtensor=self.subtensor,
-            metagraph=self.metagraph,
-        )
-        bt.logging.debug("processed_weights", processed_weights)
-        bt.logging.debug("processed_weight_uids", processed_weight_uids)
-
-        # Convert to uint16 weights and uids.
-        (
-            uint_uids,
-            uint_weights,
-        ) = convert_weights_and_uids_for_emit(
-            uids=processed_weight_uids, weights=processed_weights
-        )
-        bt.logging.debug("uint_weights", uint_weights)
-        bt.logging.debug("uint_uids", uint_uids)
+        try:
+            min_allowed = self.subtensor.min_allowed_weights(self.config.netuid)
+            uint_uids, uint_weights = allowed_emit_vector(
+                self.scores, self.metagraph.hotkeys,
+                validator_config.HERALD_INCENTIVE_HOTKEY, min_allowed,
+            )
+        except WeightVectorRefused as refused:
+            bt.logging.error(f"WEIGHT_VECTOR_REFUSED reason={refused.reason}")
+            return False
+        except Exception as e:
+            try:
+                detail = _scrubbed(e, self._raw_chain_endpoint())
+            except Exception:
+                detail = type(e).__name__
+            bt.logging.error(f"WEIGHT_VECTOR_REFUSED reason=read_error ({detail})")
+            return False
+        bt.logging.info(f"WEIGHT_VECTOR uids={uint_uids} weights={uint_weights}")
         submitted_vector = [[int(uid), int(weight)] for uid, weight in zip(uint_uids, uint_weights)]
         self._last_submitted_weight_vector = submitted_vector
         self._last_submitted_weight_vector_hash = hashlib.sha256(

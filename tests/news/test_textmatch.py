@@ -26,7 +26,7 @@ def test_containment_exact_and_unrelated():
 
 
 def test_containment_survives_editing():
-    # A journalist trims and reorders but keeps most sentences: still well above threshold.
+    # An editor trims and reorders but keeps most sentences: still well above threshold.
     edited = ("Herald, the verified media placement subnet on Bittensor, today announced its public pilot. "
               "The pilot pays miners only for articles that pass an automated oracle, the company said.")
     assert containment(edited, DRAFT) > 0.6

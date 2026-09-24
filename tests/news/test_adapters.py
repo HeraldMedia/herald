@@ -1,4 +1,7 @@
+from datetime import datetime, timezone
 from types import SimpleNamespace
+
+import pytest
 
 from herald.validator.news import adapters
 
@@ -28,6 +31,40 @@ def test_nyt_adapter_builds_authoritative_excerpt(monkeypatch):
     assert fr.published_ts is not None
     # topic_text is the unfakeable authoritative blob (headline + abstract + lead + tags + section)
     assert "Big News Today" in fr.topic_text and "Ukraine" in fr.topic_text and "World" in fr.topic_text
+
+
+@pytest.mark.parametrize("pub_date, published, exact", [
+    ("2026-07-02T06:00:00+0000", datetime(2026, 7, 2, 6, 0, tzinfo=timezone.utc), True),
+    ("2026-07-02T06:00:00Z", datetime(2026, 7, 2, 6, 0, tzinfo=timezone.utc), True),
+    ("2026-07-02T08:00:00+02:00", datetime(2026, 7, 2, 6, 0, tzinfo=timezone.utc), True),
+    ("2026-07-02T06:00:00", datetime(2026, 7, 2, 6, 0, tzinfo=timezone.utc), False),
+    ("2026-07-02", datetime(2026, 7, 2, tzinfo=timezone.utc), False),
+    ("2026-07-02T00:00:00+0000", datetime(2026, 7, 2, tzinfo=timezone.utc), False),
+    ("2026-07-02T00:00:00-04:00", datetime(2026, 7, 2, 4, 0, tzinfo=timezone.utc), False),
+    ("2026-07-02T00:00:01Z", datetime(2026, 7, 2, 0, 0, 1, tzinfo=timezone.utc), True),
+])
+def test_nyt_publication_time_is_exact_only_with_an_explicit_offset(pub_date, published, exact):
+    fr = adapters._from_nyt_doc(DOC["web_url"], {**DOC, "pub_date": pub_date})
+    assert fr.published_ts == published.timestamp()
+    assert fr.published_exact is exact
+
+
+@pytest.mark.parametrize("pub_date, stated", [
+    ("2026-07-02T00:00:00+02:00", "2026-07-02"),
+    ("2026-07-02T00:00:00+0000", "2026-07-02"),
+    ("2026-07-02", "2026-07-02"),
+    ("2026-07-02T23:30:00", "2026-07-02"),
+    ("2026-07-02T06:00:00+0000", None),
+])
+def test_nyt_publication_time_that_is_not_exact_carries_the_date_it_states(pub_date, stated):
+    fr = adapters._from_nyt_doc(DOC["web_url"], {**DOC, "pub_date": pub_date})
+    assert fr.published_date == stated
+
+
+@pytest.mark.parametrize("pub_date", [None, "", "not a date", 1751436000])
+def test_nyt_missing_or_unreadable_publication_time_is_none(pub_date):
+    fr = adapters._from_nyt_doc(DOC["web_url"], {**DOC, "pub_date": pub_date})
+    assert fr.published_ts is None and fr.published_exact is False and fr.published_date is None
 
 
 def test_nyt_adapter_requires_exact_web_url_match(monkeypatch):

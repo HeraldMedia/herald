@@ -36,8 +36,9 @@ class ClaimRecord(BaseModel):
     evidence_text: typing.Optional[str] = Field(default=None, max_length=MAX_EVIDENCE_TEXT)
     evidence_author: typing.Optional[str] = Field(default=None, max_length=120)
     evidence_window: typing.Optional[typing.List[_ShortStr]] = Field(default=None, max_length=2)
-    # Claim-time snapshot of the article's extracted text. Validators anchor it against their
-    # own fetch, then run the content checks on these identical bytes so the fleet agrees.
+    # Claim-time snapshot of the article's extracted text. Validators score their own fetch of the
+    # article and reject a snapshot that does not match it; publisher-API outlets, which validators
+    # fetch only as an excerpt, require one.
     snapshot_text: typing.Optional[str] = Field(default=None, max_length=MAX_SNAPSHOT_TEXT)
 
 
