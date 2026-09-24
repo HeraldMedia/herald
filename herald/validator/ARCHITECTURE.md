@@ -28,11 +28,14 @@ uploaded text present, not paid content, on topic, search presence
 Prepaid client pools + standing briefs → payable USD for the epoch
     │
     ▼
-w = min(1, payable USD / USD value of the day's miner emission)
-weights {incentive hotkey UID: w, UID 0: 1 − w}; a failed shared step → {UID 0: 1}
+share = min(1, payable USD / USD value of the day's miner emission)
+HERALD_BURN_UNEARNED=false (default): weights {incentive hotkey UID: 1}, every epoch
+HERALD_BURN_UNEARNED=true: weights {incentive hotkey UID: share, UID 0: 1 − share};
+                           a failed shared step → {UID 0: 1}
     │
     ▼
-Signed snapshots → backend confirms the epoch and credits contributor accounts →
+Signed snapshots, stating contributor_share_ppb → backend confirms the epoch and credits
+contributor accounts →
 contributors claim their share of the incentive hotkey's alpha to a connected wallet
 ```
 
@@ -44,7 +47,8 @@ contributors claim their share of the incentive hotkey's alpha to a connected wa
   website is used only to claim earnings.
 - **The Herald backend** (`herald-backend`, a separate service) signs the brief feed, records each
   upload and link against the contributor's account, serves the submissions feed, confirms signed
-  epoch snapshots, and credits each account its share of the alpha the incentive hotkey receives.
+  epoch snapshots, and credits each account its share of the part of the incentive hotkey's alpha
+  that the epoch's snapshot states is owed to contributors (`contributor_share_ppb`).
 - **Validators** verify articles, vest their value on the incentive hotkey, and set weights on that
   hotkey and UID 0.
 - **The incentive hotkey** is one hotkey registered on the subnet and configured identically on
@@ -89,7 +93,7 @@ pool. Validators verify the signature and freshness timestamp.
 
 The scoring block's timestamp, the subnet's alpha price, its per-block alpha emission and its
 mechanism emission split are read from the chain at the scoring block; TAO/USD comes from
-CoinGecko. An input that is missing, non-finite or not positive burns the day.
+CoinGecko. An input that is missing, non-finite or not positive fails the day.
 
 ### Public web
 
@@ -104,11 +108,13 @@ epoch (`HERALD_VEST_EPOCH_LEN` blocks, about one day, lagged behind the chain he
 
 1. Load the Herald ledger and derive the evaluation epoch. If either fails, log the error and change
    nothing.
-2. For an epoch that is already scored, keep scores only on UID 0 and the incentive hotkey's current
-   UID; any other scores are replaced by all weight on UID 0 (`stale_scores`), which the next
-   weight submission sends.
-3. Fetch and verify the signed active brief feed. A verified empty feed puts all weight on UID 0
-   (`no_briefs`).
+2. For an epoch that is already scored, keep its vector on the incentive hotkey's current UID
+   (`stale_scores`), and the next weight submission sends any replacement. With
+   `HERALD_BURN_UNEARNED=true`, scores on any UID other than 0 and that UID are replaced by all
+   weight on UID 0. With `false`, anything other than all weight on that UID is replaced by all
+   weight on it, or on UID 0 while it cannot be resolved.
+3. Fetch and verify the signed active brief feed. A verified empty feed (`no_briefs`) puts all
+   weight on the incentive hotkey's UID, or on UID 0 with `HERALD_BURN_UNEARNED=true`.
 4. Resolve the incentive hotkey's UID: the hotkey must be set, registered, different from this
    validator's hotkey, and not at UID 0.
 5. Read the scoring block's chain time and price one day of miner emission (`pricing.py`).
@@ -121,18 +127,21 @@ epoch (`HERALD_VEST_EPOCH_LEN` blocks, about one day, lagged behind the chain he
 9. Expire entries past their maximum age and entries without a submission id; check the rest for
    liveness and collect released installments.
 10. Apply prepaid client pools and sum the payable USD.
-11. Build the incentive and burn vector, replace the scores with it, publish result items and a
-    signed epoch snapshot, and save the ledger.
+11. Build the weight vector (`incentive_weight_vector()`) and the contributors' share
+    (`contributor_share_ppb()`), replace the scores with the vector, publish result items and a
+    signed epoch snapshot whose state carries `burn_unearned` and `contributor_share_ppb`, and save
+    the ledger.
 12. Submit the latest vector whenever the chain's weight record for this validator's uid is at
     least `HERALD_WEIGHT_RESUBMIT_BLOCKS` blocks old (default 180) and no commit of this hotkey is
     pending reveal, after the base `--neuron.epoch_length` gate. The vector is scored once per epoch
     but submitted on this block cadence, so the chain's copy stays inside the activity cutoff; with
     commit-reveal the record is refreshed about once per tempo.
 
-An error in steps 4–11 burns the epoch (`_burn_epoch`): the ledger returns to its state before the
-pass, the scores become all weight on UID 0, the epoch is marked scored so it is not retried, and
-nothing is published. Installments not released that day are caught up by the next successful
-epoch.
+An error in steps 4–11 fails the epoch (`_fail_epoch`): the ledger returns to its state before the
+pass, the epoch is marked scored so it is not retried, and nothing is published. The scores become
+all weight on the incentive hotkey's UID (`INCENTIVE_FULL`), or all weight on UID 0
+(`INCENTIVE_BURN`) with `HERALD_BURN_UNEARNED=true` or when that UID cannot be resolved (step 4).
+Installments not released that day are caught up by the next successful epoch.
 
 ## Selection
 
@@ -213,10 +222,23 @@ daily_miner_alpha = BLOCKS_PER_DAY (7200) × alpha_out_emission × MINER_EMISSIO
 daily_usd         = daily_miner_alpha × alpha price in TAO × TAO/USD
 ```
 
-`incentive_burn_vector()` in `emission.py` returns `([0, uid], [1 − w, w])` with
-`w = min(1, payable_usd / daily_usd)` and zero entries dropped, or `([0], [1.0])` when nothing is
-payable or there is no usable incentive UID. The validator logs `INCENTIVE_WEIGHT` with `w`, the
-payable USD and every pricing input.
+`incentive_weight_vector()` in `emission.py` builds the epoch's vector from `HERALD_BURN_UNEARNED`,
+a consensus setting that must be identical on every validator:
+
+- `true`: `incentive_burn_vector()` returns `([0, uid], [1 − w, w])` with
+  `w = min(1, payable_usd / daily_usd)` and zero entries dropped, or `([0], [1.0])` when nothing is
+  payable or there is no usable incentive UID.
+- `false` (default): `full_incentive_vector()` returns `([uid], [1.0])`, whatever was verified, or
+  `([0], [1.0])` when there is no usable incentive UID.
+
+`contributor_share_ppb()` gives the part of the incentive UID's receipt for the epoch that is owed to
+contributors, in parts per billion: `1000000000` with the burn, since the chain already scaled the
+receipt to verified value, and otherwise `floor(min(1, payable_usd / daily_usd) × 10^9)`, computed
+exactly with rational arithmetic on the two values, or `0` when nothing is payable or `daily_usd` is
+not a finite positive number. The epoch snapshot's state records it with `burn_unearned`, so the
+backend credits contributors that part of what the incentive hotkey received. The validator logs
+`INCENTIVE_WEIGHT` with `w` (the incentive UID's weight), the payable USD, every pricing input,
+`burn_unearned` and `contributor_share_ppb`.
 
 At submission, `set_weights()` in `herald/base/validator.py` reads the subnet's MinAllowedWeights
 and calls `allowed_emit_vector()`. It normalizes the scores over UID 0 and the incentive hotkey's
@@ -224,7 +246,8 @@ current UID (scores anywhere else become all weight on UID 0, logged as `WEIGHT_
 converts them to u16 without padding or `MaxWeightsLimit` clipping, and raises
 `WeightVectorRefused` when the vector is empty, reaches another UID, MinAllowedWeights is unknown,
 or the vector is shorter than MinAllowedWeights. A refusal logs `WEIGHT_VECTOR_REFUSED reason=...`
-at ERROR and sends no extrinsic. A burn-only vector has one entry, so MinAllowedWeights must be 1.
+at ERROR and sends no extrinsic. The full-incentive and burn-only vectors have one entry each, so
+MinAllowedWeights must be 1.
 
 ## State
 
@@ -237,8 +260,8 @@ Validator state has two layers:
   file format and are no longer updated.
 
 The score checkpoint is restored before initial sync so startup cannot overwrite it with zeroes.
-Herald state is atomically replaced after scoring or a burn and again after successful weight
-inclusion. The submitted-epoch marker is bookkeeping: when the latest vector is submitted again is
+Herald state is atomically replaced after scoring or a failed pass and again after successful
+weight inclusion. The submitted-epoch marker is bookkeeping: when the latest vector is submitted again is
 decided from the age of the chain's weight record, not from the marker. Compose persists both files
 under the `validator_state` volume.
 
@@ -251,16 +274,16 @@ snapshot and weight-receipt ingestion, and contributor accounts and earnings.
 
 ## Consensus controls
 
-`herald/validator/utils/consensus.py` fingerprints scoring, timing, the emission mode, pricing
-constants, submission intake, provider availability, LLM provider/model readiness, fetch limits,
+`herald/validator/utils/consensus.py` fingerprints scoring, timing, the emission mode and burn
+setting, pricing constants, submission intake, provider availability, LLM provider/model readiness, fetch limits,
 brief-signature policy, and registry trust settings. The fingerprint detects fleet drift; it does
 not coordinate deployment. Operators must still roll out changes together.
 
 The following must match across validators:
 
 - epoch, vesting, liveness and payout parameters;
-- the emission mode, burn UID, incentive hotkey, price source, miner emission share and blocks per
-  day;
+- the emission mode, burn UID, `HERALD_BURN_UNEARNED`, incentive hotkey, price source, miner
+  emission share and blocks per day;
 - submission intake: the draft-match threshold, publication buffer, maximum article age and
   per-epoch submission cap;
 - fetch/search provider availability, quorum, and limits;

@@ -3,10 +3,22 @@
 Herald is Bittensor netuid 69 for verified editorial media placement. PR firms and PR professionals
 submit articles through the Herald website. Validators read those submissions from the backend,
 verify each article against the outlet's own page, vest its value on one incentive hotkey
-(`HERALD_INCENTIVE_HOTKEY`), and set weights on that hotkey and UID 0 only. The incentive hotkey
-receives the epoch's verified USD installments divided by the USD value of the day's miner
-emission, at most 100%; UID 0 receives the rest, which is burned. Registered miner hotkeys receive
-no weight.
+(`HERALD_INCENTIVE_HOTKEY`), and set weights on that hotkey and UID 0 only. Registered miner
+hotkeys receive no weight.
+
+The epoch's verified USD installments divided by the USD value of the day's miner emission, at most
+100%, is the share owed to contributors. `HERALD_BURN_UNEARNED` decides what the weights do with it,
+and must be identical on every validator:
+
+- `false` (default): the incentive hotkey receives all the weight every epoch, including a day whose
+  pricing, feed or scoring fails. Each epoch snapshot states the share of that receipt owed to
+  contributors as `contributor_share_ppb` (parts per billion), and the rest stays with the incentive
+  hotkey.
+- `true`: the incentive hotkey's weight is the share and UID 0 receives the rest, which is burned;
+  a failed day goes entirely to UID 0. All of the incentive hotkey's receipt is then owed to
+  contributors (`contributor_share_ppb` is 1000000000).
+
+In both modes, an incentive hotkey whose UID cannot be resolved puts all weight on UID 0.
 
 The core path is rules-based. An LLM is optional and must not be enabled unless every validator
 uses the same provider and pinned model.
@@ -40,9 +52,10 @@ earliest upload, at most `HERALD_MAX_SUBMISSIONS_PER_EPOCH` per epoch.
 Rewards vest over the configured persistence window while the article stays live. Confirmed
 removal or conversion to paid content claws back the remaining vest. There is no slashing.
 
-When the verified brief feed is empty, or a step every article depends on fails (the incentive
-hotkey check, chain time, pricing, the outlet registry or the submissions feed), the validator
-puts all weight on UID 0 for the day. See [docs/validator.md](../../docs/validator.md) §8 for the
+When the verified brief feed is empty, or a step every article depends on fails (chain time,
+pricing, the outlet registry or the submissions feed), the day is not scored: all its weight goes
+to the incentive hotkey's UID, or to UID 0 with `HERALD_BURN_UNEARNED=true`. When the incentive
+hotkey check fails, all weight goes to UID 0 in both modes. See [docs/validator.md](../../docs/validator.md) §8 for the
 submissions feed, settings, pricing inputs, weight vector checks and log tags.
 
 ## Requirements
@@ -51,7 +64,7 @@ submissions feed, settings, pricing inputs, weight vector checks and log tags.
 - A registered validator hotkey with subnet-69 alpha stake
 - Outbound HTTPS and chain RPC only: a validator serves no axon and takes no inbound traffic
 - The same consensus-affecting configuration as every other Herald validator, including
-  `HERALD_INCENTIVE_HOTKEY`
+  `HERALD_INCENTIVE_HOTKEY` and `HERALD_BURN_UNEARNED`
 - The offline-signed production outlet registry
 - A signed brief-board validator feed
 - `HERALD_RESULTS_ENDPOINT` with a results read credential (the submissions feed) and write
@@ -59,7 +72,8 @@ submissions feed, settings, pricing inputs, weight vector checks and log tags.
 - ScrapingBee credentials for the shipped registry's `proxy:*`-strategy outlets
 - SerpAPI and/or Brave credentials for the search-index multiplier
 - Outbound HTTPS to CoinGecko for the TAO/USD price
-- A subnet MinAllowedWeights of 1, so single-entry burn vectors are accepted
+- A subnet MinAllowedWeights of 1, so single-entry vectors (all weight on the incentive hotkey's
+  UID, or on UID 0) are accepted
 
 Copy the root configuration template:
 
@@ -125,7 +139,7 @@ HERALD_REGISTRY_AUTHORITY_HOTKEY=<AUTHORITY_SS58>
 ```
 
 When an authority hotkey is configured, a missing or mismatched anchor fails closed and the day is
-burned.
+not scored.
 
 For a guarded two-validator PM2 handoff after a testnet canary has scored its target epoch:
 
@@ -163,24 +177,31 @@ HERALD_REQUIRE_SIGNED_BRIEFS=true
 HERALD_BRIEFS_MAX_AGE=900
 ```
 
-An explicitly empty, valid feed puts all weight on UID 0 for the epoch
-(`INCENTIVE_BURN epoch=<e> reason=no_briefs`). A network failure uses the existing brief cache when
+An explicitly empty, valid feed puts all of the epoch's weight on the incentive hotkey's UID
+(`INCENTIVE_FULL epoch=<e> reason=no_briefs uid_star=<uid>`), or on UID 0 with
+`HERALD_BURN_UNEARNED=true` (`INCENTIVE_BURN epoch=<e> reason=no_briefs`). A network failure uses the existing brief cache when
 available; it is not treated as an authoritative empty feed.
 
 ## Incentive hotkey and submissions
 
 ```dotenv
 HERALD_INCENTIVE_HOTKEY=<INCENTIVE_SS58>
+HERALD_BURN_UNEARNED=false
 HERALD_RESULTS_ENDPOINT=https://herald-api.example
 HERALD_RESULTS_READ_TOKEN=<READ_TOKEN>
 ```
 
 - `HERALD_INCENTIVE_HOTKEY` is provided by the subnet operator and must be identical on every
   validator; it is part of the consensus fingerprint. Production preflight requires a valid SS58
-  address that differs from `HERALD_REGISTRY_AUTHORITY_HOTKEY`. At scoring time the day is burned
-  if the hotkey is not registered, is this validator's own hotkey, or holds UID 0.
+  address that differs from `HERALD_REGISTRY_AUTHORITY_HOTKEY`. At scoring time all of the day's
+  weight goes to UID 0 if the hotkey is not registered, is this validator's own hotkey, or holds
+  UID 0.
+- `HERALD_BURN_UNEARNED` (default `false`) must also be identical on every validator; it is part of
+  the consensus fingerprint. With `false` the incentive hotkey receives all the weight and each
+  snapshot states the share owed to contributors; with `true` the weight is that share and UID 0
+  burns the rest. `1`, `true` or `yes` (any case) turns it on; anything else leaves it off.
 - The validator reads `GET /api/v4/validator/submissions` with `HERALD_RESULTS_READ_TOKEN`, or the
-  shared `HERALD_RESULTS_TOKEN`. A feed that cannot be read burns the day.
+  shared `HERALD_RESULTS_TOKEN`. A feed that cannot be read fails the day.
 - Uploaded draft text is used only for verification. The validator never publishes, stores or logs
   it.
 - `HERALD_DRAFT_MATCH_THRESHOLD` (default `0.6`), `HERALD_PUBLISH_BUFFER_DAYS` (`3`),
@@ -234,14 +255,16 @@ and price pages, all outbound. `AXON_EXTERNAL_IP` and `AXON_EXTERNAL_PORT` are m
   edition but independently verifies its Ed25519 signature and finalized authority anchor before
   caching it; a new anchor without its matching edition fails closed.
 - With `HERALD_RESULTS_ENDPOINT` set, each scored epoch publishes an immutable hotkey-signed epoch
-  snapshot containing exact micro-USD pool accounting, daily contributions, lifecycle state, and
-  the intended vector on UID 0 and the incentive hotkey's UID. A second signed receipt follows
-  weight submission. An epoch burned by a failed step publishes no snapshot.
+  snapshot containing exact micro-USD pool accounting, daily contributions, lifecycle state, the
+  intended vector on UID 0 and the incentive hotkey's UID, the burn setting it was scored under
+  (`burn_unearned`) and the share of the incentive hotkey's receipt owed to contributors
+  (`contributor_share_ppb`, 0 to 1000000000). A second signed receipt follows weight submission. An
+  epoch whose scoring failed publishes no snapshot.
 - The backend confirms an epoch when `HERALD_QUORUM_REQUIRED` enrolled reporters agree. Set it to 1
   when a single operator's validator is the only confirming reporter.
 - Roll out consensus changes to the entire fleet together; automatic git updates should stay off.
-- Give every validator the same registry edition, anchor, brief key, incentive hotkey, provider
-  set, quorum, and LLM configuration.
+- Give every validator the same registry edition, anchor, brief key, incentive hotkey,
+  `HERALD_BURN_UNEARNED`, provider set, quorum, and LLM configuration.
 
 ## Verification and monitoring
 
@@ -253,9 +276,10 @@ pm2 logs herald_validator
 curl -fsS https://herald-api.example/public/articles
 ```
 
-Watch for `SUBMISSION_RESULT`, `SUBMISSION_CREDITED`, `INCENTIVE_WEIGHT`, `INCENTIVE_BURN` and
-`WEIGHT_VECTOR_REFUSED` lines; [docs/validator.md](../../docs/validator.md) §8.8 lists every tag.
+Watch for `SUBMISSION_RESULT`, `SUBMISSION_CREDITED`, `INCENTIVE_WEIGHT`, `INCENTIVE_FULL`,
+`INCENTIVE_BURN` and `WEIGHT_VECTOR_REFUSED` lines; [docs/validator.md](../../docs/validator.md) §8.8 lists every tag.
 
 Before mainnet, rehearse with at least two validators and several submissions. Confirm identical
-fingerprints, restart recovery, persistence checks, `INCENTIVE_WEIGHT` and `INCENTIVE_BURN` lines,
-and a real `set_weights` extrinsic that carries only UID 0 and the incentive hotkey's UID.
+fingerprints, restart recovery, persistence checks, `INCENTIVE_WEIGHT`, `INCENTIVE_FULL` and
+`INCENTIVE_BURN` lines, and a real `set_weights` extrinsic that carries only UID 0 and the incentive
+hotkey's UID.

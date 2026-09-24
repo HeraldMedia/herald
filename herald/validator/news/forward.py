@@ -9,6 +9,7 @@ import numpy as np
 from herald.validator.utils.briefs import get_briefs
 from herald.validator.utils.consensus import consensus_fingerprint
 from herald.validator.utils.config import (
+    HERALD_BURN_UNEARNED,
     HERALD_DEAD_CONFIRM_EPOCHS,
     HERALD_EPOCH_LAG,
     HERALD_INCENTIVE_HOTKEY,
@@ -22,7 +23,13 @@ from herald.validator.utils.config import (
     VEST_EPOCH_LEN,
 )
 from .chain import get_commitments_with_block
-from .emission import BURN_UID, apply_reward_pools, incentive_burn_vector, incentive_uid
+from .emission import (
+    BURN_UID,
+    apply_reward_pools,
+    contributor_share_ppb,
+    incentive_uid,
+    incentive_weight_vector,
+)
 from .fetch import fetch_article
 from .judge import judge
 from .oracle import verify_article
@@ -42,7 +49,11 @@ _CONSENSUS_FP = consensus_fingerprint()
 
 
 class _EpochBurn(Exception):
-    """An input every article depends on is missing, so the whole epoch goes to BURN_UID."""
+    """An input every article depends on is missing, so the epoch is not scored.
+
+    With HERALD_BURN_UNEARNED the whole epoch goes to BURN_UID; without it the incentive UID keeps
+    all the weight unless the reason is that the incentive UID itself cannot be resolved.
+    """
 
     def __init__(self, reason: str):
         super().__init__(reason)
@@ -99,6 +110,12 @@ def _set_burn_scores(self):
     self.update_scores([1.0], [BURN_UID])
 
 
+def _set_incentive_scores(self, uid_star: int):
+    """Replace the score vector with all weight on the incentive UID."""
+    self.scores[...] = 0
+    self.update_scores([1.0], [uid_star])
+
+
 def _load_registry(self, block: int, network):
     """The outlet registry, verified against the registry authority's on-chain anchor when an
     authority hotkey is configured. That anchor is the only commitment this validator reads."""
@@ -124,6 +141,14 @@ def _checked_incentive_uid(self, incentive_hotkey: str) -> int:
     if uid == BURN_UID:
         raise _EpochBurn("incentive_hotkey_at_burn_uid")
     return uid
+
+
+def _resolved_incentive_uid(self):
+    """The incentive hotkey's UID, or None when it cannot receive weight."""
+    try:
+        return _checked_incentive_uid(self, HERALD_INCENTIVE_HOTKEY)
+    except _EpochBurn:
+        return None
 
 
 def _judge_fn(briefs):
@@ -201,7 +226,12 @@ def _restrict_scored_epoch(self, state: HeraldState):
     Scores loaded from an earlier release, or left on a UID the incentive hotkey no longer holds,
     are replaced by all weight on BURN_UID. The ledger is not touched: the burn becomes the latest
     stored vector, which the block-cadence weight submission sends in place of the stale one.
+
+    Without HERALD_BURN_UNEARNED, _keep_full_incentive() applies instead.
     """
+    if not HERALD_BURN_UNEARNED:
+        _keep_full_incentive(self, state)
+        return
     uid_star = incentive_uid(self.metagraph.hotkeys, HERALD_INCENTIVE_HOTKEY)
     allowed = {BURN_UID} if uid_star is None else {BURN_UID, uid_star}
     scores = np.asarray(self.scores, dtype=np.float64)
@@ -212,6 +242,29 @@ def _restrict_scored_epoch(self, state: HeraldState):
     bt.logging.info(f"INCENTIVE_BURN epoch={state.last_scored_epoch} reason=stale_scores")
 
 
+def _keep_full_incentive(self, state: HeraldState):
+    """Without the burn, keep an already scored epoch's scores as all weight on the incentive UID.
+
+    Every epoch's vector is then all weight on the incentive hotkey's current UID, whatever its
+    scoring found, or all weight on BURN_UID while that UID cannot be resolved. Scores anywhere else
+    (from an earlier release, left on a UID the incentive hotkey no longer holds, or a burn from
+    before the incentive UID resolved) are replaced. The ledger is not touched.
+    """
+    uid_star = _resolved_incentive_uid(self)
+    target = BURN_UID if uid_star is None else uid_star
+    scores = np.asarray(self.scores, dtype=np.float64)
+    support = {int(uid) for uid in np.flatnonzero(np.isfinite(scores) & (scores > 0))}
+    if support == {target}:
+        return
+    if uid_star is None:
+        _set_burn_scores(self)
+        bt.logging.info(f"INCENTIVE_BURN epoch={state.last_scored_epoch} reason=stale_scores")
+    else:
+        _set_incentive_scores(self, uid_star)
+        bt.logging.info(f"INCENTIVE_FULL epoch={state.last_scored_epoch} reason=stale_scores "
+                        f"uid_star={uid_star}")
+
+
 def _burn_reason(exc: Exception) -> str:
     if isinstance(exc, _EpochBurn):
         return exc.reason
@@ -220,8 +273,12 @@ def _burn_reason(exc: Exception) -> str:
     return f"error ({type(exc).__name__}: {exc})"
 
 
-def _burn_epoch(self, epoch: int, before: dict, reason: str):
-    """All weight to BURN_UID for the epoch; every ledger change this pass made is discarded.
+def _fail_epoch(self, epoch: int, before: dict, reason: str):
+    """The epoch's scoring failed: every ledger change this pass made is discarded.
+
+    With HERALD_BURN_UNEARNED all weight goes to BURN_UID for the epoch. Without it the incentive
+    UID receives all the weight, because its weight does not depend on what was verified; only an
+    incentive UID that cannot be resolved burns.
 
     Installments that were released or drawn from a pool during the failed pass are released again
     by the next successful epoch, because a release catches up on missed epochs.
@@ -229,12 +286,21 @@ def _burn_epoch(self, epoch: int, before: dict, reason: str):
     try:
         state = HeraldState.from_dict(before)
         self.herald_state = state
-        _set_burn_scores(self)
-        state.last_scored_epoch = epoch
-        bt.logging.warning(f"INCENTIVE_BURN epoch={epoch} reason={reason}")
+        try:
+            uid_star = None if HERALD_BURN_UNEARNED else _resolved_incentive_uid(self)
+        except Exception:
+            uid_star = None  # the metagraph cannot be read: burn
+        if uid_star is None:
+            _set_burn_scores(self)
+            state.last_scored_epoch = epoch
+            bt.logging.warning(f"INCENTIVE_BURN epoch={epoch} reason={reason}")
+        else:
+            _set_incentive_scores(self, uid_star)
+            state.last_scored_epoch = epoch
+            bt.logging.warning(f"INCENTIVE_FULL epoch={epoch} reason={reason} uid_star={uid_star}")
         _save_state(self, state)
     except Exception as e:
-        bt.logging.error(f"Saving the burn for epoch {epoch} failed: {e}")
+        bt.logging.error(f"Saving the weights for epoch {epoch} failed: {e}")
 
 
 def _score_epoch(self, state: HeraldState, epoch: int, block: int):
@@ -249,10 +315,18 @@ def _score_epoch(self, state: HeraldState, epoch: int, block: int):
     briefs = get_briefs(now=now)
     if not briefs:
         # An explicit, successfully verified empty feed means there is no authorized work to pay.
-        _set_burn_scores(self)
+        if HERALD_BURN_UNEARNED:
+            _set_burn_scores(self)
+            state.last_scored_epoch = epoch
+            _save_state(self, state)
+            bt.logging.info(f"INCENTIVE_BURN epoch={epoch} reason=no_briefs")
+            return
+        # Without the burn the incentive UID keeps all the weight; an unresolvable one burns.
+        uid_star = _checked_incentive_uid(self, HERALD_INCENTIVE_HOTKEY)
+        _set_incentive_scores(self, uid_star)
         state.last_scored_epoch = epoch
         _save_state(self, state)
-        bt.logging.info(f"INCENTIVE_BURN epoch={epoch} reason=no_briefs")
+        bt.logging.info(f"INCENTIVE_FULL epoch={epoch} reason=no_briefs uid_star={uid_star}")
         return
 
     incentive_hotkey = HERALD_INCENTIVE_HOTKEY
@@ -337,8 +411,12 @@ def _score_epoch(self, state: HeraldState, epoch: int, block: int):
     paid = apply_reward_pools(installments, briefs, state.pool_spent)
     payable_usd = math.fsum(sorted(paid.values()))
 
-    # The incentive UID's share is the verified USD over the USD value of the day's miner emission.
-    uids, weights = incentive_burn_vector(payable_usd, price["daily_usd"], uid_star)
+    # The share owed to contributors is the verified USD over the USD value of the day's miner
+    # emission. With the burn it is the incentive UID's weight and UID 0 receives the rest; without
+    # it the incentive UID receives all the weight and the snapshot states the share.
+    uids, weights = incentive_weight_vector(payable_usd, price["daily_usd"], uid_star,
+                                            HERALD_BURN_UNEARNED)
+    share_ppb = contributor_share_ppb(payable_usd, price["daily_usd"], HERALD_BURN_UNEARNED)
     self.scores[...] = 0
     self.update_scores(weights, uids)
     state.last_scored_epoch = epoch
@@ -367,6 +445,8 @@ def _score_epoch(self, state: HeraldState, epoch: int, block: int):
         registry_version=registry.version_id,
         registry_hash=registry.content_hash,
         consensus=_CONSENSUS_FP,
+        burn_unearned=HERALD_BURN_UNEARNED,
+        contributor_share_ppb=share_ppb,
     ), self.wallet.hotkey)
 
     _save_state(self, state)
@@ -374,7 +454,8 @@ def _score_epoch(self, state: HeraldState, epoch: int, block: int):
         f"INCENTIVE_WEIGHT epoch={epoch} w={w:.6f} payable_usd={payable_usd:.6f} "
         f"daily_usd={price['daily_usd']:.6f} alpha_tao={price['alpha_tao']:.9f} "
         f"tao_usd={price['tao_usd']:.6f} daily_miner_alpha={price['daily_miner_alpha']:.6f} "
-        f"uid_star={uid_star}"
+        f"uid_star={uid_star} burn_unearned={str(bool(HERALD_BURN_UNEARNED)).lower()} "
+        f"contributor_share_ppb={share_ppb}"
     )
 
 
@@ -407,5 +488,5 @@ async def forward(self):
     try:
         _score_epoch(self, state, epoch, block)
     except Exception as e:
-        _burn_epoch(self, epoch, before, _burn_reason(e))
+        _fail_epoch(self, epoch, before, _burn_reason(e))
     time.sleep(VALIDATOR_WAIT)

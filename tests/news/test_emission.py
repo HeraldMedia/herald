@@ -6,11 +6,15 @@ import pytest
 from herald.validator.news import emission
 from herald.validator.news.emission import (
     BURN_UID,
+    SHARE_PPB,
     WeightVectorRefused,
     allowed_emit_vector,
     apply_reward_pools,
+    contributor_share_ppb,
+    full_incentive_vector,
     incentive_burn_vector,
     incentive_uid,
+    incentive_weight_vector,
 )
 from herald.validator.news.vesting import VestingLedger
 
@@ -271,6 +275,106 @@ def test_no_incentive_uid_burns_everything(uid_star):
 @pytest.mark.parametrize("daily", [0.0, -1.0, math.nan, math.inf])
 def test_unusable_daily_value_burns_everything(daily):
     assert as_lists(incentive_burn_vector(500.0, daily, UID_STAR)) == ([BURN_UID], [1.0])
+
+
+# --- the burn setting: both modes' vectors and the contributors' share ------------------------------
+
+PAYABLE_DAILY = [
+    (0.0, 1000.0), (-5.0, 1000.0), (math.nan, 1000.0), (math.inf, 1000.0), (250.0, 1000.0),
+    (500.0 / 30, 1234.5678), (1000.0 / 3, 1000.0), (999.999, 1000.0), (1000.0, 1000.0),
+    (5000.0, 1000.0), (500.0, 0.0), (500.0, -1.0), (500.0, math.nan), (500.0, math.inf),
+]
+
+
+@pytest.mark.parametrize("payable, daily", PAYABLE_DAILY)
+@pytest.mark.parametrize("uid_star", [UID_STAR, 1, 255, None, 0])
+def test_with_the_burn_the_vector_is_exactly_the_incentive_and_burn_vector(payable, daily, uid_star):
+    uids, weights = incentive_weight_vector(payable, daily, uid_star, True)
+    expected_uids, expected_weights = incentive_burn_vector(payable, daily, uid_star)
+    assert uids == expected_uids
+    assert weights.dtype == expected_weights.dtype == np.float32
+    assert weights.tobytes() == expected_weights.tobytes()
+
+
+@pytest.mark.parametrize("payable, daily, vector", [
+    (0.0, 1000.0, ([BURN_UID], [1.0])),
+    (250.0, 1000.0, ([0, UID_STAR], [0.75, 0.25])),
+    (500.0, 1000.0, ([0, UID_STAR], [0.5, 0.5])),
+    (100.0, 300.0, ([0, UID_STAR], [float(np.float32(1 - 1 / 3)), float(np.float32(1 / 3))])),
+    (1000.0, 1000.0, ([UID_STAR], [1.0])),
+    (5000.0, 1000.0, ([UID_STAR], [1.0])),
+    (500.0, math.nan, ([BURN_UID], [1.0])),
+])
+def test_with_the_burn_the_vectors_are_unchanged(payable, daily, vector):
+    assert as_lists(incentive_weight_vector(payable, daily, UID_STAR, True)) == vector
+
+
+@pytest.mark.parametrize("payable, daily", PAYABLE_DAILY)
+def test_without_the_burn_the_incentive_uid_receives_all_the_weight(payable, daily):
+    # Whatever was verified, priced or payable: the incentive UID's receipt does not depend on it.
+    assert as_lists(incentive_weight_vector(payable, daily, UID_STAR, False)) == ([UID_STAR], [1.0])
+
+
+@pytest.mark.parametrize("burn_unearned", [False, True])
+@pytest.mark.parametrize("uid_star", [None, 0])
+def test_without_an_incentive_uid_both_modes_burn_everything(burn_unearned, uid_star):
+    assert as_lists(incentive_weight_vector(5000.0, 1000.0, uid_star, burn_unearned)) == (
+        [BURN_UID], [1.0])
+
+
+def test_the_full_incentive_vector_is_a_single_entry():
+    assert as_lists(full_incentive_vector(UID_STAR)) == ([UID_STAR], [1.0])
+    assert as_lists(full_incentive_vector(np.int64(3))) == ([3], [1.0])
+    assert as_lists(full_incentive_vector(None)) == ([BURN_UID], [1.0])
+    assert as_lists(full_incentive_vector(0)) == ([BURN_UID], [1.0])
+
+
+@pytest.mark.parametrize("payable, daily", PAYABLE_DAILY)
+def test_with_the_burn_all_of_the_receipt_is_owed_to_contributors(payable, daily):
+    # The chain already scaled the incentive UID's receipt to verified value.
+    assert contributor_share_ppb(payable, daily, True) == SHARE_PPB == 1_000_000_000
+
+
+@pytest.mark.parametrize("payable, daily, share", [
+    (250.0, 1000.0, 250_000_000),
+    (500.0, 1000.0, 500_000_000),
+    (100.0, 1000.0, 100_000_000),
+    (1000.0 / 3, 1000.0, 333_333_333),
+    (2000.0 / 3, 1000.0, 666_666_666),
+    (1.0, 1e9, 1),
+    (1.0, 2e9, 0),  # half a part per billion rounds down
+    # The exact floor of the two values held: 0.3 is 0.29999999999999998889... as a float, so a
+    # rounded float product (300000000.0) would overstate it.
+    (0.3, 1.0, 299_999_999),
+    (999.999, 1000.0, 999_999_000),
+    (1000.0, 1000.0, 1_000_000_000),
+    (5000.0, 1000.0, 1_000_000_000),
+    (math.inf, 1000.0, 0),
+])
+def test_without_the_burn_the_share_is_the_floor_of_payable_over_daily_capped_at_1e9(payable, daily,
+                                                                                    share):
+    result = contributor_share_ppb(payable, daily, False)
+    assert result == share and type(result) is int
+    assert 0 <= result <= 1_000_000_000
+
+
+@pytest.mark.parametrize("payable, daily", [
+    (0.0, 1000.0), (-5.0, 1000.0), (math.nan, 1000.0),
+    (500.0, 0.0), (500.0, -1.0), (500.0, math.nan), (500.0, math.inf),
+])
+def test_without_the_burn_nothing_payable_or_an_unusable_daily_value_owes_nothing(payable, daily):
+    assert contributor_share_ppb(payable, daily, False) == 0
+
+
+def test_the_share_owes_contributors_what_the_burn_would_have_paid_them():
+    # Burn on: the receipt is w of the day's miner emission, all owed. Burn off: the receipt is
+    # the whole emission and the share owed is w, to within one part per billion.
+    for payable, daily in ((250.0, 1000.0), (500.0 / 30, 1234.5678), (999.999, 1000.0)):
+        [w] = [float(weight) for uid, weight in zip(*incentive_burn_vector(payable, daily, UID_STAR))
+               if uid == UID_STAR]
+        owed_with_burn = w * contributor_share_ppb(payable, daily, True) / 1e9
+        owed_without = 1.0 * contributor_share_ppb(payable, daily, False) / 1e9
+        assert owed_without == pytest.approx(owed_with_burn, rel=1e-6, abs=1e-9)
 
 
 def test_incentive_uid_resolves_only_a_registered_hotkey_above_uid_zero():

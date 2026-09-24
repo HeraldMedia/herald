@@ -14,7 +14,7 @@ def test_any_param_change_changes_fingerprint():
     base = consensus_params()
     fp = consensus_fingerprint(base)
     for key in ("vest_epoch_len", "no_search_floor", "quorum_threshold", "incentive_hotkey",
-                "miner_emission_share", "blocks_per_day", "price_source", "intake",
+                "burn_unearned", "miner_emission_share", "blocks_per_day", "price_source", "intake",
                 "draft_match_threshold", "max_submissions_per_epoch", "max_candidates_per_article"):
         changed = dict(base)
         changed[key] = "DIFFERENT"
@@ -24,7 +24,8 @@ def test_any_param_change_changes_fingerprint():
 def test_live_params_cover_the_consensus_surface():
     p = consensus_params()
     for key in ("epoch_len", "vest_epoch_len", "vest_epochs", "base_payout", "tier_mult",
-                "no_search_floor", "emission_mode", "burn_uid", "incentive_hotkey", "price_source",
+                "no_search_floor", "emission_mode", "burn_uid", "burn_unearned",
+                "incentive_hotkey", "price_source",
                 "miner_emission_share", "blocks_per_day", "intake", "draft_match_threshold",
                 "publish_buffer_days", "max_article_age_days", "max_submissions_per_epoch",
                 "max_candidates_per_article", "use_llm_judge", "llm_provider", "llm_provider_ready",
@@ -36,6 +37,7 @@ def test_live_params_cover_the_consensus_surface():
 
     assert p["emission_mode"] == "incentive_burn_v1"
     assert p["burn_uid"] == 0
+    assert p["burn_unearned"] is cfg.HERALD_BURN_UNEARNED
     assert p["incentive_hotkey"] == cfg.HERALD_INCENTIVE_HOTKEY
     assert p["price_source"] == "chain_spot_alpha_x_coingecko_tao_usd_v1" == pricing.PRICE_SOURCE
     assert p["miner_emission_share"] == 0.41
@@ -65,6 +67,28 @@ def test_incentive_hotkey_and_draft_match_threshold_move_the_fingerprint(monkeyp
     assert with_hotkey != fp
     monkeypatch.setattr(cfg, "HERALD_DRAFT_MATCH_THRESHOLD", cfg.HERALD_DRAFT_MATCH_THRESHOLD + 0.1)
     assert consensus_fingerprint() != with_hotkey
+
+
+def test_burning_unearned_weight_is_off_by_default_and_moves_the_fingerprint(monkeypatch):
+    monkeypatch.delenv("HERALD_BURN_UNEARNED", raising=False)
+    assert cfg._env_flag("HERALD_BURN_UNEARNED") is False
+    for value, expected in (("true", True), ("TRUE ", True), ("1", True), ("yes", True),
+                            ("false", False), ("0", False), ("", False)):
+        monkeypatch.setenv("HERALD_BURN_UNEARNED", value)
+        assert cfg._env_flag("HERALD_BURN_UNEARNED") is expected, value
+
+    monkeypatch.setattr(cfg, "HERALD_BURN_UNEARNED", False)
+    off = consensus_params()
+    monkeypatch.setattr(cfg, "HERALD_BURN_UNEARNED", True)
+    on = consensus_params()
+    assert (off["burn_unearned"], on["burn_unearned"]) == (False, True)
+    assert {key for key in off if off[key] != on[key]} == {"burn_unearned"}
+    assert consensus_fingerprint(off) != consensus_fingerprint(on)
+    # Adding the setting moves the fingerprint in both modes, so a validator without it shows as
+    # a mismatch whichever mode the fleet runs.
+    before = {key: value for key, value in off.items() if key != "burn_unearned"}
+    assert consensus_fingerprint(before) not in (consensus_fingerprint(off),
+                                                 consensus_fingerprint(on))
 
 
 def test_the_per_epoch_and_per_article_caps_move_the_fingerprint(monkeypatch):

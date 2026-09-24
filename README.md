@@ -3,9 +3,8 @@
 Herald is a Bittensor subnet that rewards **verified editorial articles in real news outlets**. PR
 firms and PR professionals take part through the Herald website. Validators run an automatic,
 code-only **verification oracle** on every submitted article, checking it against the outlet's own
-page, and direct the subnet's miner incentive to one **incentive hotkey** in proportion to the
-verified value. The part of the day's miner emission that verified value does not cover goes to
-UID 0 and is burned.
+page, and direct the subnet's miner incentive to one **incentive hotkey**. Each epoch they state
+the part of what that hotkey receives that verified value covers, which is owed to contributors.
 
 ## How it works
 
@@ -21,13 +20,17 @@ UID 0 and is burned.
 5. **Vest.** A verified article is valued by its outlet tier and search presence. The value releases
    in daily installments over a 30-day persistence window while the article stays live. A
    confirmed removal, or a change to paid content, forfeits the remaining installments.
-6. **Weight.** Each epoch validators set weight on one incentive hotkey (`HERALD_INCENTIVE_HOTKEY`):
-   its share is the epoch's verified USD installments divided by the USD value of the day's miner
-   emission, capped at 100%. The rest goes to UID 0 and is burned. If a step that every article
-   depends on fails, the whole day is burned.
-7. **Earn.** Contributors earn shares of the alpha the incentive hotkey receives, by the value of
-   their verified articles. Earnings accumulate on the contributor's account and are claimed to a
-   wallet the contributor connects on the website.
+6. **Weight.** Each epoch validators set weight on one incentive hotkey (`HERALD_INCENTIVE_HOTKEY`).
+   The contributors' share is the epoch's verified USD installments divided by the USD value of
+   the day's miner emission, capped at 100%. By default (`HERALD_BURN_UNEARNED=false`) the
+   incentive hotkey receives all the weight and each signed epoch snapshot states that share as
+   `contributor_share_ppb`. With `HERALD_BURN_UNEARNED=true` the incentive hotkey's weight is the
+   share, the rest goes to UID 0 and is burned, and a day on which a step every article depends on
+   fails is burned whole. The setting must be identical on every validator.
+7. **Earn.** Contributors earn the part of the alpha the incentive hotkey receives that the
+   snapshots state is owed to them, shared by the value of their verified articles. Earnings
+   accumulate on the contributor's account and are claimed to a wallet the contributor connects on
+   the website.
 
 No wallet, hotkey or command line is needed to contribute. See [docs/miner.md](docs/miner.md).
 
@@ -39,8 +42,8 @@ miner neuron are deprecated.
 
 - `herald/validator/news/` — the submissions feed (`submissions.py`), the oracle (`oracle.py`) and
   its checks (`real_news`, `topic_match`, `textmatch`, `fetch`, `search`), `vesting.py`,
-  `pricing.py`, `emission.py` (the incentive and burn vector), `forward.py` (the epoch pass),
-  `registry.py`, `publish.py`, `state.py`.
+  `pricing.py`, `emission.py` (the weight vector and the contributors' share), `forward.py` (the
+  epoch pass), `registry.py`, `publish.py`, `state.py`.
 - `herald/registry/admin.py` — operator CLI to manage and sign the outlet registry.
 - `neurons/validator.py` — the validator entrypoint.
 - `herald/miner/`, `neurons/miner.py` — deprecated; they earn nothing.

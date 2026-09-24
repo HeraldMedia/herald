@@ -1,6 +1,7 @@
-"""Turn each epoch's payable installments into the incentive and burn weight vector."""
+"""Turn each epoch's payable installments into its weight vector and the contributors' share."""
 
 import math
+from fractions import Fraction
 from typing import Dict, List, Tuple
 
 import bittensor as bt
@@ -8,8 +9,11 @@ import numpy as np
 
 from herald.base.utils.weight_utils import convert_weights_and_uids_for_emit
 
-# UID 0 receives the share of the day's miner emission that verified value does not cover.
+# UID 0 receives the share of the day's miner emission that verified value does not cover when that
+# share is burned, and all of it when there is no incentive UID.
 BURN_UID = 0
+# contributor_share_ppb of a whole receipt: parts per billion.
+SHARE_PPB = 1_000_000_000
 
 
 class WeightVectorRefused(Exception):
@@ -92,6 +96,44 @@ def incentive_burn_vector(payable_usd, daily_usd, uid_star) -> Tuple[List[int], 
     w = min(1.0, payable / daily)
     pairs = [(uid, share) for uid, share in ((BURN_UID, 1.0 - w), (int(uid_star), w)) if share > 0]
     return [uid for uid, _ in pairs], np.array([share for _, share in pairs], dtype=np.float32)
+
+
+def full_incentive_vector(uid_star) -> Tuple[List[int], np.ndarray]:
+    """([uid_star], [1.0]) whatever was verified; ([0], [1.0]) when there is no incentive UID."""
+    if uid_star is None or int(uid_star) <= BURN_UID:
+        return [BURN_UID], np.array([1.0], dtype=np.float32)
+    return [int(uid_star)], np.array([1.0], dtype=np.float32)
+
+
+def incentive_weight_vector(payable_usd, daily_usd, uid_star,
+                            burn_unearned: bool) -> Tuple[List[int], np.ndarray]:
+    """The epoch's weight vector.
+
+    With burn_unearned, incentive_burn_vector(): the incentive UID's weight is the verified share
+    and UID 0 receives the rest. Without it, full_incentive_vector(): all weight on the incentive
+    UID.
+    """
+    if burn_unearned:
+        return incentive_burn_vector(payable_usd, daily_usd, uid_star)
+    return full_incentive_vector(uid_star)
+
+
+def contributor_share_ppb(payable_usd, daily_usd, burn_unearned: bool) -> int:
+    """The part of the incentive UID's receipt for the epoch owed to contributors, in ppb.
+
+    With burn_unearned the chain already scales the receipt to verified value, so all of it is
+    owed: SHARE_PPB. Without it the receipt is the whole incentive and the owed part is
+    floor(min(1, payable_usd / daily_usd) * 1e9), computed exactly from the two values with
+    rational arithmetic so every validator states the same integer; 0 when nothing is payable or
+    the USD value of the day's miner emission is not a finite positive number.
+    """
+    if burn_unearned:
+        return SHARE_PPB
+    payable = float(payable_usd)
+    daily = float(daily_usd)
+    if not math.isfinite(payable) or payable <= 0 or not math.isfinite(daily) or daily <= 0:
+        return 0
+    return min(SHARE_PPB, int((Fraction(payable) * SHARE_PPB) // Fraction(daily)))
 
 
 def allowed_emit_vector(scores, hotkeys, incentive_hotkey: str,

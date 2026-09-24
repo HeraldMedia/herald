@@ -3,8 +3,8 @@
 A Herald **validator** runs the code-only **verification oracle**: it pulls open briefs from the
 subnet backend, reads the articles contributors submitted through the Herald website, verifies each
 one against the outlet's own page, vests its value on one **incentive hotkey**, sets weights on that
-hotkey and UID 0 (the rest of the day's miner emission is burned), and publishes signed epoch
-snapshots. Registered miner hotkeys receive no weight. **No GPU / no ML** — it is network-I/O bound
+hotkey (and on UID 0, which burns, when `HERALD_BURN_UNEARNED=true`), and publishes signed epoch
+snapshots that state the share of the incentive hotkey's receipt owed to contributors. Registered miner hotkeys receive no weight. **No GPU / no ML** — it is network-I/O bound
 (web fetches, search-API calls, chain RPC, one price API). The optional LLM judge is a *remote* API.
 
 > Deploying the whole stack? You also run the backend (`herald-backend/`). Keep your
@@ -62,8 +62,8 @@ hashed into a short **consensus fingerprint**, logged at startup and attached to
 result. The set that must match fleet-wide includes: the **search provider(s)**, ScrapingBee on/off,
 any `api:*` adapters, the LLM-judge setting + pinned model, all scoring tunables (epoch lengths,
 payout, floors, the publication window, the draft-match threshold, the per-epoch article cap and
-the per-article candidate cap), the incentive hotkey and pricing constants (§8), and the trust
-anchors (pubkeys, authority hotkey). Release `0.2.0` changes the fingerprint (§8.7).
+the per-article candidate cap), the incentive hotkey, `HERALD_BURN_UNEARNED` and the pricing
+constants (§8), and the trust anchors (pubkeys, authority hotkey). Release `0.2.0` changes the fingerprint (§8.7).
 
 Derive it and pin it on the validator **and** give it to the backend operator
 (`HERALD_EXPECTED_CONSENSUS_FP` on both):
@@ -132,6 +132,9 @@ HERALD_RESULTS_TOKEN=
 
 # ── Incentive hotkey: the only UID besides 0 that receives weight (public, fleet-wide) ──
 HERALD_INCENTIVE_HOTKEY=
+# false: the incentive hotkey receives all the weight every epoch; true: only the verified share,
+# the rest burned on UID 0 (§8.5). CONSENSUS: identical on every validator (in the fingerprint).
+HERALD_BURN_UNEARNED=false
 
 # ── Signed outlet registry ──
 # Docker:      HERALD_REGISTRY_HOST_FILE is the host file; compose bind-mounts it read-only at
@@ -194,7 +197,7 @@ non-localhost; a results write and read credential (scoped, or the shared token)
 
 Preflight sees only the environment. Whether the incentive hotkey is registered, differs from this
 validator's own hotkey and is not at UID 0 is checked at every scoring pass instead, and a failure
-there burns the day (§8.5).
+there puts all of the day's weight on UID 0, whatever `HERALD_BURN_UNEARNED` is (§8.5).
 
 ---
 
@@ -249,7 +252,9 @@ confirmed epochs are what the backend settles contributor submissions from.
 - **Independent validators:** raise it to 2 or more once independent validators are enrolled, so
   two validators corroborate each epoch before its results are canonical.
 
-An epoch burned by a failed step publishes no results or snapshot (§8.5).
+Each snapshot's state also carries `burn_unearned`, the setting the epoch was scored under, and
+`contributor_share_ppb`, the part of the incentive hotkey's receipt for that epoch owed to
+contributors (§8.5). An epoch whose scoring failed publishes no results or snapshot (§8.5).
 
 ---
 
@@ -293,8 +298,9 @@ Registered miner hotkeys receive no weight, and the validator sends no queries t
 - The uploaded text is used only for verification. The validator never publishes, stores or logs
   it.
 - A feed that cannot be read (unset endpoint, HTTP or JSON error, or a body that is not a list)
-  burns the day: `Submissions feed read failed: <error>`, then
-  `INCENTIVE_BURN epoch=<e> reason=feed_unavailable`.
+  fails the day (§8.5): `Submissions feed read failed: <error>`, then
+  `INCENTIVE_FULL epoch=<e> reason=feed_unavailable uid_star=<uid>`, or
+  `INCENTIVE_BURN epoch=<e> reason=feed_unavailable` with `HERALD_BURN_UNEARNED=true`.
 
 ### 8.2 What each article must pass
 
@@ -328,6 +334,7 @@ installments are clawed back; there is no slashing.
 | Setting | Default | Meaning |
 |---|---|---|
 | `HERALD_INCENTIVE_HOTKEY` | none | The SS58 hotkey every verified article vests to, and the only UID besides 0 that receives weight. Provided by the subnet operator; identical on every validator. Preflight requires a valid SS58 address that differs from `HERALD_REGISTRY_AUTHORITY_HOTKEY`. |
+| `HERALD_BURN_UNEARNED` | `false` | `false`: the incentive hotkey receives all the weight every epoch, and each snapshot states the share owed to contributors. `true`: its weight is the verified share and UID 0 burns the rest (§8.5). Must be identical on every validator. `1`, `true` or `yes` (any case) is on; anything else is off. |
 | `HERALD_DRAFT_MATCH_THRESHOLD` | `0.6` | Share of the uploaded text that must appear in the published article. |
 | `HERALD_PUBLISH_BUFFER_DAYS` | `3` | Days before a brief's start date from which publication counts. |
 | `HERALD_MAX_ARTICLE_AGE_DAYS` | `21` | Oldest accepted publication, counted back from the scoring block's chain time. |
@@ -361,50 +368,79 @@ daily_usd         = daily_miner_alpha × alpha_tao × tao_usd
 
 The constants and the price source name `chain_spot_alpha_x_coingecko_tao_usd_v1` are set in
 `herald/validator/news/pricing.py`, not in the environment, and are part of the fingerprint. An
-input that cannot be read, or is not a finite positive number, burns the day with
+input that cannot be read, or is not a finite positive number, fails the day (§8.5) with
 `reason=pricing_error (<detail>)`.
 
-### 8.5 Weights and the burn
+### 8.5 Weights, the burn setting and the contributors' share
 
-Each scoring pass sums the installments released by vesting articles, caps client briefs at their
-prepaid reward pools, and sets:
+Each scoring pass sums the installments released by vesting articles and caps client briefs at their
+prepaid reward pools. The share of the day's miner emission that this verified value covers is
 
 ```text
-w       = min(1, payable_usd / daily_usd)
-weights = {incentive hotkey UID: w, UID 0: 1 − w}      (zero entries dropped)
+share = min(1, payable_usd / daily_usd)
 ```
 
-Weight on UID 0 is burned. With nothing payable, all weight goes to UID 0 and the pass still
-publishes and logs `INCENTIVE_WEIGHT … w=0.000000`.
+What the validator does with it is set by `HERALD_BURN_UNEARNED`, a consensus setting that must be
+identical on every validator:
 
-All weight goes to UID 0 for the day, logged as `INCENTIVE_BURN epoch=<e> reason=<reason>`, when:
+| | `HERALD_BURN_UNEARNED=false` (default) | `HERALD_BURN_UNEARNED=true` |
+|---|---|---|
+| Weights | `{incentive hotkey UID: 1}`, every epoch | `{incentive hotkey UID: share, UID 0: 1 − share}`, zero entries dropped |
+| A day whose pricing, feed or scoring fails | `{incentive hotkey UID: 1}` | `{UID 0: 1}` |
+| `contributor_share_ppb` in the epoch snapshot | `floor(share × 1,000,000,000)`; `0` when nothing is payable or `daily_usd` is not a finite positive number | `1000000000` |
+
+- **`false` (the default).** The incentive hotkey receives all the weight whenever its UID can be
+  resolved, whatever was verified that day: its weight does not depend on verification, pricing or
+  the submissions feed. Contributors are paid by verified value either way: the snapshot's
+  `contributor_share_ppb` states the part of the incentive hotkey's receipt for the epoch that is
+  owed to contributors, in parts per billion, and the backend credits contributor accounts from
+  it. The rest of the receipt stays with the incentive hotkey.
+- **`true`.** The incentive hotkey's weight is the verified share, and the rest of the day's miner
+  emission goes to UID 0 and is burned. The chain has then already scaled the receipt to verified
+  value, so all of it is owed to contributors (`contributor_share_ppb=1000000000`). With nothing
+  payable, all weight goes to UID 0 and the pass still publishes and logs
+  `INCENTIVE_WEIGHT … w=0.000000`.
+- **Either way**, when the incentive hotkey's UID cannot be resolved (unset, not registered, this
+  validator's own hotkey, or at UID 0) nothing else can be weighted and all weight goes to UID 0.
+
+`contributor_share_ppb` is the exact floor of the two values the validator holds, computed with
+integer arithmetic, so every validator scoring the same inputs states the same integer. Each
+snapshot's state records it next to `burn_unearned`, the setting the epoch was scored under; both are
+part of the signed state and its `state_hash`. Changing the setting changes the consensus
+fingerprint (§3), so switch it only fleet-wide.
+
+A pass that does not score the day logs its reason. All weight goes to UID 0, logged as
+`INCENTIVE_BURN epoch=<e> reason=<reason>`, with `HERALD_BURN_UNEARNED=true` or when the incentive
+UID cannot be resolved. Otherwise all weight goes to the incentive hotkey's UID, logged as
+`INCENTIVE_FULL epoch=<e> reason=<reason> uid_star=<uid>`. The reasons:
 
 | Reason | Cause |
 |---|---|
 | `no_briefs` | The signed brief feed verified as empty. |
-| `incentive_hotkey_unset` | `HERALD_INCENTIVE_HOTKEY` is empty. |
-| `incentive_hotkey_not_registered` | The incentive hotkey is not in the metagraph. |
-| `incentive_hotkey_is_validator_hotkey` | The incentive hotkey is this validator's own wallet hotkey. |
-| `incentive_hotkey_at_burn_uid` | The incentive hotkey holds UID 0. |
+| `incentive_hotkey_unset` | `HERALD_INCENTIVE_HOTKEY` is empty. Always `INCENTIVE_BURN`. |
+| `incentive_hotkey_not_registered` | The incentive hotkey is not in the metagraph. Always `INCENTIVE_BURN`. |
+| `incentive_hotkey_is_validator_hotkey` | The incentive hotkey is this validator's own wallet hotkey. Always `INCENTIVE_BURN`. |
+| `incentive_hotkey_at_burn_uid` | The incentive hotkey holds UID 0. Always `INCENTIVE_BURN`. |
 | `chain_time_unavailable` | The scoring block's timestamp could not be read. |
 | `pricing_error (<detail>)` | A pricing input failed (§8.4). |
 | `feed_unavailable` | The submissions feed could not be read (§8.1). |
 | `error (<type>: <detail>)` | Any other error in the shared steps, for example loading the outlet registry or its on-chain anchor. |
-| `stale_scores` | An already scored epoch holds scores on a UID other than 0 and the incentive hotkey's current UID (scores from an earlier release, or the incentive hotkey moved to another UID). The scores are replaced with the burn, and the next weight submission sends the burn in their place. |
+| `stale_scores` | An already scored epoch's stored scores no longer fit the incentive hotkey's current UID: scores from an earlier release, or the incentive hotkey moved to another UID. With `HERALD_BURN_UNEARNED=true`, scores on any UID other than 0 and that UID are replaced with the burn. With `false`, anything other than all weight on that UID is replaced with all weight on it, or with the burn while it cannot be resolved, so a scored epoch's weight follows the incentive hotkey to a new UID. The next weight submission sends the replacement. |
 
 For every reason except `no_briefs` and `stale_scores`, the pass has failed: every ledger change it
-made is discarded, nothing is published, and the epoch is marked scored so it is not retried.
-Installments not released that day are caught up by the next successful epoch. A failure before the
-epoch is known (the ledger or the chain head cannot be read) logs `Error in Herald forward pass`
-and changes nothing.
+made is discarded, nothing is published (so no share is stated for that day), and the epoch is
+marked scored so it is not retried. Installments not released that day are caught up by the next
+successful epoch. A failure before the epoch is known (the ledger or the chain head cannot be read)
+logs `Error in Herald forward pass` and changes nothing.
 
 **Submitting and re-submitting weights.** Scoring runs once per epoch, but the chain's copy of a
 validator's weights ages: once its last update is older than the subnet's activity cutoff (5,000
 blocks on netuid 69), the chain stops counting that validator's weights. So once an epoch has been
-scored or burned, the validator submits the latest vector, incentive and burn or burn only, whenever
-the chain's weight record for its own uid (`LastUpdate`) is at least `HERALD_WEIGHT_RESUBMIT_BLOCKS`
-blocks old (default 180). The stored vector changes only when an epoch is scored or burned, or its
-scores are replaced by the burn (`stale_scores`), and a new vector is submitted under the same rule.
+scored or has failed, the validator submits the latest vector, whichever of the vectors above that
+epoch produced, whenever the chain's weight record for its own uid (`LastUpdate`) is at least
+`HERALD_WEIGHT_RESUBMIT_BLOCKS` blocks old (default 180). The stored vector changes only when an
+epoch is scored or fails, or its scores are replaced (`stale_scores`), and a new vector is submitted
+under the same rule.
 At each weight-setting step:
 
 - the `--neuron.epoch_length` interval (default 100 blocks) and `--neuron.disable_set_weights`
@@ -448,8 +484,9 @@ from the scores. It is never padded with other registered UIDs and never clipped
   Nothing is marked as submitted, and the validator tries again at its next weight-setting step
   while the chain's record stays old.
 
-**MinAllowedWeights must be 1.** A burn-only vector has a single entry (UID 0), so on a subnet whose
-MinAllowedWeights is above 1 every burn-only vector is refused and no weights are set. Check
+**MinAllowedWeights must be 1.** The default vector has a single entry (the incentive UID), and so
+does a burn-only vector (UID 0), so on a subnet whose MinAllowedWeights is above 1 those vectors are
+refused and no weights are set. Check
 `min_allowed_weights` with `btcli subnet hyperparameters --netuid 69 --network finney`.
 
 ### 8.7 Release 0.2.0 (spec version 20)
@@ -458,9 +495,10 @@ MinAllowedWeights is above 1 every burn-only vector is refused and no weights ar
   submission, is `20`.
 - A score checkpoint (`state.npz`) written by another spec version is discarded at startup
   (`Discarding score checkpoint from spec <n>; current spec is 20`).
-- The consensus fingerprint changes with this release. Set `HERALD_INCENTIVE_HOTKEY`, recompute the
-  fingerprint and set `HERALD_EXPECTED_CONSENSUS_FP` on every validator and the backend, then
-  recreate the whole fleet together.
+- The consensus fingerprint changes with this release. Set `HERALD_INCENTIVE_HOTKEY` and
+  `HERALD_BURN_UNEARNED` to the operator's values, recompute the fingerprint and set
+  `HERALD_EXPECTED_CONSENSUS_FP` on every validator and the backend, then recreate the whole fleet
+  together.
 - `herald_state.json` keeps its format (schema 2). Vesting entries started by an earlier release
   carry no submission id; the first successful scoring pass expires them and logs
   `LEGACY_VESTING_EXPIRED <n>`.
@@ -473,8 +511,9 @@ MinAllowedWeights is above 1 every burn-only vector is refused and no weights ar
 | `SUBMISSION_RESULT <submission_id> <reason>` | INFO | Once per candidate tried (§8.1, §8.2). |
 | `SUBMISSION_CREDITED <submission_id> candidate=<i>/<n>` | INFO | The candidate credited with its article: the `i`-th of the article's `n` candidates in upload order. |
 | `LEGACY_VESTING_EXPIRED <n>` | INFO | A pass expired `n` vesting entries that carry no submission id. |
-| `INCENTIVE_WEIGHT epoch=<e> w=<w> payable_usd=<usd> daily_usd=<usd> alpha_tao=<price> tao_usd=<price> daily_miner_alpha=<alpha> uid_star=<uid>` | INFO | A successful scoring pass; `uid_star` is the incentive hotkey's UID. |
-| `INCENTIVE_BURN epoch=<e> reason=<reason>` | INFO for `no_briefs` and `stale_scores`, WARNING otherwise | The day's weight went to UID 0 (§8.5). |
+| `INCENTIVE_WEIGHT epoch=<e> w=<w> payable_usd=<usd> daily_usd=<usd> alpha_tao=<price> tao_usd=<price> daily_miner_alpha=<alpha> uid_star=<uid> burn_unearned=<true\|false> contributor_share_ppb=<ppb>` | INFO | A successful scoring pass. `uid_star` is the incentive hotkey's UID and `w` its weight (`1.000000` with `burn_unearned=false`); `contributor_share_ppb` is the part of its receipt owed to contributors (§8.5). |
+| `INCENTIVE_FULL epoch=<e> reason=<reason> uid_star=<uid>` | INFO for `no_briefs` and `stale_scores`, WARNING otherwise | With `HERALD_BURN_UNEARNED=false`, the day was not scored and all its weight went to the incentive hotkey's UID (§8.5). |
+| `INCENTIVE_BURN epoch=<e> reason=<reason>` | INFO for `no_briefs` and `stale_scores`, WARNING otherwise | The day was not scored and all its weight went to UID 0: with `HERALD_BURN_UNEARNED=true`, or when the incentive UID cannot be resolved (§8.5). |
 | `Submitting Herald epoch <e> weights: the chain record for uid <uid> is <n> blocks old (>= <interval>)` | INFO | The first submission of epoch `e`'s vector passed every submission gate (§8.5). |
 | `Re-submitting Herald epoch <e> weights: the chain record for uid <uid> is <n> blocks old (>= <interval>)` | INFO | The same vector is submitted again because the chain's record reached the interval (§8.5). |
 | `Weights for uid <uid> are <n> blocks old (< <interval>); skipping resubmission` | INFO | The chain's record is still fresh; nothing is submitted. |
@@ -519,7 +558,8 @@ endpoint or an unexpected payload exits 2. Without the flag the watchdog runs ex
   (default 240 ≈ 4 h), and **`self.step` persists across restarts** (`state.npz`). Frequent restarts
   march the counter past the scoring step. Lower `HERALD_VALIDATOR_STEPS_INTERVAL` (e.g. 1–10) to
   poll often; actual scoring stays gated to once per epoch and is **not** in the fingerprint. A day
-  that was burned publishes nothing either: look for `INCENTIVE_BURN` and its reason (§8.5).
+  that was not scored publishes nothing either: look for `INCENTIVE_FULL` or `INCENTIVE_BURN` and
+  its reason (§8.5).
 - **`INCENTIVE_BURN … reason=incentive_hotkey_…`** — check that `HERALD_INCENTIVE_HOTKEY` is the
   operator's value and is registered on the subnet, and that the validator is not running with that
   hotkey as its own wallet hotkey.
@@ -589,8 +629,8 @@ endpoint or an unexpected payload exits 2. Without the flag the watchdog runs ex
   hotkey. The validator logs only the status line, so ask the operator which it is.
 - **`401` on reports or the feed** — the token is wrong or was retired, or the read and write tokens
   are swapped (a read token is refused on reports, a write token on the feed). A failed feed read
-  logs `Submissions feed read failed: …` at WARNING and burns the day
-  (`INCENTIVE_BURN … reason=feed_unavailable`). The feed is read only in epochs with active briefs,
+  logs `Submissions feed read failed: …` at WARNING and fails the day
+  (`INCENTIVE_FULL … reason=feed_unavailable`, or `INCENTIVE_BURN …` with the burn on). The feed is read only in epochs with active briefs,
   after the incentive hotkey check and pricing succeed.
 
 See also: [miner.md](miner.md) for how contributors submit the articles you verify.

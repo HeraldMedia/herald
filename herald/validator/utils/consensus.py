@@ -29,10 +29,13 @@ def consensus_params() -> dict:
         "base_payout": cfg.HERALD_BASE_PAYOUT_USD,
         "tier_mult": cfg.HERALD_TIER_MULTIPLIER,
         "no_search_floor": cfg.HERALD_NO_SEARCH_FLOOR,
-        # weights: the incentive hotkey's share is verified USD over the USD value of the day's
-        # miner emission; UID 0 receives the rest
+        # weights: the share owed to contributors is verified USD over the USD value of the day's
+        # miner emission. With burn_unearned the incentive hotkey's weight is that share and UID 0
+        # receives the rest; without it the incentive hotkey receives all the weight and the epoch
+        # snapshot states the share (contributor_share_ppb).
         "emission_mode": "incentive_burn_v1",
         "burn_uid": BURN_UID,
+        "burn_unearned": cfg.HERALD_BURN_UNEARNED,
         "incentive_hotkey": cfg.HERALD_INCENTIVE_HOTKEY,
         "price_source": pricing.PRICE_SOURCE,
         "miner_emission_share": pricing.MINER_EMISSION_SHARE,

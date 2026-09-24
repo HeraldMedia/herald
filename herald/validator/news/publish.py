@@ -133,7 +133,19 @@ def build_epoch_snapshot(vesting, briefs: list, pool_spent: dict, rewards_by_uid
                          weights, uids: list, hotkey_by_uid: dict, *, network: str,
                          netuid: int, validator_hotkey: str, validator_uid: int,
                          chain_block: int, epoch: int, registry_version: int,
-                         registry_hash: str, consensus: str) -> dict:
+                         registry_hash: str, consensus: str, burn_unearned: bool,
+                         contributor_share_ppb: int) -> dict:
+    """The epoch's snapshot, with a state every validator scoring the same inputs agrees on.
+
+    Besides the articles, briefs, rewards and weights, the state records the burn setting the epoch
+    was scored under (`burn_unearned`) and `contributor_share_ppb`, the part of what the incentive
+    hotkey receives for the epoch that is owed to contributors, in parts per billion
+    (0..1_000_000_000).
+    """
+    if isinstance(contributor_share_ppb, bool) or not isinstance(contributor_share_ppb, int):
+        raise ValueError("contributor_share_ppb must be an integer")
+    if not 0 <= contributor_share_ppb <= 1_000_000_000:
+        raise ValueError("contributor_share_ppb must be between 0 and 1000000000")
     articles = []
     for item in build_result_items(
         vesting, network=network, netuid=netuid, validator_hotkey=validator_hotkey,
@@ -176,7 +188,9 @@ def build_epoch_snapshot(vesting, briefs: list, pool_spent: dict, rewards_by_uid
         "consensus": consensus, "registry_version": int(registry_version),
         "registry_hash": registry_hash,
         "state": {"articles": article_rows, "briefs": brief_rows,
-                  "rewards": reward_rows, "weights": weight_rows},
+                  "rewards": reward_rows, "weights": weight_rows,
+                  "burn_unearned": bool(burn_unearned),
+                  "contributor_share_ppb": contributor_share_ppb},
     }
     material = {key: item[key] for key in (
         "schema_version", "network", "netuid", "epoch", "consensus",

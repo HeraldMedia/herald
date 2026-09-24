@@ -8,6 +8,13 @@ from herald import __version__
 env_path = Path(__file__).parents[1] / '.env'
 load_dotenv(dotenv_path=env_path)
 
+
+def _env_flag(name: str) -> bool:
+    """On when the variable is 1, true or yes (any case, surrounding spaces ignored); off otherwise,
+    including when it is unset."""
+    return os.getenv(name, 'false').strip().lower() in ('1', 'true', 'yes')
+
+
 # Cache Configuration
 CACHE_ROOT = Path(__file__).resolve().parents[2] / "cache"
 CACHE_DIRS = {
@@ -195,6 +202,12 @@ HERALD_TREASURY_COLDKEY = os.getenv('HERALD_TREASURY_COLDKEY', '')
 # Hotkey that every verified article vests to, and the only UID besides 0 that receives weight. Set
 # identically on every validator.
 HERALD_INCENTIVE_HOTKEY = os.getenv('HERALD_INCENTIVE_HOTKEY', '')
+# Whether the weight that verified value does not cover is burned to UID 0. true: the incentive
+# hotkey's weight is min(1, payable USD / USD value of the day's miner emission) and UID 0 receives
+# the rest. false (default): the incentive hotkey receives all the weight whenever its UID
+# resolves, and each epoch snapshot states the share of that receipt owed to contributors. A
+# consensus setting: set identically on every validator.
+HERALD_BURN_UNEARNED = _env_flag('HERALD_BURN_UNEARNED')
 # Publication window for a brief with an end_date: from start_date minus this many days (00:00 UTC)
 # through end_date 23:59:59 UTC.
 HERALD_PUBLISH_BUFFER_DAYS = int(os.getenv('HERALD_PUBLISH_BUFFER_DAYS', '3'))
