@@ -52,7 +52,8 @@ contributors claim their share of the incentive hotkey's alpha to a connected wa
 - **Validators** verify articles, vest their value on the incentive hotkey, and set weights on that
   hotkey and UID 0.
 - **The incentive hotkey** is one hotkey registered on the subnet and configured identically on
-  every validator as `HERALD_INCENTIVE_HOTKEY`. It is the only UID besides 0 that receives weight.
+  every validator as `HERALD_INCENTIVE_HOTKEY` (built into the release for finney netuid 69 by
+  `herald/network_profile.py`). It is the only UID besides 0 that receives weight.
 
 Registered miner hotkeys receive no weight. The miner neuron (`neurons/miner.py`), `herald/miner/`,
 `herald/protocol.py`, `herald/commit.py` and `herald/evidence.py` are deprecated and unused by the

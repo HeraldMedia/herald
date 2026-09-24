@@ -37,15 +37,17 @@ snapshots that state the share of the incentive hotkey's receipt owed to contrib
     fork from the fleet.
   - **One search provider — `SERPAPI_API_KEY` *or* `BRAVE_API_KEY`** (the *search-index* check).
     Brave is markedly cheaper. Pick **one** and standardize it fleet-wide.
-- **Trust anchors** from the subnet operator:
+- **Built into the release** for finney netuid 69 (`herald/network_profile.py`, §8.3). These are
+  public, fleet-wide values; you set none of them:
   - Backend endpoint (canonical): `https://api.heraldmedia.ai`
   - Brief-feed pubkey: `a1b3e1d6e412a1a97d694ce5af196411e1bc2b4cc250d83ab92d0111b7b1af9a`
   - Registry pubkey: `9bc2326f0019bcbfe279948222e1fbc6d0b281bb50bc7569c3551ede764aede6`
-  - Registry **authority hotkey** (SS58, public / fleet-wide constant): `5FWB5CFZQB4FcmekEXrXtoGgjFt37HGQk27JzWKkRzqWjkg5`
-  - **Incentive hotkey** (SS58, public / fleet-wide constant): the value of
-    `HERALD_INCENTIVE_HOTKEY`, provided by the subnet operator.
+  - Registry **authority hotkey**: `5FWB5CFZQB4FcmekEXrXtoGgjFt37HGQk27JzWKkRzqWjkg5`
+  - **Incentive hotkey**: `5CK1qDSktB7i28rr8dnCpG1sTr13CTwg2EffhkD9eNWRDB6x`
+  - Epoch alignment: `HERALD_EPOCH_LAG=-12803`
+- **From the subnet operator:**
   - **Results credentials** — the shared results token, or a per-validator write and read token
-    pair (secret, operator-provided). The read credential is what reads the submissions feed.
+    pair (secret). The read credential is what reads the submissions feed.
   - The **signed registry file** (byte-identical to what the backend serves).
 - **Outbound HTTPS to CoinGecko** for the TAO/USD price (public API, no key).
 - The subnet's **MinAllowedWeights must be 1** (§8.6).
@@ -70,9 +72,14 @@ Derive it and pin it on the validator **and** give it to the backend operator
 ```bash
 # Docker (loads .env, no wallet needed):
 docker compose --profile validator run --rm --no-deps --entrypoint python \
-  validator -m herald.production fingerprint
-# or bare-metal:  set -a; source .env; set +a; python -m herald.production fingerprint
+  validator -m herald.production fingerprint --netuid 69 --subtensor.network finney
+# or bare-metal:
+set -a; source .env; set +a
+python -m herald.production fingerprint --netuid 69 --subtensor.network finney
 ```
+The flags apply the release's built-in mainnet values (§8.3) exactly as the validator does, so the
+printed value is the one it computes at startup. A release that changes a consensus value changes
+the fingerprint: recompute it after every pull.
 A mismatch = weight divergence, and the backend `/ready` won't confirm. **Standardize the provider
 set before you launch.**
 
@@ -98,57 +105,62 @@ mkdir -p /secure/herald
 curl -s https://api.heraldmedia.ai/registry/outlets.json -o /secure/herald/outlets.signed.json
 ```
 Copy `deploy/validator.env.production.example` to `.env` and fill the blanks. Its settings are
-shown below — the public trust anchors (endpoint + pubkeys) are baked in; you supply your
-wallet, the operator-provided incentive hotkey and the operator-provided secrets (results token,
-API keys):
+shown below. The public, fleet-wide values (backend endpoints, pubkeys, the authority and incentive
+hotkeys, the epoch alignment) are built into the release and stay commented out; you supply your
+wallet, your API keys and the operator-provided results credential:
 ```ini
 # Herald validator — production .env (Bittensor netuid 69, finney).
-# Copy to .env, fill the blanks (your wallet + operator-provided secrets), then: chmod 600 .env
+# Copy to .env, fill the blanks (your wallet, API keys and results credential), then: chmod 600 .env
 # For every available setting (incl. the consensus-critical scoring tunables), see root .env.example.
 HERALD_PRODUCTION=true
 HERALD_PRODUCTION_NETUID=69
 NETUID=69
 SUBTENSOR_NETWORK=finney
 # The provided compose connects with --subtensor.network (finney, as production preflight requires)
-# and passes no chain endpoint. HERALD_WEIGHT_CHECK_FALLBACK_ENDPOINT adds a second finney node that
-# is used only for the pending weight-commit check (see Troubleshooting).
+# and passes no chain endpoint. HERALD_WEIGHT_CHECK_FALLBACK_ENDPOINT (below) adds a second finney
+# node that is used only for the pending weight-commit check.
 
 # ── Wallet: registered on netuid 69 with stake for a validator permit ──
 WALLET_NAME=
 HOTKEY_NAME=
 # No axon settings: a validator serves nothing and announces no address.
 
-# ── Canonical subnet backend + trust anchors (the pubkeys are public) ──
-HERALD_BRIEFS_ENDPOINT=https://api.heraldmedia.ai/api/v2/validator/briefs
-HERALD_BRIEFS_PUBKEY=a1b3e1d6e412a1a97d694ce5af196411e1bc2b4cc250d83ab92d0111b7b1af9a
-HERALD_REQUIRE_SIGNED_BRIEFS=true
-HERALD_RESULTS_ENDPOINT=https://api.heraldmedia.ai
-# Operator-provided (secret) — the shared token validators present to the backend's results routes:
+# ── Built into the release for finney netuid 69 (herald/network_profile.py) ──
+# The canonical backend, the trust anchors, the incentive hotkey and the epoch alignment are public,
+# fleet-wide values that each release carries: pulling a new release and recreating the container
+# picks them up. Leave them unset. A non-empty value here overrides the release's value and pins
+# this validator to it, so set one only to deliberately deviate (for example on a test network).
+# HERALD_RESULTS_ENDPOINT=https://api.heraldmedia.ai
+# HERALD_BRIEFS_ENDPOINT=https://api.heraldmedia.ai/api/v2/validator/briefs
+# HERALD_REGISTRY_ENDPOINT=https://api.heraldmedia.ai
+# HERALD_BRIEFS_PUBKEY=a1b3e1d6e412a1a97d694ce5af196411e1bc2b4cc250d83ab92d0111b7b1af9a
+# HERALD_REQUIRE_SIGNED_BRIEFS=true
+# HERALD_REGISTRY_PUBKEY=9bc2326f0019bcbfe279948222e1fbc6d0b281bb50bc7569c3551ede764aede6
+# HERALD_REGISTRY_AUTHORITY_HOTKEY=5FWB5CFZQB4FcmekEXrXtoGgjFt37HGQk27JzWKkRzqWjkg5
+# HERALD_REQUIRE_SIGNED_REGISTRY=true
+# The only UID besides 0 that receives weight:
+# HERALD_INCENTIVE_HOTKEY=5CK1qDSktB7i28rr8dnCpG1sTr13CTwg2EffhkD9eNWRDB6x
+# HERALD_EPOCH_LAG=-12803
+
+# ── Results credential (operator-provided, secret) ──
+# The shared token validators present to the backend's results routes:
 HERALD_RESULTS_TOKEN=
 # Or scoped credentials, once the operator issues them: the write token for reports and the read
 # token for the submissions feed. Each one set replaces the shared token for its routes.
 # HERALD_RESULTS_WRITE_TOKEN=
 # HERALD_RESULTS_READ_TOKEN=
 
-# ── Incentive hotkey: the only UID besides 0 that receives weight (public, fleet-wide) ──
-HERALD_INCENTIVE_HOTKEY=
-# false: the incentive hotkey receives all the weight every epoch; true: only the verified share,
-# the rest burned on UID 0 (§8.5). CONSENSUS: identical on every validator (in the fingerprint).
-HERALD_BURN_UNEARNED=false
-
-# ── Signed outlet registry ──
+# ── Signed outlet registry file (the production preflight verifies it at startup) ──
+# Scoring reads the active edition from the backend and falls back to this file.
 # Docker:      HERALD_REGISTRY_HOST_FILE is the host file; compose bind-mounts it read-only at
 #              HERALD_REGISTRY_PATH inside the container.
 # Bare-metal:  set HERALD_REGISTRY_PATH to the host file directly and leave HOST_FILE unset.
 HERALD_REGISTRY_HOST_FILE=/secure/herald/outlets.signed.json
 HERALD_REGISTRY_PATH=/run/registry/outlets.signed.json
-HERALD_REGISTRY_PUBKEY=9bc2326f0019bcbfe279948222e1fbc6d0b281bb50bc7569c3551ede764aede6
-# The subnet's registry authority hotkey — its on-chain HRLDREG commitment activates registry
-# editions. A fleet-wide CONSENSUS constant (part of the fingerprint): identical on every validator,
-# and public. Currently the owner hotkey (uid 0); a dedicated hotkey is cleaner, but reusing the
-# owner key is fine for bootstrap (its metadata commitment slot doesn't collide with weight-setting).
-HERALD_REGISTRY_AUTHORITY_HOTKEY=5FWB5CFZQB4FcmekEXrXtoGgjFt37HGQk27JzWKkRzqWjkg5
-HERALD_REQUIRE_SIGNED_REGISTRY=true
+# false: the incentive hotkey receives all the weight every epoch, and each epoch snapshot states
+# the part of that receipt owed to contributors. true: its weight is only the verified share and
+# UID 0 burns the rest. CONSENSUS: identical on every validator (part of the fingerprint).
+HERALD_BURN_UNEARNED=false
 
 # ── Outside-data providers — CONSENSUS-CRITICAL: enable the identical set on every validator ──
 # Required — the signed registry contains proxy: outlets (fetch provider):
@@ -166,7 +178,9 @@ DISABLE_AUTO_UPDATE=true
 # Poll for scoring every N steps (~N*60s). Scoring itself stays once per epoch and is NOT in the
 # fingerprint; the default (240) can delay the first snapshot by hours, so 10 is a sensible start.
 HERALD_VALIDATOR_STEPS_INTERVAL=10
-# Compute with `python -m herald.production fingerprint`; set the SAME value here AND on the backend:
+# Compute with `python -m herald.production fingerprint --netuid 69 --subtensor.network finney` (the
+# flags apply the release's mainnet values, as the validator does); set the SAME value here AND on
+# the backend. It changes when a release changes a consensus value, so recompute it after a pull.
 HERALD_EXPECTED_CONSENSUS_FP=
 ```
 `chmod 600 .env`.
@@ -194,6 +208,10 @@ non-localhost; a results write and read credential (scoped, or the shared token)
 (and an NYT key if it has `api:nyt`); **at least one search provider**;
 `HERALD_EXPECTED_CONSENSUS_FP` set and matching the computed fingerprint; and a **live on-chain
 `HRLDREG` registry anchor** exists. Any failure prints `production preflight failed: <exact reasons>`.
+
+On finney netuid 69 the release fills the endpoints, pubkeys, signing requirements and the
+authority and incentive hotkeys when `.env` leaves them unset (§8.3), so those checks pass without
+setting them.
 
 Preflight sees only the environment. Whether the incentive hotkey is registered, differs from this
 validator's own hotkey and is not at UID 0 is checked at every scoring pass instead, and a failure
@@ -231,7 +249,7 @@ CHUTES_API_KEY=<key>                    # or OPENROUTER_API_KEY
 Rolling it out:
 1. Agree the provider **and** the pinned model across the fleet — `use_llm_judge`, `ref_model_id`,
    `llm_provider` and `llm_provider_ready` are all in the consensus fingerprint.
-2. Recompute the fingerprint (`python -m herald.production fingerprint`) and set the new value on
+2. Recompute the fingerprint (`python -m herald.production fingerprint --netuid 69 --subtensor.network finney`) and set the new value on
    **every validator and the backend** (`HERALD_EXPECTED_CONSENSUS_FP`).
 3. Recreate every validator together (`docker compose --profile validator up -d validator`; a
    plain `docker restart` keeps the old environment), and recreate the backend so it checks the new
@@ -333,7 +351,7 @@ installments are clawed back; there is no slashing.
 
 | Setting | Default | Meaning |
 |---|---|---|
-| `HERALD_INCENTIVE_HOTKEY` | none | The SS58 hotkey every verified article vests to, and the only UID besides 0 that receives weight. Provided by the subnet operator; identical on every validator. Preflight requires a valid SS58 address that differs from `HERALD_REGISTRY_AUTHORITY_HOTKEY`. |
+| `HERALD_INCENTIVE_HOTKEY` | built in on finney netuid 69; none elsewhere | The SS58 hotkey every verified article vests to, and the only UID besides 0 that receives weight. Identical on every validator. Preflight requires a valid SS58 address that differs from `HERALD_REGISTRY_AUTHORITY_HOTKEY`. |
 | `HERALD_BURN_UNEARNED` | `false` | `false`: the incentive hotkey receives all the weight every epoch, and each snapshot states the share owed to contributors. `true`: its weight is the verified share and UID 0 burns the rest (§8.5). Must be identical on every validator. `1`, `true` or `yes` (any case) is on; anything else is off. |
 | `HERALD_DRAFT_MATCH_THRESHOLD` | `0.6` | Share of the uploaded text that must appear in the published article. |
 | `HERALD_PUBLISH_BUFFER_DAYS` | `3` | Days before a brief's start date from which publication counts. |
@@ -346,6 +364,26 @@ All but `HERALD_WEIGHT_RESUBMIT_BLOCKS` are in the consensus fingerprint. Change
 fleet-wide, together with `HERALD_EXPECTED_CONSENSUS_FP` on every validator and the backend (§3).
 `HERALD_WEIGHT_RESUBMIT_BLOCKS` sets only how often weights are submitted, not what they are, so it
 is not in the fingerprint and may differ between validators.
+
+**Built-in mainnet values.** A validator started with `--netuid 69` on finney (the provided compose
+file and `scripts/run_validator.sh` both pass these flags) takes the values below for every setting
+its environment leaves unset or empty. They live in `herald/network_profile.py`, so each release
+carries the current ones and a pull plus a recreate picks them up. A non-empty value in `.env`
+always wins and pins the validator to it, so leave these unset unless you mean to deviate. Startup
+logs `MAINNET_DEFAULTS_APPLIED: <names>` with the settings the release filled.
+
+| Setting | Mainnet value |
+|---|---|
+| `HERALD_INCENTIVE_HOTKEY` | `5CK1qDSktB7i28rr8dnCpG1sTr13CTwg2EffhkD9eNWRDB6x` |
+| `HERALD_EPOCH_LAG` | `-12803` (epoch 1258 began at block 9044797) |
+| `HERALD_RESULTS_ENDPOINT`, `HERALD_REGISTRY_ENDPOINT` | `https://api.heraldmedia.ai` |
+| `HERALD_BRIEFS_ENDPOINT` | `https://api.heraldmedia.ai/api/v2/validator/briefs` |
+| `HERALD_BRIEFS_PUBKEY` | `a1b3e1d6e412a1a97d694ce5af196411e1bc2b4cc250d83ab92d0111b7b1af9a` |
+| `HERALD_REGISTRY_PUBKEY` | `9bc2326f0019bcbfe279948222e1fbc6d0b281bb50bc7569c3551ede764aede6` |
+| `HERALD_REGISTRY_AUTHORITY_HOTKEY` | `5FWB5CFZQB4FcmekEXrXtoGgjFt37HGQk27JzWKkRzqWjkg5` |
+| `HERALD_REQUIRE_SIGNED_BRIEFS`, `HERALD_REQUIRE_SIGNED_REGISTRY` | `true` |
+
+On any other network or netuid nothing is filled.
 
 ### 8.4 Pricing the day's miner emission
 
@@ -417,7 +455,7 @@ UID cannot be resolved. Otherwise all weight goes to the incentive hotkey's UID,
 | Reason | Cause |
 |---|---|
 | `no_briefs` | The signed brief feed verified as empty. |
-| `incentive_hotkey_unset` | `HERALD_INCENTIVE_HOTKEY` is empty. Always `INCENTIVE_BURN`. |
+| `incentive_hotkey_unset` | `HERALD_INCENTIVE_HOTKEY` is empty, which on finney netuid 69 the release prevents (§8.3). Always `INCENTIVE_BURN`. |
 | `incentive_hotkey_not_registered` | The incentive hotkey is not in the metagraph. Always `INCENTIVE_BURN`. |
 | `incentive_hotkey_is_validator_hotkey` | The incentive hotkey is this validator's own wallet hotkey. Always `INCENTIVE_BURN`. |
 | `incentive_hotkey_at_burn_uid` | The incentive hotkey holds UID 0. Always `INCENTIVE_BURN`. |
@@ -495,10 +533,22 @@ refused and no weights are set. Check
   submission, is `20`.
 - A score checkpoint (`state.npz`) written by another spec version is discarded at startup
   (`Discarding score checkpoint from spec <n>; current spec is 20`).
-- The consensus fingerprint changes with this release. Set `HERALD_INCENTIVE_HOTKEY` and
-  `HERALD_BURN_UNEARNED` to the operator's values, recompute the fingerprint and set
-  `HERALD_EXPECTED_CONSENSUS_FP` on every validator and the backend, then recreate the whole fleet
-  together.
+- The consensus fingerprint changes with this release. On finney netuid 69 the release carries the
+  incentive hotkey, the trust anchors and the epoch alignment (§8.3), and `HERALD_BURN_UNEARNED`
+  defaults to `false`, so upgrading from 0.1 is a pull and a recreate:
+  ```bash
+  git pull
+  # Only with HERALD_PRODUCTION=true: pin the new fingerprint first (§3).
+  docker compose --profile validator run --rm --no-deps --entrypoint python \
+    validator -m herald.production fingerprint --netuid 69 --subtensor.network finney
+  #   -> set HERALD_EXPECTED_CONSENSUS_FP in .env to the printed value
+  docker compose --profile validator up -d --build validator
+  # bare-metal: git pull && ./scripts/run_validator.sh
+  ```
+  Explicit values an earlier `.env` already carries for these settings match 0.2.0 and keep
+  working; remove them so later releases can update them. Startup logs
+  `HERALD_INCENTIVE_HOTKEY: 5CK1qDSk…` and, once scored, `INCENTIVE_FULL` or `INCENTIVE_WEIGHT` with
+  its `uid_star`.
 - `herald_state.json` keeps its format (schema 2). Vesting entries started by an earlier release
   carry no submission id; the first successful scoring pass expires them and logs
   `LEGACY_VESTING_EXPIRED <n>`.
@@ -560,9 +610,11 @@ endpoint or an unexpected payload exits 2. Without the flag the watchdog runs ex
   poll often; actual scoring stays gated to once per epoch and is **not** in the fingerprint. A day
   that was not scored publishes nothing either: look for `INCENTIVE_FULL` or `INCENTIVE_BURN` and
   its reason (§8.5).
-- **`INCENTIVE_BURN … reason=incentive_hotkey_…`** — check that `HERALD_INCENTIVE_HOTKEY` is the
-  operator's value and is registered on the subnet, and that the validator is not running with that
-  hotkey as its own wallet hotkey.
+- **`INCENTIVE_BURN … reason=incentive_hotkey_…`** — check that `HERALD_INCENTIVE_HOTKEY` is unset
+  in `.env` (so the release's value applies; startup logs it) or is the operator's value, that it is
+  registered on the subnet, and that the validator is not running with that hotkey as its own wallet
+  hotkey. `MAINNET_DEFAULTS_APPLIED: none` on mainnet means `.env` sets every built-in value itself
+  or the validator was not started with `--netuid 69` on finney.
 - **`WEIGHT_VECTOR_REFUSED reason=below_min_allowed_weights …`** — the subnet's MinAllowedWeights is
   above the number of entries in the vector; it must be 1 (§8.6).
 - **Can't see what it's doing** — bittensor logs at WARNING unless told otherwise. The provided

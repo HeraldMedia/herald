@@ -190,6 +190,12 @@ def main() -> None:
 
     parser = argparse.ArgumentParser(prog="python -m herald.production")
     parser.add_argument("command", choices=("fingerprint", "check-validator"))
+    # The validator's own target flags. Importing herald already applied the mainnet settings for
+    # them (herald/network_profile.py), so the fingerprint printed here is the one the validator
+    # computes when started with the same flags. Each falls back to NETUID / SUBTENSOR_NETWORK, and
+    # the network to finney as in bittensor.
+    parser.add_argument("--netuid", type=int, default=None)
+    parser.add_argument("--subtensor.network", dest="network", default=None)
     args = parser.parse_args()
     if args.command == "fingerprint":
         from herald.validator.utils.consensus import consensus_fingerprint
@@ -197,8 +203,8 @@ def main() -> None:
         return
     validate_neuron_environment(
         "ValidatorNeuron",
-        os.environ.get("SUBTENSOR_NETWORK", ""),
-        int(os.environ.get("NETUID", "-1")),
+        args.network or os.environ.get("SUBTENSOR_NETWORK") or "finney",
+        args.netuid if args.netuid is not None else int(os.environ.get("NETUID", "-1")),
     )
     print("production validator preflight passed")
 
