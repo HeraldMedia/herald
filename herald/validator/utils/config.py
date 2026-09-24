@@ -4,9 +4,13 @@ from dotenv import load_dotenv
 from pathlib import Path
 import bittensor as bt
 from herald import __version__
+from herald.network_profile import apply_mainnet_defaults
 
 env_path = Path(__file__).parents[1] / '.env'
 load_dotenv(dotenv_path=env_path)
+# On finney netuid 69, settings left unset or empty take the release's mainnet values (see
+# herald/network_profile.py). Applied to the environment before anything below or elsewhere reads it.
+MAINNET_DEFAULTS_APPLIED = apply_mainnet_defaults()
 
 
 def _env_flag(name: str) -> bool:
@@ -223,6 +227,9 @@ HERALD_MAX_CANDIDATES_PER_ARTICLE = int(os.getenv('HERALD_MAX_CANDIDATES_PER_ART
 HERALD_DRAFT_MATCH_THRESHOLD = float(os.getenv('HERALD_DRAFT_MATCH_THRESHOLD', '0.6'))
 
 # Log out all non-sensitive config variables
+bt.logging.info(f"MAINNET_DEFAULTS_APPLIED: {', '.join(MAINNET_DEFAULTS_APPLIED) or 'none'}")
+bt.logging.info(f"HERALD_INCENTIVE_HOTKEY: {HERALD_INCENTIVE_HOTKEY or 'unset'}")
+bt.logging.info(f"HERALD_EPOCH_LAG: {HERALD_EPOCH_LAG}")
 bt.logging.info(f"HERALD_BRIEFS_ENDPOINT: {HERALD_BRIEFS_ENDPOINT}")
 bt.logging.info(f"YOUTUBE_SUBMIT_ENDPOINT: {YOUTUBE_SUBMIT_ENDPOINT}")
 bt.logging.info(f"ENABLE_DATA_PUBLISH: {ENABLE_DATA_PUBLISH}")

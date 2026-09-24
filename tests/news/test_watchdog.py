@@ -241,6 +241,17 @@ def test_epoch_defaults_mirror_herald_config_without_importing_herald(wd, monkey
     assert wd._herald_epoch_defaults() == (360, 3)
 
 
+def test_epoch_lag_default_on_mainnet_is_the_releases_value(wd, monkeypatch):
+    monkeypatch.delenv("HERALD_VEST_EPOCH_LEN", raising=False)
+    monkeypatch.delenv("HERALD_EPOCH_LAG", raising=False)
+    assert wd._herald_epoch_defaults("finney", 69) == (7200, -12803)
+    assert wd._herald_epoch_defaults("test", 535) == (7200, 10)
+    assert "HERALD_EPOCH_LAG" not in os.environ  # read-only: the process environment is untouched
+
+    monkeypatch.setenv("HERALD_EPOCH_LAG", "3")
+    assert wd._herald_epoch_defaults("finney", 69) == (7200, 3)
+
+
 def test_invalid_epoch_env_is_incomplete_not_a_crash(wd, monkeypatch):
     monkeypatch.setenv("HERALD_VEST_EPOCH_LEN", "daily")
     out = io.StringIO()

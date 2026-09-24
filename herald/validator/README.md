@@ -64,7 +64,8 @@ submissions feed, settings, pricing inputs, weight vector checks and log tags.
 - A registered validator hotkey with subnet-69 alpha stake
 - Outbound HTTPS and chain RPC only: a validator serves no axon and takes no inbound traffic
 - The same consensus-affecting configuration as every other Herald validator, including
-  `HERALD_INCENTIVE_HOTKEY` and `HERALD_BURN_UNEARNED`
+  `HERALD_INCENTIVE_HOTKEY` and `HERALD_BURN_UNEARNED` (on finney netuid 69 the release supplies
+  the incentive hotkey, trust anchors and epoch alignment: `herald/network_profile.py`)
 - The offline-signed production outlet registry
 - A signed brief-board validator feed
 - `HERALD_RESULTS_ENDPOINT` with a results read credential (the submissions feed) and write
@@ -185,14 +186,17 @@ available; it is not treated as an authoritative empty feed.
 ## Incentive hotkey and submissions
 
 ```dotenv
-HERALD_INCENTIVE_HOTKEY=<INCENTIVE_SS58>
+# Built in on finney netuid 69; set only on another network, or to deviate on purpose:
+# HERALD_INCENTIVE_HOTKEY=<INCENTIVE_SS58>
+# HERALD_RESULTS_ENDPOINT=https://herald-api.example
 HERALD_BURN_UNEARNED=false
-HERALD_RESULTS_ENDPOINT=https://herald-api.example
 HERALD_RESULTS_READ_TOKEN=<READ_TOKEN>
 ```
 
-- `HERALD_INCENTIVE_HOTKEY` is provided by the subnet operator and must be identical on every
-  validator; it is part of the consensus fingerprint. Production preflight requires a valid SS58
+- `HERALD_INCENTIVE_HOTKEY` must be identical on every validator; it is part of the consensus
+  fingerprint. A validator started for finney netuid 69 takes the release's value
+  (`5CK1qDSktB7i28rr8dnCpG1sTr13CTwg2EffhkD9eNWRDB6x`) when `.env` leaves it unset or empty, so a
+  pull and a recreate follow a change of it. Production preflight requires a valid SS58
   address that differs from `HERALD_REGISTRY_AUTHORITY_HOTKEY`. At scoring time all of the day's
   weight goes to UID 0 if the hotkey is not registered, is this validator's own hotkey, or holds
   UID 0.

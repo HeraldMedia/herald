@@ -25,6 +25,7 @@ not include scripts/):
 """
 
 import argparse
+import importlib.util
 import os
 import sys
 from dataclasses import dataclass
@@ -323,25 +324,42 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--epoch-len", type=int, default=None,
                         help="blocks per Herald epoch (default: $HERALD_VEST_EPOCH_LEN or 7200)")
     parser.add_argument("--epoch-lag", type=int, default=None,
-                        help="epoch boundary lag in blocks (default: $HERALD_EPOCH_LAG or 10)")
+                        help="epoch boundary lag in blocks (default: $HERALD_EPOCH_LAG, else the "
+                             "release's mainnet value on finney netuid 69, else 10)")
     parser.add_argument("--check-board-feed", action="store_true",
                         help="also read the backend's reconciliation-feed health "
                              "(GET /public/placements/feed-health) and breach on any alarm it reports")
     return parser
 
 
-def _herald_epoch_defaults() -> tuple:
+def _network_profile():
+    """herald/network_profile.py, loaded by path so that the herald package is never imported."""
+    path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                        "herald", "network_profile.py")
+    spec = importlib.util.spec_from_file_location("_herald_network_profile", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _herald_epoch_defaults(network: str = None, netuid: int = None) -> tuple:
     """(HERALD_VEST_EPOCH_LEN, HERALD_EPOCH_LAG), read exactly as herald/validator/utils/config.py does.
 
     Taken from the environment instead of importing herald: importing the package initialises the
     validator's on-disk caches, and this watchdog must not write anything. tests/news/test_watchdog.py
-    pins these defaults to config.py so the two cannot drift apart.
+    pins these defaults to config.py so the two cannot drift apart. For a subnet given by `netuid`,
+    the release's mainnet settings fill what the environment leaves unset, as they do for the
+    validator.
     """
-    return int(os.getenv("HERALD_VEST_EPOCH_LEN", "7200")), int(os.getenv("HERALD_EPOCH_LAG", "10"))
+    env = dict(os.environ)
+    if netuid is not None:
+        _network_profile().apply_mainnet_defaults(
+            ["--netuid", str(netuid), "--subtensor.network", network or "finney"], env)
+    return int(env.get("HERALD_VEST_EPOCH_LEN", "7200")), int(env.get("HERALD_EPOCH_LAG", "10"))
 
 
 def _collect(args, chain_factory, backend_factory) -> List[Finding]:
-    default_len, default_lag = _herald_epoch_defaults()
+    default_len, default_lag = _herald_epoch_defaults(args.network, args.netuid)
     epoch_len = default_len if args.epoch_len is None else args.epoch_len
     epoch_lag = default_lag if args.epoch_lag is None else args.epoch_lag
     chain_target = args.chain_endpoint or args.network

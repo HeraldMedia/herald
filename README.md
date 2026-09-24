@@ -20,7 +20,9 @@ the part of what that hotkey receives that verified value covers, which is owed 
 5. **Vest.** A verified article is valued by its outlet tier and search presence. The value releases
    in daily installments over a 30-day persistence window while the article stays live. A
    confirmed removal, or a change to paid content, forfeits the remaining installments.
-6. **Weight.** Each epoch validators set weight on one incentive hotkey (`HERALD_INCENTIVE_HOTKEY`).
+6. **Weight.** Each epoch validators set weight on one incentive hotkey (`HERALD_INCENTIVE_HOTKEY`,
+   built into each release for finney netuid 69 with the other public mainnet settings; see
+   `herald/network_profile.py`).
    The contributors' share is the epoch's verified USD installments divided by the USD value of
    the day's miner emission, capped at 100%. By default (`HERALD_BURN_UNEARNED=false`) the
    incentive hotkey receives all the weight and each signed epoch snapshot states that share as
@@ -67,7 +69,9 @@ signature when `HERALD_REGISTRY_PUBKEY` is set. See `.env.example` for configura
 
 Production deployments use the standalone `herald-backend`; the JSON Brief Board under
 `herald/services` is restricted to development and migration. Start validators from
-`deploy/validator.env.production.example`. With `HERALD_PRODUCTION=true`, neuron startup fails
+`deploy/validator.env.production.example`; on finney netuid 69 the release supplies the public
+settings (endpoints, pubkeys, authority and incentive hotkeys, epoch alignment), so an operator adds
+only a wallet, API keys and the results credential. With `HERALD_PRODUCTION=true`, neuron startup fails
 closed on a non-mainnet scope, simulator/local endpoints, unsigned feeds or registries, missing
 provider or results credentials, a missing or invalid `HERALD_INCENTIVE_HOTKEY`,
 consensus-fingerprint drift, or a missing live registry anchor.
