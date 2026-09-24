@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from types import SimpleNamespace
 
 import pytest
@@ -288,6 +289,66 @@ def test_published_ts_parses_lancet_citation_online_date(monkeypatch):
     monkeypatch.setattr(fetchmod, "_http_get", lambda url: (200, url, html))
     expect = datetime(2026, 6, 17, tzinfo=timezone.utc).timestamp()
     assert fetch("https://x/lancet").published_ts == expect
+
+
+@pytest.mark.parametrize("raw, published, exact", [
+    ("2026-09-08T10:15:00Z", datetime(2026, 9, 8, 10, 15, tzinfo=timezone.utc), True),
+    ("2026-09-08T12:15:00+02:00", datetime(2026, 9, 8, 10, 15, tzinfo=timezone.utc), True),
+    ("2026-09-08T06:15:00-0400", datetime(2026, 9, 8, 10, 15, tzinfo=timezone.utc), True),
+    ("2026-09-08", datetime(2026, 9, 8, tzinfo=timezone.utc), False),
+    ("2026-09-08T10:15:00", datetime(2026, 9, 8, 10, 15, tzinfo=timezone.utc), False),
+    ("2026/09/08", datetime(2026, 9, 8, tzinfo=timezone.utc), False),
+    # Exactly midnight in the stated offset is how many sites render a date alone.
+    ("2026-09-08T00:00:00Z", datetime(2026, 9, 8, tzinfo=timezone.utc), False),
+    ("2026-09-08T00:00:00-04:00", datetime(2026, 9, 8, 4, 0, tzinfo=timezone.utc), False),
+    ("2026-09-08T00:00:00.000+02:00", datetime(2026, 9, 7, 22, 0, tzinfo=timezone.utc), False),
+    ("2026-09-08T00:00:01+02:00", datetime(2026, 9, 7, 22, 0, 1, tzinfo=timezone.utc), True),
+    ("2026-09-07T20:00:00-04:00", datetime(2026, 9, 8, tzinfo=timezone.utc), True),
+], ids=["z", "offset", "offset-without-colon", "date-only", "time-without-offset", "slash-date",
+        "midnight-z", "midnight-negative-offset", "midnight-fractional-zeros",
+        "one-second-past-midnight", "utc-midnight-local-evening"])
+def test_publication_time_is_exact_only_with_a_time_of_day_and_an_explicit_offset(monkeypatch, raw,
+                                                                                  published, exact):
+    html = b'<script>{"datePublished":"' + raw.encode() + b'"}</script>' + b"x" * 600
+    monkeypatch.setattr(fetchmod, "_http_get", lambda url: (200, url, html))
+    r = fetch("https://x/a")
+    assert r.published_ts == published.timestamp()
+    assert r.published_exact is exact
+
+
+def test_publication_time_from_a_meta_tag_reports_exactness():
+    exact = b'<meta property="article:published_time" content="2026-09-08T10:15:00+00:00">'
+    dated = b'<meta name="citation_online_date" content="2026/09/08">'
+    assert fetchmod._parse_published(exact.decode()) == (
+        datetime(2026, 9, 8, 10, 15, tzinfo=timezone.utc).timestamp(), True, None)
+    assert fetchmod._parse_published(dated.decode()) == (
+        datetime(2026, 9, 8, tzinfo=timezone.utc).timestamp(), False, "2026-09-08")
+
+
+@pytest.mark.parametrize("raw, stated", [
+    ("2026-09-08T00:00:00+02:00", "2026-09-08"),  # 22:00 UTC on 7 September
+    ("2026-09-08T00:00:00-04:00", "2026-09-08"),
+    ("2026-09-08T00:00:00Z", "2026-09-08"),
+    ("2026-09-08", "2026-09-08"),
+    ("2026/09/08", "2026-09-08"),
+    ("2026-09-08T23:30:00", "2026-09-08"),
+    ("2026-09-08T00:30:00+02:00", None),  # exact: compared as an instant
+    ("2026-09-08T10:15:00Z", None),
+])
+def test_a_publication_time_that_is_not_exact_carries_the_date_it_states(monkeypatch, raw, stated):
+    html = b'<script>{"datePublished":"' + raw.encode() + b'"}</script>' + b"x" * 600
+    monkeypatch.setattr(fetchmod, "_http_get", lambda url: (200, url, html))
+    r = fetch("https://x/a")
+    assert r.published_date == stated
+    assert r.published_exact is (stated is None)
+
+
+def test_page_without_a_publication_time_is_not_exact(monkeypatch):
+    monkeypatch.setattr(fetchmod, "_http_get", lambda url: (200, url, b"x" * 1000))
+    r = fetch("https://x/a")
+    assert r.published_ts is None and r.published_exact is False and r.published_date is None
+    empty = FetchResult(False, 0, "https://x/a", "", 0)
+    assert empty.published_exact is False and empty.published_date is None
 
 
 def test_published_ts_no_redos_on_pathological_body():

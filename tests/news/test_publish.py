@@ -1,5 +1,7 @@
 from types import SimpleNamespace
 
+import pytest
+
 from herald.validator.news import publish
 from herald.validator.news.vesting import VestingLedger
 
@@ -86,7 +88,7 @@ def test_epoch_snapshot_uses_exact_integer_accounting_and_normalized_u16():
         [0.4166666667, 0.5833333333], [1, 2], {1: "miner-1", 2: "miner-2"},
         network="test", netuid=535, validator_hotkey="validator", validator_uid=4,
         chain_block=1234, epoch=20, registry_version=3, registry_hash="a" * 48,
-        consensus="fp",
+        consensus="fp", burn_unearned=True, contributor_share_ppb=1_000_000_000,
     )
 
     assert snapshot["state"]["articles"][0]["earned_microusd"] == 16_666_667
@@ -101,7 +103,8 @@ def test_state_hash_ignores_validator_identity_and_evaluation_block():
                   hotkey="miner-1", brief_id="b1", start_epoch=20)
     args = (vesting, [], {}, {}, [], [], {})
     common = dict(network="test", netuid=535, epoch=20, registry_version=3,
-                  registry_hash="a" * 48, consensus="fp")
+                  registry_hash="a" * 48, consensus="fp", burn_unearned=False,
+                  contributor_share_ppb=250_000_000)
     one = publish.build_epoch_snapshot(*args, validator_hotkey="v1", validator_uid=4,
                                        chain_block=1234, **common)
     two = publish.build_epoch_snapshot(*args, validator_hotkey="v2", validator_uid=5,
@@ -109,6 +112,46 @@ def test_state_hash_ignores_validator_identity_and_evaluation_block():
     assert one["state_hash"] == two["state_hash"]
     assert "validator_hotkey" not in one["state"]["articles"][0]
     assert "chain_block" not in one["state"]["articles"][0]
+
+
+def _snapshot(burn_unearned, contributor_share_ppb):
+    vesting = VestingLedger(vest_epochs=30)
+    vesting.start("a1", uid=2, total_usd=500, hotkey="incentive", brief_id="b1", start_epoch=20)
+    return publish.build_epoch_snapshot(
+        vesting, [{"id": "b1", "kind": "standing"}], {}, {2: 250.0}, [1.0], [2],
+        {0: "hk0", 2: "incentive"}, network="test", netuid=535, validator_hotkey="validator",
+        validator_uid=4, chain_block=1234, epoch=20, registry_version=3, registry_hash="a" * 48,
+        consensus="fp", burn_unearned=burn_unearned, contributor_share_ppb=contributor_share_ppb,
+    )
+
+
+@pytest.mark.parametrize("burn_unearned, share", [
+    (False, 0), (False, 250_000_000), (False, 1_000_000_000), (True, 1_000_000_000),
+])
+def test_epoch_snapshot_states_the_burn_setting_and_the_contributor_share(burn_unearned, share):
+    snapshot = _snapshot(burn_unearned, share)
+
+    assert snapshot["schema_version"] == 1
+    assert snapshot["state"]["burn_unearned"] is burn_unearned
+    assert snapshot["state"]["contributor_share_ppb"] == share
+    assert type(snapshot["state"]["contributor_share_ppb"]) is int
+    assert set(snapshot["state"]) == {"articles", "briefs", "rewards", "weights", "burn_unearned",
+                                      "contributor_share_ppb"}
+    # Both fields are consensus state, and the bytes validators sign carry them.
+    assert b'"contributor_share_ppb":%d' % share in publish.canonical_bytes(snapshot)
+
+
+def test_the_burn_setting_and_the_contributor_share_are_in_the_state_hash():
+    hashes = {_snapshot(burn, share)["state_hash"]
+              for burn, share in ((False, 250_000_000), (False, 250_000_001), (True, 250_000_000))}
+    assert len(hashes) == 3
+    assert _snapshot(False, 7)["state_hash"] == _snapshot(False, 7)["state_hash"]
+
+
+@pytest.mark.parametrize("share", [-1, 1_000_000_001, 0.5, 250_000_000.0, True, "1", None])
+def test_a_contributor_share_outside_0_to_1e9_or_not_an_integer_is_refused(share):
+    with pytest.raises(ValueError, match="contributor_share_ppb"):
+        _snapshot(False, share)
 
 
 def test_credentials_are_sent_without_surrounding_whitespace(monkeypatch):

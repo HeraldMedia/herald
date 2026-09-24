@@ -161,9 +161,9 @@ def add_miner_args(cls, parser):
 def add_validator_args(cls, parser):
     """Add validator specific arguments to the parser.
 
-    A Herald validator serves nothing: it answers no requests and makes only outbound calls, so it
-    has no axon to switch on or off and takes no inbound port. The --axon.* arguments bittensor adds
-    belong to the miner.
+    A Herald validator serves nothing. It reads contributor submissions from the Herald backend and
+    queries no axons, so it has no axon to switch on or off and takes no inbound port: the --axon.*
+    arguments bittensor adds belong to the miner.
     """
 
     parser.add_argument(

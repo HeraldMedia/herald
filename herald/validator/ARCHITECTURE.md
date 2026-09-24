@@ -1,45 +1,74 @@
 # Herald Architecture
 
 Herald is a Bittensor subnet for verified editorial media placement. Its central invariant is that
-the same chain state, signed configuration, and public evidence should produce the same reward
-weights on every validator.
+the same chain state, signed configuration, backend submissions and public evidence should produce
+the same weights on every validator.
 
 ## System flow
 
 ```text
-Brief-board operator
-    │ creates and funds a signed brief
+Brief operator (herald-backend)
+    │ creates, funds and signs briefs
     ▼
-Miner commits (brief, outlet, hotkey, reserved bond=0, evidence hash) on chain
-    │ performs the off-chain PR work
+Contributor on the Herald website (Google sign-in)
+    │ picks a brief and uploads the text before publishing
+    │ publishes, then adds the article link
     ▼
-Miner attaches the published URL and article snapshot
-    │ serves ClaimSynapse over its axon
+Token-gated submissions feed: submission id, brief, link, uploaded text, upload time
+    │ read once per daily evaluation epoch
     ▼
-Validator oracle verifies commitment, registry, URL, editorial status,
-topic, search presence, publication time, and attribution evidence
+Validator oracle verifies each new article on the outlet's own page: registry outlet,
+supported fetch, live page, publication inside the brief window and not before the upload,
+uploaded text present, not paid content, on topic, search presence
     │
     ▼
-Strongest evidence → earliest commitment → one winner per article and outlet/brief
+30-epoch vesting on the incentive hotkey → liveness checks → clawback on confirmed removal
     │
     ▼
-30-epoch vesting → liveness checks → clawback/slash/dispute handling
+Prepaid client pools + standing briefs → payable USD for the epoch
     │
     ▼
-Prepaid client pools + standing placement installments → per-UID USD
+share = min(1, payable USD / USD value of the day's miner emission)
+HERALD_BURN_UNEARNED=false (default): weights {incentive hotkey UID: 1}, every epoch
+HERALD_BURN_UNEARNED=true: weights {incentive hotkey UID: share, UID 0: 1 − share};
+                           a failed shared step → {UID 0: 1}
     │
     ▼
-Normalize rewarded miners to 100% of Bittensor weights
+Signed snapshots, stating contributor_share_ppb → backend confirms the epoch and credits
+contributor accounts →
+contributors claim their share of the incentive hotkey's alpha to a connected wallet
 ```
+
+## Participants
+
+- **Contributors** are PR firms and PR professionals. They sign in to the Herald website with
+  Google, pick a brief, upload the text they will publish before publishing, and add the published
+  link. They need no wallet, hotkey or command line to contribute; a wallet connected on the
+  website is used only to claim earnings.
+- **The Herald backend** (`herald-backend`, a separate service) signs the brief feed, records each
+  upload and link against the contributor's account, serves the submissions feed, confirms signed
+  epoch snapshots, and credits each account its share of the part of the incentive hotkey's alpha
+  that the epoch's snapshot states is owed to contributors (`contributor_share_ppb`).
+- **Validators** verify articles, vest their value on the incentive hotkey, and set weights on that
+  hotkey and UID 0.
+- **The incentive hotkey** is one hotkey registered on the subnet and configured identically on
+  every validator as `HERALD_INCENTIVE_HOTKEY`. It is the only UID besides 0 that receives weight.
+
+Registered miner hotkeys receive no weight. The miner neuron (`neurons/miner.py`), `herald/miner/`,
+`herald/protocol.py`, `herald/commit.py` and `herald/evidence.py` are deprecated and unused by the
+validator.
 
 ## Trust boundaries
 
-### Miner input
+### Submissions feed
 
-The miner controls every `ClaimSynapse` field. `herald/protocol.py` bounds list sizes, string
-lengths, integers, evidence, snapshots, and Merkle depth before scoring. The raw transport body is
-still read by Bittensor before model validation, so production validators also need a process or
-container memory limit.
+The backend decides which account a submission belongs to; the validator verifies the article.
+`herald/validator/news/submissions.py` reads at most the first 10,000 rows and keeps a row only when
+its network and netuid are the validator's own, its ids are 1–128 characters of
+`[A-Za-z0-9._:-]`, its URL is ASCII `https` of at most 2,048 characters with no query string after
+canonicalization, its uploaded text is 300–40,000 characters after trimming, and its upload time is
+a positive integer no later than chain time. The uploaded text is used only for verification and is
+never published, stored or logged.
 
 ### Outlet registry
 
@@ -50,101 +79,175 @@ container memory limit.
 - fetch strategy (`direct`, `proxy[:profile]`, `api:<adapter>`, or fail-closed `disabled`);
 - outlet-specific paid-content URL patterns and disclosure markers.
 
-Production editions are signed offline with Ed25519 and bound to an authority hotkey's on-chain
-`HRLDREG` commitment. A configured missing or mismatched anchor fails closed.
+New submissions are accepted only from `direct` and `proxy` outlets, because every content check
+runs on the page the validator fetches itself. Production editions are signed offline with Ed25519
+and bound to an authority hotkey's on-chain `HRLDREG` commitment, the only commitment a validator
+reads. A configured missing or mismatched anchor fails closed.
 
 ### Brief feed
 
 The brief board signs the complete validator payload, including funding state, kind, and reward
-pool. Validators verify the signature and freshness timestamp. The board signing key is online;
-an on-chain brief-edition anchor remains future hardening.
+pool. Validators verify the signature and freshness timestamp.
+
+### Chain and price inputs
+
+The scoring block's timestamp, the subnet's alpha price, its per-block alpha emission and its
+mechanism emission split are read from the chain at the scoring block; TAO/USD comes from
+CoinGecko. An input that is missing, non-finite or not positive fails the day.
 
 ### Public web
 
 Article fetches permit only HTTP(S), reject private/reserved targets, check every direct redirect,
 stream bodies to a configured byte limit, and restrict verification to registry-owned domains.
-DNS rebinding remains a bounded residual risk.
 
 ## Validator pipeline
 
-The epoch orchestration is `herald/validator/news/forward.py`.
+The epoch orchestration is `herald/validator/news/forward.py`. Scoring runs once per evaluation
+epoch (`HERALD_VEST_EPOCH_LEN` blocks, about one day, lagged behind the chain head by
+`HERALD_EPOCH_LAG`).
 
-1. Load persistent commit, vesting, slash, dispute, pool, and last-scored state.
-2. Derive the evaluation epoch from lagged chain height.
-3. Fetch and verify the signed active brief feed.
-4. Read on-chain commitments and the registry authority anchor.
-5. Load and verify the outlet registry.
-6. Pull claims concurrently from miner axons.
-7. Merge public-board reconciliation hints and validate them as bounded claims.
-8. Run winner selection and reject articles not provably published after the commitment.
-9. Start new vesting entries and process on-chain disputes.
-10. Recheck active placements for liveness and paid-content swaps.
-11. Apply prepaid client pools and aggregate placement/dispute value by miner.
-12. Normalize rewarded miners to the full weight vector, publish results, and persist state.
-13. Submit that vector once for the scored Herald epoch when Bittensor's chain gate permits it.
+1. Load the Herald ledger and derive the evaluation epoch. If either fails, log the error and change
+   nothing.
+2. For an epoch that is already scored, keep its vector on the incentive hotkey's current UID
+   (`stale_scores`), and the next weight submission sends any replacement. With
+   `HERALD_BURN_UNEARNED=true`, scores on any UID other than 0 and that UID are replaced by all
+   weight on UID 0. With `false`, anything other than all weight on that UID is replaced by all
+   weight on it, or on UID 0 while it cannot be resolved.
+3. Fetch and verify the signed active brief feed. A verified empty feed (`no_briefs`) puts all
+   weight on the incentive hotkey's UID, or on UID 0 with `HERALD_BURN_UNEARNED=true`.
+4. Resolve the incentive hotkey's UID: the hotkey must be set, registered, different from this
+   validator's hotkey, and not at UID 0.
+5. Read the scoring block's chain time and price one day of miner emission (`pricing.py`).
+6. Load the outlet registry and verify it against the authority anchor.
+7. Read the submissions feed, validate its rows, and select new articles with their candidate
+   submissions.
+8. Verify each selected article's candidates in upload order (`oracle.py`). The first that passes
+   starts a vesting entry on the incentive hotkey that records its submission id. An error
+   verifying one candidate rejects only that candidate (`verify_error`).
+9. Expire entries past their maximum age and entries without a submission id; check the rest for
+   liveness and collect released installments.
+10. Apply prepaid client pools and sum the payable USD.
+11. Build the weight vector (`incentive_weight_vector()`) and the contributors' share
+    (`contributor_share_ppb()`), replace the scores with the vector, publish result items and a
+    signed epoch snapshot whose state carries `burn_unearned` and `contributor_share_ppb`, and save
+    the ledger.
+12. Submit the latest vector whenever the chain's weight record for this validator's uid is at
+    least `HERALD_WEIGHT_RESUBMIT_BLOCKS` blocks old (default 180) and no commit of this hotkey is
+    pending reveal, after the base `--neuron.epoch_length` gate. The vector is scored once per epoch
+    but submitted on this block cadence, so the chain's copy stays inside the activity cutoff; with
+    commit-reveal the record is refreshed about once per tempo.
 
-An explicitly valid empty brief feed clears local scores. The weight writer skips an empty vector
-instead of letting the SDK convert it into uniform rewards.
+An error in steps 4–11 fails the epoch (`_fail_epoch`): the ledger returns to its state before the
+pass, the epoch is marked scored so it is not retried, and nothing is published. The scores become
+all weight on the incentive hotkey's UID (`INCENTIVE_FULL`), or all weight on UID 0
+(`INCENTIVE_BURN`) with `HERALD_BURN_UNEARNED=true` or when that UID cannot be resolved (step 4).
+Installments not released that day are caught up by the next successful epoch.
+
+## Selection
+
+`select_new()` groups validated rows by canonical article id and skips articles the vesting ledger
+already holds in any status, whatever their rows. An article's rows are its candidates, ordered by
+upload time, then submission id; at most `HERALD_MAX_CANDIDATES_PER_ARTICLE` of the earliest uploads
+are kept. Articles are ordered by their earliest candidate's upload time, then article id, and at
+most `HERALD_MAX_SUBMISSIONS_PER_EPOCH` articles are returned, so a backlog is verified first come,
+first served.
+
+The scoring pass walks each article's candidates in order through the whole oracle and credits the
+first that passes: the earliest matching draft wins, and an earlier draft that fails does not block
+a later one. Each canonical URL is fetched at most once per pass, shared by every candidate and the
+liveness check. Each article vests at most once.
 
 ## Verification oracle
 
-`evaluate_article()` in `herald/validator/news/oracle.py` is ordered cheapest-first:
+`verify_article()` in `herald/validator/news/oracle.py` runs exact checks in order and stops at the
+first failure. The brief must be active before it is called (`brief_not_active`).
 
-1. Serving-hotkey and attribution-evidence integrity
-2. Commitment hash
-3. Registry version and outlet lookup
-4. Strategy-aware page fetch
-5. Miner snapshot anchoring
-6. Generic and outlet-specific paid-content detection
-7. Rules-first topic matching
-8. Search-index check
-9. Attribution-evidence grading and USD calculation
+1. Registry outlet lookup (`outlet_not_listed`)
+2. Supported fetch strategy, `direct` or `proxy` (`outlet_not_supported`)
+3. Strategy-aware page fetch (`url_not_live`)
+4. Publication time present (`publication_date_unverifiable`)
+5. Publication window (`published_outside_window`): no later than chain time and at most
+   `HERALD_MAX_ARTICLE_AGE_DAYS` before it; for a brief with an end date that is not a standing
+   brief, from start date minus `HERALD_PUBLISH_BUFFER_DAYS` at 00:00 UTC through end date
+   23:59:59 UTC; a publication time that is not exact counts on the date the page states
+6. Published no earlier than the upload (`published_before_upload`): at or after the upload time
+   when the page states an exact publication time (a time of day with `Z` or an explicit UTC
+   offset), otherwise on or after the upload's UTC day. A date alone, a time with no offset, or
+   exactly 00:00:00 in the stated offset (how many sites render a date alone) is not exact, and is
+   judged by the date the page states, in its own offset (`published_date`): for example
+   `2026-09-08T00:00:00+02:00` is 8 September. The evidence records `published_exact` and
+   `published_date`.
+7. Draft match (`draft_mismatch`): the share of the uploaded text's normalized five-word shingles
+   found in the fetched article body must be at least `HERALD_DRAFT_MATCH_THRESHOLD`
+8. Generic and outlet-specific paid-content detection (`paid_not_real_news`)
+9. Rules-first topic matching (`topic_mismatch`)
+10. Search-index check and USD value
 
-Direct/proxy fetches anchor the miner snapshot inside the validator's full page. Publisher API
-adapters reverse the direction: the authoritative excerpt must appear inside the miner's snapshot.
-Topic metadata for API adapters remains publisher-controlled.
+Each candidate tried logs `SUBMISSION_RESULT <submission_id> <reason>`, where the reason is `ok` or
+the first failed check, and the credited candidate logs
+`SUBMISSION_CREDITED <submission_id> candidate=<i>/<n>`. The uploaded text is never added to the
+evidence.
 
-## Attribution and winner selection
+## Vesting and liveness
 
-Commitments can bind three evidence levels:
+`VestingLedger` releases an article's value over `HERALD_VEST_EPOCHS`. Each epoch checks liveness
+only; topic and search results are not rerun because per-validator page and index variance would
+fork installments.
 
-- Level 2: precommitted draft or quote appears in the article.
-- Level 1: precommitted byline and bounded publication window match.
-- Level 0: bare prediction.
+- Alive: release every installment accrued since the last release.
+- Hold: the brief is no longer active, or the fetch is inconclusive; release nothing and change
+  nothing.
+- Dead: a confirmed 404/410, or the page changed to paid content. After
+  `HERALD_DEAD_CONFIRM_EPOCHS` consecutive dead epochs the remaining installments are clawed back.
 
-Selection is strongest evidence, then earliest observed commitment, then lowest UID. If two
-different hotkeys commit substantially overlapping level-2 text for the same article, both are
-demoted because shared copy proves campaign involvement but not individual causation.
-
-Only one article wins each `(outlet, brief)` placement slot.
-
-## Vesting, slashing, and disputes
-
-`VestingLedger` releases a placement over `HERALD_VEST_EPOCHS`. Each epoch checks liveness only;
-topic and search decisions are not rerun because per-validator page/index variance would fork
-installments.
-
-- Alive: release accrued installments.
-- Hold: withhold while evidence is inconclusive or the brief is unavailable.
-- Confirmed dead or changed to paid content: claw back remaining installments and slash.
-
-Outlet-specific paid markers are reapplied during persistence, preventing a page from being changed
-to an outlet's branded-content format after initial acceptance.
-
-Disputes use an on-chain `HRLDDIS` commitment. They are enabled only with a fleet-wide pinned model.
-An upheld dispute rewards the eligible filer from forfeited vesting; a rejected
-griefing dispute slashes the filer.
+Outlet-specific paid markers are reapplied during liveness checks. There is no slashing. Entries
+older than `HERALD_VEST_EPOCHS + HERALD_VEST_GRACE_EPOCHS` epochs expire. Entries without a
+submission id, started by earlier releases, are expired and counted in
+`LEGACY_VESTING_EXPIRED <n>`.
 
 ## Funding and emissions
 
 Client briefs use prepaid USD reward pools recorded in the signed feed. `pool_spent` prevents a
-pool from paying more than its funded amount across epochs. Standing placements contribute their
-full current installment value.
+pool from paying more than its funded amount across epochs. Standing briefs contribute their full
+current installment value (`apply_reward_pools()` in `emission.py`).
 
-There is no funding boost or `HRLDFUND` multiplier. Per-article USD is based on tier, search status,
-and attribution evidence. Each placement releases `total_usd / HERALD_VEST_EPOCHS` per evaluation
-epoch while it remains live. The validator sums all current installments by miner, including
-overlapping placements, and `compute_weights()` normalizes those positive totals to 100%.
+Per-article USD is `HERALD_BASE_PAYOUT_USD × tier multiplier × search factor`, and each article
+releases `total_usd / HERALD_VEST_EPOCHS` per evaluation epoch while it remains live. The epoch's
+payable USD is the pool-capped sum of released installments.
+
+`daily_miner_usd()` in `pricing.py` values one day of miner emission at the scoring block:
+
+```text
+daily_miner_alpha = BLOCKS_PER_DAY (7200) × alpha_out_emission × MINER_EMISSION_SHARE (0.41) × mechanism 0 ratio
+daily_usd         = daily_miner_alpha × alpha price in TAO × TAO/USD
+```
+
+`incentive_weight_vector()` in `emission.py` builds the epoch's vector from `HERALD_BURN_UNEARNED`,
+a consensus setting that must be identical on every validator:
+
+- `true`: `incentive_burn_vector()` returns `([0, uid], [1 − w, w])` with
+  `w = min(1, payable_usd / daily_usd)` and zero entries dropped, or `([0], [1.0])` when nothing is
+  payable or there is no usable incentive UID.
+- `false` (default): `full_incentive_vector()` returns `([uid], [1.0])`, whatever was verified, or
+  `([0], [1.0])` when there is no usable incentive UID.
+
+`contributor_share_ppb()` gives the part of the incentive UID's receipt for the epoch that is owed to
+contributors, in parts per billion: `1000000000` with the burn, since the chain already scaled the
+receipt to verified value, and otherwise `floor(min(1, payable_usd / daily_usd) × 10^9)`, computed
+exactly with rational arithmetic on the two values, or `0` when nothing is payable or `daily_usd` is
+not a finite positive number. The epoch snapshot's state records it with `burn_unearned`, so the
+backend credits contributors that part of what the incentive hotkey received. The validator logs
+`INCENTIVE_WEIGHT` with `w` (the incentive UID's weight), the payable USD, every pricing input,
+`burn_unearned` and `contributor_share_ppb`.
+
+At submission, `set_weights()` in `herald/base/validator.py` reads the subnet's MinAllowedWeights
+and calls `allowed_emit_vector()`. It normalizes the scores over UID 0 and the incentive hotkey's
+current UID (scores anywhere else become all weight on UID 0, logged as `WEIGHT_VECTOR_BURN`),
+converts them to u16 without padding or `MaxWeightsLimit` clipping, and raises
+`WeightVectorRefused` when the vector is empty, reaches another UID, MinAllowedWeights is unknown,
+or the vector is shorter than MinAllowedWeights. A refusal logs `WEIGHT_VECTOR_REFUSED reason=...`
+at ERROR and sends no extrinsic. The full-incentive and burn-only vectors have one entry each, so
+MinAllowedWeights must be 1.
 
 ## State
 
@@ -152,41 +255,37 @@ Validator state has two layers:
 
 - `state.npz`: Bittensor step, scores, hotkeys, and the producing spec version. A version mismatch
   discards scores so a rollout cannot resubmit an older emission model under a new version key.
-- `herald_state.json`: commit index, vesting, slashing, disputes, pool spending, the last scored
-  epoch, and the last successfully submitted weight epoch.
+- `herald_state.json` (schema 2): vesting, pool spending, the last scored epoch, and the last
+  successfully submitted weight epoch. The commit index, slash and dispute sections are kept in the
+  file format and are no longer updated.
 
 The score checkpoint is restored before initial sync so startup cannot overwrite it with zeroes.
-Herald state is atomically replaced after successful scoring and again after successful weight
-inclusion. The separate submission marker prevents Bittensor's shorter weight-update interval from
-resubmitting one unchanged daily allocation. Compose persists both files under the
-`validator_state` volume.
-
-Miner `claims.json` contains commitment nonces and is written atomically with mode `0600`.
+Herald state is atomically replaced after scoring or a failed pass and again after successful
+weight inclusion. The submitted-epoch marker is bookkeeping: when the latest vector is submitted again is
+decided from the age of the chain's weight record, not from the marker. Compose persists both files
+under the `validator_state` volume.
 
 ## Supporting service
 
-`herald/services/app.py` exposes:
-
-- signed validator briefs and public open briefs;
-- token-gated brief administration and funding confirmation;
-- token-gated result and reveal ingestion;
-- public verified placements, leaderboard, statistics, registry, and reporting export;
-- registry draft staging for later offline signing;
-- an informational dispute mirror.
-
-Writes fail closed when their token is unset. Reveals are protected on both read and write. The
-service should run behind TLS, a request-body limit, and persistent storage.
+`herald/services/app.py` is the legacy JSON brief board, for development and migration only. It
+refuses to run with `HERALD_PRODUCTION=true` and requires `HERALD_ENABLE_LEGACY_BRIEF_BOARD=true`.
+Production uses `herald-backend`, which serves the signed brief feed, the submissions feed,
+snapshot and weight-receipt ingestion, and contributor accounts and earnings.
 
 ## Consensus controls
 
-`herald/validator/utils/consensus.py` fingerprints scoring, timing, provider availability, LLM
-provider/model readiness, fetch limits, brief-signature policy, and registry trust settings. The
-fingerprint detects fleet drift; it does not coordinate deployment. Operators must still roll out
-changes together.
+`herald/validator/utils/consensus.py` fingerprints scoring, timing, the emission mode and burn
+setting, pricing constants, submission intake, provider availability, LLM provider/model readiness, fetch limits,
+brief-signature policy, and registry trust settings. The fingerprint detects fleet drift; it does
+not coordinate deployment. Operators must still roll out changes together.
 
 The following must match across validators:
 
-- epoch, vesting, weight-slashing, dispute-eligibility, and payout parameters;
+- epoch, vesting, liveness and payout parameters;
+- the emission mode, burn UID, `HERALD_BURN_UNEARNED`, incentive hotkey, price source, miner
+  emission share and blocks per day;
+- submission intake: the draft-match threshold, publication buffer, maximum article age and
+  per-epoch submission cap;
 - fetch/search provider availability, quorum, and limits;
 - outlet registry edition, signing key, and authority anchor;
 - brief signing key and freshness policy;
@@ -197,7 +296,6 @@ The following must match across validators:
 ```bash
 source .venv/bin/activate
 python -m pytest -q
-python scripts/e2e_simulation.py
 docker compose config -q
 bash -n entrypoint.sh scripts/*.sh
 ```

@@ -1,10 +1,7 @@
-"""Dispute ledger: tracks active placement disputes and their resolution.
+"""Dispute ledger.
 
-Consensus-safe by construction: a dispute only marks an article for the escalated re-check; the
-existing deterministic oracle/persistence path decides upheld (article failed -> clawback+slash the
-miner, reward the disputer) vs rejected (still alive at window close -> slash the disputer). One
-active dispute per article — the earliest on-chain filer wins (the caller registers in block order).
-Incentives are weight-only; see dev/DISPUTE_DESIGN.md.
+Validator state keeps persisting this ledger so existing state files stay readable. Scoring does not
+open or resolve disputes.
 """
 
 from dataclasses import dataclass
@@ -62,42 +59,3 @@ class DisputeLedger:
     @classmethod
     def from_dict(cls, data: dict) -> "DisputeLedger":
         return cls(disputes=data or {})
-
-
-def settle_persistence(article_id, entry, status, epoch, *, vesting, slash, disputes,
-                       dead_confirm, cooldown, window, reward_fraction, uid_by_hotkey):
-    """Apply one epoch's persistence verdict to a vesting article and any open dispute.
-
-    This is the validator's Pass-1 rule (called from forward.py), factored out as a pure,
-    deterministic function so the consensus-critical decision is directly unit-testable without the
-    validator runtime. Mutates the vesting / slash / dispute ledgers in place; returns
-    ``(installment_usd_or_0.0, {disputer_uid: reward_usd})``.
-
-      dead  -> after `dead_confirm` consecutive confirmed epochs: clawback + slash the miner; if the
-               article was disputed, resolve UPHELD and pay the disputer `reward_fraction` of the
-               forfeited vesting.
-      alive -> release one installment; if a dispute has been open past `window` epochs while the
-               article stayed alive, resolve REJECTED and slash the disputer (grief penalty).
-      hold  -> withhold pay, no clawback; the dispute stays open.
-    """
-    disp = disputes.active(article_id)
-    if status == "dead":
-        if epoch > entry.last_dead_epoch:  # idempotent if this epoch re-runs after a restart
-            entry.dead_streak += 1
-            entry.last_dead_epoch = epoch
-        if entry.dead_streak >= dead_confirm:
-            forfeited = entry.installment_usd * entry.remaining  # unreleased, before clawback
-            if vesting.clawback(article_id):
-                slash.slash(entry.hotkey, epoch + cooldown)
-                if disp is not None and disputes.resolve(article_id, True):
-                    duid = uid_by_hotkey.get(disp.disputer_hotkey)
-                    if duid is not None:
-                        return 0.0, {duid: forfeited * reward_fraction}
-        return 0.0, {}
-    if status == "alive":
-        entry.dead_streak = 0
-        if disp is not None and epoch - disp.filed_epoch >= window:
-            if disputes.resolve(article_id, False):  # stayed alive past the window: grief slash
-                slash.slash(disp.disputer_hotkey, epoch + cooldown)
-        return vesting.release(article_id, epoch), {}
-    return 0.0, {}  # "hold"
