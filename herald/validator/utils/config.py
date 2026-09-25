@@ -203,15 +203,12 @@ HERALD_VEST_GRACE_EPOCHS = int(os.getenv('HERALD_VEST_GRACE_EPOCHS', '30'))
 HERALD_TREASURY_COLDKEY = os.getenv('HERALD_TREASURY_COLDKEY', '')
 
 # ── Contributor submissions (backend feed: GET /api/v4/validator/submissions) ──
-# Hotkey that every verified article vests to, and the only UID besides 0 that receives weight. Set
-# identically on every validator.
-HERALD_INCENTIVE_HOTKEY = os.getenv('HERALD_INCENTIVE_HOTKEY', '')
-# Whether the weight that verified value does not cover is burned to UID 0. true: the incentive
-# hotkey's weight is min(1, payable USD / USD value of the day's miner emission) and UID 0 receives
-# the rest. false (default): the incentive hotkey receives all the weight whenever its UID
-# resolves, and each epoch snapshot states the share of that receipt owed to contributors. A
-# consensus setting: set identically on every validator.
-HERALD_BURN_UNEARNED = _env_flag('HERALD_BURN_UNEARNED')
+# Each verified article vests to the contributor's own registered hotkey, and the share of the day's
+# miner emission that verified value does not cover is burned to UID 0. The 0.2.0 settings that routed
+# all weight through one incentive hotkey no longer do anything; a value still set is reported at
+# startup so an operator can remove it.
+RETIRED_SETTINGS = tuple(name for name in ("HERALD_INCENTIVE_HOTKEY", "HERALD_BURN_UNEARNED")
+                         if (os.getenv(name) or "").strip())
 # Publication window for a brief with an end_date: from start_date minus this many days (00:00 UTC)
 # through end_date 23:59:59 UTC.
 HERALD_PUBLISH_BUFFER_DAYS = int(os.getenv('HERALD_PUBLISH_BUFFER_DAYS', '3'))
@@ -228,7 +225,8 @@ HERALD_DRAFT_MATCH_THRESHOLD = float(os.getenv('HERALD_DRAFT_MATCH_THRESHOLD', '
 
 # Log out all non-sensitive config variables
 bt.logging.info(f"MAINNET_DEFAULTS_APPLIED: {', '.join(MAINNET_DEFAULTS_APPLIED) or 'none'}")
-bt.logging.info(f"HERALD_INCENTIVE_HOTKEY: {HERALD_INCENTIVE_HOTKEY or 'unset'}")
+for _name in RETIRED_SETTINGS:
+    bt.logging.warning(f"{_name} is set but no longer used: each miner's own hotkey is paid; remove it")
 bt.logging.info(f"HERALD_EPOCH_LAG: {HERALD_EPOCH_LAG}")
 bt.logging.info(f"HERALD_BRIEFS_ENDPOINT: {HERALD_BRIEFS_ENDPOINT}")
 bt.logging.info(f"YOUTUBE_SUBMIT_ENDPOINT: {YOUTUBE_SUBMIT_ENDPOINT}")

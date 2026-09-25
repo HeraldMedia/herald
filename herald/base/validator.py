@@ -18,7 +18,6 @@ from urllib.parse import urlsplit
 from herald.base.neuron import BaseNeuron
 from herald.utils.config import add_validator_args
 from herald.validator.news.emission import WeightVectorRefused, allowed_emit_vector
-from herald.validator.utils import config as validator_config
 
 # Operational knobs for the pending weight-commit check. None of them is a consensus parameter.
 WEIGHT_CHECK_ATTEMPTS_ENV = "HERALD_WEIGHT_CHECK_ATTEMPTS"
@@ -108,6 +107,21 @@ def _bittensor_debug_muted():
 
 class WeightCommitCheckError(RuntimeError):
     """No endpoint could say whether this hotkey has a weight commit pending reveal."""
+
+
+def burn_replaced_scores(scores, old_hotkeys, new_hotkeys) -> None:
+    """Move the score of every UID whose hotkey changed from `old_hotkeys` to `new_hotkeys` to UID 0.
+
+    Each miner's weight is its own verified value against the day's miner emission, and UID 0 holds
+    the rest (the burn). A deregistered miner's share therefore goes to UID 0, not to the UID's new
+    holder, and is never spread over the other miners, whose weights would grow past their value
+    once the vector is normalized. UID 0's own score is simply dropped if its hotkey changed.
+    """
+    for uid, hotkey in enumerate(old_hotkeys):
+        if uid < len(new_hotkeys) and hotkey != new_hotkeys[uid]:
+            if uid != 0 and len(scores):
+                scores[0] += scores[uid]
+            scores[uid] = 0
 
 
 class BaseValidatorNeuron(BaseNeuron):
@@ -383,6 +397,13 @@ class BaseValidatorNeuron(BaseNeuron):
             except Exception:
                 pass
 
+    def _weight_hotkeys(self) -> dict:
+        """Subclass hook: {uid: hotkey} for the miner UIDs the latest scored epoch put weight on.
+
+        Only these UIDs, while still held by the same hotkeys, and UID 0 may receive weight.
+        """
+        return {}
+
     def _has_weights_to_submit(self) -> bool:
         """Subclass hook: False when there is locally nothing to submit this step.
 
@@ -444,12 +465,13 @@ class BaseValidatorNeuron(BaseNeuron):
         self._suppressed_weight_submissions = 0
 
     def set_weights(self):
-        """Submit the scores as weights on UID 0 and the incentive hotkey's UID only.
+        """Submit the scores as weights on UID 0 and the miner UIDs the latest epoch was scored on.
 
         The u16 vector is built from the scores directly: it is never padded with other registered
-        UIDs and never clipped to MaxWeightsLimit. A vector that would reach any other UID, or is
-        shorter than MinAllowedWeights, is refused: WEIGHT_VECTOR_REFUSED is logged at ERROR and no
-        extrinsic is sent.
+        UIDs and never clipped to MaxWeightsLimit. A score on a UID whose hotkey changed since the
+        epoch was scored moves to UID 0. A vector that would reach any other UID, or is shorter than
+        MinAllowedWeights, is refused: WEIGHT_VECTOR_REFUSED is logged at ERROR and no extrinsic is
+        sent.
         """
 
         # Check if self.scores contains any NaN values and log a warning if it does.
@@ -468,8 +490,7 @@ class BaseValidatorNeuron(BaseNeuron):
         try:
             min_allowed = self.subtensor.min_allowed_weights(self.config.netuid)
             uint_uids, uint_weights = allowed_emit_vector(
-                self.scores, self.metagraph.hotkeys,
-                validator_config.HERALD_INCENTIVE_HOTKEY, min_allowed,
+                self.scores, self.metagraph.hotkeys, self._weight_hotkeys(), min_allowed,
             )
         except WeightVectorRefused as refused:
             bt.logging.error(f"WEIGHT_VECTOR_REFUSED reason={refused.reason}")
@@ -530,10 +551,8 @@ class BaseValidatorNeuron(BaseNeuron):
         bt.logging.info(
             "Metagraph updated, re-syncing hotkeys, dendrite pool and moving averages"
         )
-        # Zero out all hotkeys that have been replaced.
-        for uid, hotkey in enumerate(self.hotkeys):
-            if hotkey != self.metagraph.hotkeys[uid]:
-                self.scores[uid] = 0  # hotkey has been replaced
+        # A replaced hotkey's score moves to UID 0 (see burn_replaced_scores).
+        burn_replaced_scores(self.scores, self.hotkeys, self.metagraph.hotkeys)
 
         # Check to see if the metagraph has changed size.
         # If so, we need to add new hotkeys and moving averages.
@@ -622,9 +641,7 @@ class BaseValidatorNeuron(BaseNeuron):
         if compatible:
             count = min(len(scores), len(loaded_scores), len(loaded_hotkeys))
             scores[:count] = loaded_scores[:count]
-            for uid in range(count):
-                if loaded_hotkeys[uid] != current_hotkeys[uid]:
-                    scores[uid] = 0.0
+            burn_replaced_scores(scores, loaded_hotkeys[:count], current_hotkeys)
         else:
             bt.logging.warning(
                 f"Discarding score checkpoint from spec {saved_spec}; current spec is {self.spec_version}"

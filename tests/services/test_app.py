@@ -32,8 +32,8 @@ def test_write_endpoints_closed_without_token_by_default(tmp_path):
 
 
 def test_legacy_service_reports_release_version(client):
-    assert client.get("/openapi.json").json()["info"]["version"] == "0.2.0"
-    assert client.get("/health").json() == {"ok": True, "version": "0.2.0", "legacy": True}
+    assert client.get("/openapi.json").json()["info"]["version"] == "0.2.1"
+    assert client.get("/health").json() == {"ok": True, "version": "0.2.1", "legacy": True}
 
 
 def test_create_fund_and_list_open_brief(client):

@@ -72,6 +72,10 @@ class Validator(BaseValidatorNeuron):
         """
         return await forward(self)
 
+    def _weight_hotkeys(self):
+        # The miner UIDs, with their hotkeys, that the latest scored epoch put weight on.
+        return dict(_state(self).weight_hotkeys)
+
     def _weight_record_age(self):
         """Age, in blocks, of the chain's weight record for this validator's own uid.
 
@@ -101,7 +105,7 @@ class Validator(BaseValidatorNeuron):
             return False
 
         # Scoring stays once per Herald epoch, but the chain's copy of the vector ages out, so the
-        # LATEST stored vector (incentive and burn, or burn only) is submitted again on a block
+        # LATEST stored vector (miner UIDs and the burn, or burn only) is submitted again on a block
         # cadence. last_weight_epoch is bookkeeping only and does not gate this.
         age = self._weight_record_age()
         if age is None:
