@@ -47,7 +47,7 @@ DEFAULT_BACKUP_KEEP = 14
 # min_reader_schema is read, never written: every reader down to schema 1 can load this version's saves.
 _TOP_LEVEL_KEYS = frozenset({
     "schema_version", "min_reader_schema", "commit_index", "vesting", "slash", "disputes",
-    "pool_spent", "last_scored_epoch", "last_weight_epoch",
+    "pool_spent", "last_scored_epoch", "last_weight_epoch", "weight_hotkeys",
 })
 _BACKUP_SUFFIX = re.compile(r"\.bak\.(\d{8}T\d{12}Z)(?:-(\d+))?")
 
@@ -259,7 +259,8 @@ def _admit_newer_schema(path: str, version: int, min_reader: int) -> None:
 class HeraldState:
     def __init__(self, commit_index: CommitIndex, vesting: VestingLedger, slash: SlashLedger,
                  disputes: DisputeLedger = None, pool_spent: dict = None,
-                 last_scored_epoch: int = -1, last_weight_epoch: int = -1):
+                 last_scored_epoch: int = -1, last_weight_epoch: int = -1,
+                 weight_hotkeys: dict = None):
         self.commit_index = commit_index
         self.vesting = vesting
         self.slash = slash
@@ -278,13 +279,17 @@ class HeraldState:
         # (a fresh or replaced file reads -1 too). It is not evidence about on-chain weight-setting
         # either way: watch the chain's LastUpdate for the hotkey instead (scripts/watchdog.py).
         self.last_weight_epoch = last_weight_epoch
+        # {uid: hotkey} for every miner UID the latest scored epoch put weight on, as the metagraph
+        # held them then. Only these UIDs and UID 0 may receive that epoch's vector: a score left on a
+        # UID another hotkey has since taken is burned instead of paying the new holder.
+        self.weight_hotkeys = {int(uid): str(hotkey) for uid, hotkey in (weight_hotkeys or {}).items()}
 
     @classmethod
     def fresh(cls) -> "HeraldState":
         return cls(CommitIndex(EPOCH_LEN), VestingLedger(VEST_EPOCHS), SlashLedger(), DisputeLedger())
 
     def to_dict(self) -> dict:
-        return {
+        data = {
             "schema_version": SCHEMA_VERSION,
             "commit_index": self.commit_index.to_dict(),
             "vesting": self.vesting.to_dict(),
@@ -294,6 +299,11 @@ class HeraldState:
             "last_scored_epoch": self.last_scored_epoch,
             "last_weight_epoch": self.last_weight_epoch,
         }
+        # Written only when a miner UID holds weight, so a file with none stays exactly what 0.2.0
+        # writes and reads; 0.2.0 ignores the key, with a warning, when it is there.
+        if self.weight_hotkeys:
+            data["weight_hotkeys"] = {str(uid): hotkey for uid, hotkey in sorted(self.weight_hotkeys.items())}
+        return data
 
     @classmethod
     def from_dict(cls, data: dict) -> "HeraldState":
@@ -322,6 +332,11 @@ class HeraldState:
                               "an integer epoch")
         pool_spent = _check_values(_mapping(data, "pool_spent"), "pool_spent", _is_number,
                                    "a number")
+        weight_hotkeys = _check_values(_mapping(data, "weight_hotkeys"), "weight_hotkeys",
+                                       lambda value: isinstance(value, str), "a hotkey string")
+        for key in weight_hotkeys:
+            if not (isinstance(key, str) and key.isdigit()):
+                raise ValueError(f"weight_hotkeys key {key!r} must be a UID")
         epochs = {key: data.get(key, -1) for key in ("last_scored_epoch", "last_weight_epoch")}
         for key, value in epochs.items():
             if not _is_int(value):
@@ -337,6 +352,7 @@ class HeraldState:
             pool_spent,
             epochs["last_scored_epoch"],
             epochs["last_weight_epoch"],
+            {int(uid): hotkey for uid, hotkey in weight_hotkeys.items()},
         )
 
     def save(self, path: str):

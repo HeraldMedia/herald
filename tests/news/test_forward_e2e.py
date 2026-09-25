@@ -14,10 +14,13 @@ from herald.validator.news.registry import OutletRegistry
 from herald.validator.news.state import HeraldState
 from herald.validator.news.url import article_id, canonicalize
 from neurons.validator import Validator
+from tests.news.signing import address, sign_row
 
-STAR = "hkStar"
-HOTKEYS = ["hkOwner", "hkMiner", STAR]
-UID_STAR = 2
+# Two contributors, each with a registered hotkey owned by their own coldkey.
+MINER_A, COLD_A = address("AHot"), address("ACold")
+MINER_B, COLD_B = address("BHot"), address("BCold")
+HOTKEYS = ["hkOwner", MINER_B, MINER_A]
+UID_A, UID_B = 2, 1
 AUTHORITY = "hkAuthority"
 NOW = datetime(2026, 9, 12, 12, 0, tzinfo=timezone.utc)
 PUBLISHED = datetime(2026, 9, 10, 9, 0, tzinfo=timezone.utc).timestamp()
@@ -42,9 +45,11 @@ OTHER_DRAFT = ("Wintergreen Analytics said its quarterly survey of 400 newsrooms
                "covered. The full Wintergreen report will be released to subscribers next Thursday.")
 
 
-def row(submission_id, url, brief_id="b1", draft_text=DRAFT, uploaded_ts=UPLOADED):
-    return {"submission_id": submission_id, "network": "finney", "netuid": 69,
-            "brief_id": brief_id, "url": url, "draft_text": draft_text, "uploaded_ts": uploaded_ts}
+def row(submission_id, url, brief_id="b1", draft_text=DRAFT, uploaded_ts=UPLOADED, miner="A"):
+    """A feed row signed by `miner`'s coldkey for `miner`'s hotkey (tests/news/signing.py)."""
+    return sign_row({"submission_id": submission_id, "network": "finney", "netuid": 69,
+                     "brief_id": brief_id, "url": url, "draft_text": draft_text,
+                     "uploaded_ts": uploaded_ts}, miner)
 
 
 def draft_fragments(draft):
@@ -72,10 +77,6 @@ def env(monkeypatch):
         snapshots=[], logs=[],
     )
     monkeypatch.setattr(statemod, "VEST_EPOCHS", 2)
-    monkeypatch.setattr(fwd, "HERALD_INCENTIVE_HOTKEY", STAR)
-    # These tests pin the vectors with the unearned weight burned (HERALD_BURN_UNEARNED=true); the
-    # default, full-incentive vectors are tested at the end of this file.
-    monkeypatch.setattr(fwd, "HERALD_BURN_UNEARNED", True)
     monkeypatch.setattr(fwd, "HERALD_DEAD_CONFIRM_EPOCHS", 2)
     monkeypatch.setattr(fwd.time, "sleep", lambda *_: None)
     monkeypatch.setenv("HERALD_RESULTS_ENDPOINT", "http://results.invalid")
@@ -94,6 +95,18 @@ def env(monkeypatch):
         return REGISTRY
 
     monkeypatch.setattr(fwd, "fetch_submissions", feed)
+
+    # SubtensorModule.Owner: each hotkey's owning coldkey at the scoring block.
+    env.owners = {MINER_A: COLD_A, MINER_B: COLD_B}
+    env.owner_reads = []
+
+    def owners(subtensor, hotkeys, block=None):
+        env.owner_reads.append((sorted(set(hotkeys)), block))
+        if isinstance(env.owners, Exception):
+            raise env.owners
+        return {hotkey: env.owners.get(hotkey) for hotkey in set(hotkeys)}
+
+    monkeypatch.setattr(fwd, "get_hotkey_owners", owners)
     monkeypatch.setattr(fwd, "get_commitments_with_block", commitments)
     monkeypatch.setattr(fwd, "load_registry", registry)
     monkeypatch.setattr(fwd, "fetch_article",
@@ -105,7 +118,6 @@ def env(monkeypatch):
                         lambda endpoint, snapshot, hotkey: env.snapshots.append(snapshot) or True)
     for level in ("info", "warning", "error"):
         monkeypatch.setattr(fwd.bt.logging, level, lambda msg, *a, **k: env.logs.append(str(msg)))
-    monkeypatch.setattr("herald.validator.utils.config.HERALD_INCENTIVE_HOTKEY", STAR)
     monkeypatch.setattr("neurons.validator.WEIGHT_RESUBMIT_BLOCKS", 180)
 
     # One day of miner emission is worth $1000.
@@ -157,7 +169,7 @@ def next_epoch(env):
 
 
 def burns(env):
-    return [line for line in env.logs if line.startswith("INCENTIVE_BURN")]
+    return [line for line in env.logs if line.startswith("EPOCH_BURN")]
 
 
 def results_for(env, reason):
@@ -165,7 +177,7 @@ def results_for(env, reason):
 
 
 @pytest.mark.asyncio
-async def test_verified_submission_vests_on_the_incentive_hotkey_with_its_first_installment(env):
+async def test_verified_submission_vests_on_the_signing_miners_own_hotkey_with_its_first_installment(env):
     env.rows = [row("sub-1", URL_A)]
     self = make_validator(env, scores=[0.1, 0.6, 0.3])
 
@@ -175,34 +187,38 @@ async def test_verified_submission_vests_on_the_incentive_hotkey_with_its_first_
     state = self.herald_state
     assert state.last_scored_epoch == epoch
     entry = state.vesting.entry(article_id(URL_A))
-    assert (entry.hotkey, entry.uid, entry.reveal) == (STAR, UID_STAR, {"submission_id": "sub-1"})
+    assert (entry.hotkey, entry.uid, entry.reveal) == (MINER_A, UID_A, {"submission_id": "sub-1", "coldkey": COLD_A})
     assert (entry.url, entry.brief_id, entry.outlet_id, entry.tier, entry.attribution) == (
         URL_A, "b1", "guardian", 1, 0)
     assert (entry.commit_epoch, entry.start_epoch, entry.last_release_epoch) == (epoch, epoch, epoch)
     assert entry.total_usd == pytest.approx(500.0) and entry.remaining == 1
     assert "SUBMISSION_RESULT sub-1 ok" in env.logs
-    # $250 payable against $1000 of daily miner emission: a quarter to the incentive UID.
-    assert env.updates == [([0, UID_STAR], [0.75, 0.25])]
+    assert f"SUBMISSION_CREDITED sub-1 candidate=1/1 hotkey={MINER_A}" in env.logs
+    # Ownership was read once, at the scoring block, for the one hotkey being verified.
+    assert env.owner_reads == [([MINER_A], env.block)]
+    # $250 payable against $1000 of daily miner emission: a quarter to the miner's UID, the rest burned.
+    assert env.updates == [([0, UID_A], [0.75, 0.25])]
     assert self.scores.tolist() == [0.75, 0.0, 0.25]
+    assert state.weight_hotkeys == {UID_A: MINER_A}
     assert env.commitment_reads == 0 and env.price_calls == 1
-    assert (f"INCENTIVE_WEIGHT epoch={epoch} w=0.250000 payable_usd=250.000000 daily_usd=1000.000000 "
-            f"alpha_tao=0.004000000 tao_usd=250.000000 daily_miner_alpha=1000.000000 "
-            f"uid_star={UID_STAR} burn_unearned=true contributor_share_ppb=1000000000") in env.logs
+    assert (f"EPOCH_WEIGHTS epoch={epoch} miners=1 payable_usd=250.000000 daily_usd=1000.000000 "
+            f"burn=0.750000 alpha_tao=0.004000000 tao_usd=250.000000 "
+            f"daily_miner_alpha=1000.000000") in env.logs
+    assert (f"MINER_WEIGHT epoch={epoch} uid={UID_A} hotkey={MINER_A} usd=250.000000 "
+            f"w=0.250000") in env.logs
 
     [snapshot] = env.snapshots
-    assert snapshot["epoch"] == epoch
-    # The chain already scales the incentive UID's receipt to verified value: all of it is owed.
-    assert (snapshot["state"]["burn_unearned"], snapshot["state"]["contributor_share_ppb"]) == (
-        True, 1_000_000_000)
+    assert snapshot["epoch"] == epoch and snapshot["schema_version"] == 2
+    assert snapshot["state"]["emission"] == "miner_hotkeys_v1"
     assert snapshot["state"]["rewards"] == [
-        {"uid": UID_STAR, "hotkey": STAR, "reward_microusd": 250_000_000}]
+        {"uid": UID_A, "hotkey": MINER_A, "reward_microusd": 250_000_000}]
     assert snapshot["state"]["weights"] == [{"uid": 0, "hotkey": "hkOwner", "weight_u16": 49151},
-                                            {"uid": UID_STAR, "hotkey": STAR, "weight_u16": 16384}]
+                                            {"uid": UID_A, "hotkey": MINER_A, "weight_u16": 16384}]
     [article] = snapshot["state"]["articles"]
-    assert (article["hotkey"], article["reveal"]) == (STAR, {"submission_id": "sub-1"})
+    assert (article["hotkey"], article["reveal"]) == (MINER_A, {"submission_id": "sub-1", "coldkey": COLD_A})
     assert article["earned_microusd"] == 250_000_000
     [[published]] = env.results
-    assert published["reveal"] == {"submission_id": "sub-1"}
+    assert published["reveal"] == {"submission_id": "sub-1", "coldkey": COLD_A}
 
 
 @pytest.mark.asyncio
@@ -218,10 +234,10 @@ async def test_drafts_never_reach_published_results_snapshots_logs_or_the_state_
     assert "SUBMISSION_RESULT sub-1 ok" in env.logs
     assert "SUBMISSION_RESULT sub-2 draft_mismatch" in env.logs
     vesting = self.herald_state.vesting
-    assert vesting.entry(article_id(URL_A)).reveal == {"submission_id": "sub-1"}
+    assert vesting.entry(article_id(URL_A)).reveal == {"submission_id": "sub-1", "coldkey": COLD_A}
     assert not vesting.has(article_id(URL_B))
     assert len(env.results) == 2 and len(env.snapshots) == 2
-    assert [item["reveal"] for rows in env.results for item in rows] == [{"submission_id": "sub-1"}] * 2
+    assert [item["reveal"] for rows in env.results for item in rows] == [{"submission_id": "sub-1", "coldkey": COLD_A}] * 2
 
     published = json.dumps([env.results, env.snapshots], sort_keys=True)
     saved = "\n".join(path.read_text(encoding="utf-8") for path in sorted(tmp_path.rglob("*")) if path.is_file())
@@ -271,7 +287,7 @@ async def test_the_same_article_later_does_not_start_a_second_entry(env):
 
     entries = self.herald_state.vesting.to_dict()["entries"]
     assert list(entries) == [article_id(URL_A)]
-    assert entries[article_id(URL_A)]["reveal"] == {"submission_id": "sub-1"}
+    assert entries[article_id(URL_A)]["reveal"] == {"submission_id": "sub-1", "coldkey": COLD_A}
     assert entries[article_id(URL_A)]["status"] == "COMPLETED"
     assert not [line for line in env.logs if line.startswith(("SUBMISSION_RESULT sub-0", "SUBMISSION_RESULT sub-7"))]
 
@@ -322,27 +338,31 @@ async def test_a_liveness_check_that_raises_holds_the_article(env, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_entries_without_a_submission_id_expire_once(env):
+async def test_entries_not_started_from_a_signed_submission_expire_once(env):
     self = make_validator(env)
     epoch = epoch_of(env)
     state = HeraldState.fresh()
+    # 0.1: a miner claim with no submission id. 0.2.0: a submission credited to the shared incentive
+    # hotkey, with no signing coldkey. Neither vests any more; the signed entry does.
     state.vesting.start("legacy", uid=1, total_usd=50.0, url=URL_B, hotkey="hkMiner", brief_id="b1",
                         commit_epoch=epoch - 1, start_epoch=epoch, reveal={"nonce": "n1"})
-    state.vesting.start("other-hotkey", uid=1, total_usd=500.0, url=URL_A, hotkey="hkEarlierIncentive",
+    state.vesting.start("incentive", uid=2, total_usd=400.0, url=URL_B + "-2", hotkey="hkIncentive",
                         brief_id="b1", commit_epoch=epoch, start_epoch=epoch,
                         reveal={"submission_id": "sub-0"})
+    state.vesting.start("signed", uid=UID_A, total_usd=500.0, url=URL_A, hotkey=MINER_A,
+                        brief_id="b1", commit_epoch=epoch, start_epoch=epoch,
+                        reveal={"submission_id": "sub-1", "coldkey": COLD_A})
     self.herald_state = state
 
     await fwd.forward(self)
-    assert state.vesting.status("legacy") == "EXPIRED"
-    other = state.vesting.entry("other-hotkey")
-    assert other.status == "VESTING" and other.last_release_epoch == epoch
-    assert env.logs.count("LEGACY_VESTING_EXPIRED 1") == 1
+    assert (state.vesting.status("legacy"), state.vesting.status("incentive")) == ("EXPIRED", "EXPIRED")
+    signed = state.vesting.entry("signed")
+    assert signed.status == "VESTING" and signed.last_release_epoch == epoch
+    assert env.logs.count("LEGACY_VESTING_EXPIRED 2") == 1
 
     next_epoch(env)
     await fwd.forward(self)
-    assert state.vesting.status("legacy") == "EXPIRED"
-    assert state.vesting.status("other-hotkey") == "COMPLETED"
+    assert state.vesting.status("signed") == "COMPLETED"
     assert len([line for line in env.logs if line.startswith("LEGACY_VESTING_EXPIRED")]) == 1
 
 
@@ -376,16 +396,16 @@ async def test_client_reward_pool_caps_installments(env):
 
     await fwd.forward(self)
     assert self.herald_state.pool_spent == {"b1": pytest.approx(100.0)}
-    assert any(line.startswith("INCENTIVE_WEIGHT") and " w=0.100000 payable_usd=100.000000 " in line
-               for line in env.logs)
+    assert any(line.startswith("MINER_WEIGHT") and f"uid={UID_A} " in line
+               and line.endswith(" usd=100.000000 w=0.100000") for line in env.logs)
     [brief_row] = env.snapshots[0]["state"]["briefs"]
     assert (brief_row["pool_spent_microusd"], brief_row["pool_remaining_microusd"]) == (100_000_000, 0)
 
     next_epoch(env)
     await fwd.forward(self)
     assert self.herald_state.pool_spent == {"b1": pytest.approx(100.0)}
-    assert any(line.startswith("INCENTIVE_WEIGHT") and " w=0.000000 payable_usd=0.000000 " in line
-               for line in env.logs)
+    assert any(line.startswith("EPOCH_WEIGHTS") and " miners=0 payable_usd=0.000000 " in line
+               and " burn=1.000000 " in line for line in env.logs)
     assert env.updates[-1] == ([0], [1.0])
     assert self.herald_state.vesting.status(article_id(URL_A)) == "COMPLETED"
 
@@ -403,7 +423,7 @@ async def test_empty_briefs_put_all_weight_on_uid_zero_without_reading_chain_com
     assert self.herald_state.last_scored_epoch == epoch_of(env)
     assert (env.commitment_reads, env.feed_calls, env.registry_calls, env.price_calls) == (0, 0, [], 0)
     assert env.snapshots == [] and env.results == []
-    assert burns(env) == [f"INCENTIVE_BURN epoch={epoch_of(env)} reason=no_briefs"]
+    assert burns(env) == [f"EPOCH_BURN epoch={epoch_of(env)} reason=no_briefs"]
 
 
 @pytest.mark.asyncio
@@ -472,7 +492,9 @@ def tried(env):
 
 
 def credited(env):
-    return [line for line in env.logs if line.startswith("SUBMISSION_CREDITED")]
+    """SUBMISSION_CREDITED lines without their trailing hotkey (the credited hotkey is asserted where
+    it matters)."""
+    return [line.split(" hotkey=")[0] for line in env.logs if line.startswith("SUBMISSION_CREDITED")]
 
 
 def counting_fetch(env, monkeypatch):
@@ -495,11 +517,11 @@ async def test_the_earliest_matching_draft_wins_a_contested_article(env):
     await fwd.forward(self)
 
     entry = self.herald_state.vesting.entry(article_id(URL_A))
-    assert entry.reveal == {"submission_id": "sub-drafted-first"}
+    assert entry.reveal == {"submission_id": "sub-drafted-first", "coldkey": COLD_A}
     assert "Submissions feed: 2 row(s), 2 valid, 1 to verify" in env.logs
     assert tried(env) == ["SUBMISSION_RESULT sub-drafted-first ok"]
     assert credited(env) == ["SUBMISSION_CREDITED sub-drafted-first candidate=1/2"]
-    assert [item["reveal"] for item in env.results[0]] == [{"submission_id": "sub-drafted-first"}]
+    assert [item["reveal"] for item in env.results[0]] == [{"submission_id": "sub-drafted-first", "coldkey": COLD_A}]
 
 
 @pytest.mark.asyncio
@@ -516,7 +538,7 @@ async def test_an_earlier_draft_that_fails_does_not_block_a_later_matching_one(e
 
     assert tried(env) == [f"SUBMISSION_RESULT sub-earlier {reason}", "SUBMISSION_RESULT sub-match ok"]
     assert credited(env) == ["SUBMISSION_CREDITED sub-match candidate=2/2"]
-    assert self.herald_state.vesting.entry(article_id(URL_A)).reveal == {"submission_id": "sub-match"}
+    assert self.herald_state.vesting.entry(article_id(URL_A)).reveal == {"submission_id": "sub-match", "coldkey": COLD_A}
 
 
 @pytest.mark.asyncio
@@ -528,7 +550,7 @@ async def test_drafts_uploaded_at_the_same_time_go_to_the_lower_submission_id(en
 
     assert tried(env) == ["SUBMISSION_RESULT sub-a ok"]
     assert credited(env) == ["SUBMISSION_CREDITED sub-a candidate=1/2"]
-    assert self.herald_state.vesting.entry(article_id(URL_A)).reveal == {"submission_id": "sub-a"}
+    assert self.herald_state.vesting.entry(article_id(URL_A)).reveal == {"submission_id": "sub-a", "coldkey": COLD_A}
 
 
 @pytest.mark.asyncio
@@ -547,7 +569,7 @@ async def test_only_the_earliest_candidates_up_to_the_cap_are_tried(env, monkeyp
         assert credited(env) == [] and not vesting.has(article_id(URL_A))
     else:
         assert credited(env) == ["SUBMISSION_CREDITED sub-4 candidate=4/4"]
-        assert vesting.entry(article_id(URL_A)).reveal == {"submission_id": "sub-4"}
+        assert vesting.entry(article_id(URL_A)).reveal == {"submission_id": "sub-4", "coldkey": COLD_A}
 
 
 @pytest.mark.asyncio
@@ -606,7 +628,7 @@ async def test_an_article_already_vesting_is_skipped_whatever_its_candidates(env
 
     assert "Submissions feed: 3 row(s), 3 valid, 1 to verify" in env.logs
     assert tried(env) == ["SUBMISSION_RESULT sub-1 ok", "SUBMISSION_RESULT sub-2 ok"]
-    assert self.herald_state.vesting.entry(article_id(URL_A)).reveal == {"submission_id": "sub-1"}
+    assert self.herald_state.vesting.entry(article_id(URL_A)).reveal == {"submission_id": "sub-1", "coldkey": COLD_A}
 
 
 @pytest.mark.asyncio
@@ -698,15 +720,15 @@ def test_persistence_detects_outlet_specific_paid_content_swap(monkeypatch):
     ) == "dead"
 
 
-# --- incentive weight and burn ----------------------------------------------------------------------
+# --- miner weights and the burn --------------------------------------------------------------------
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("daily_usd, vector", [
-    (1000.0, ([0, UID_STAR], [0.75, 0.25])),
-    (250.0, ([UID_STAR], [1.0])),
-    (100.0, ([UID_STAR], [1.0])),
+    (1000.0, ([0, UID_A], [0.75, 0.25])),
+    (250.0, ([UID_A], [1.0])),
+    (100.0, ([UID_A], [1.0])),
 ])
-async def test_weights_touch_only_uid_zero_and_the_incentive_uid(env, daily_usd, vector):
+async def test_weights_touch_only_uid_zero_and_the_paid_miner_uid(env, daily_usd, vector):
     env.price["daily_usd"] = daily_usd
     env.rows = [row("sub-1", URL_A)]
     self = make_validator(env, scores=[0.2, 0.5, 0.3])
@@ -714,7 +736,7 @@ async def test_weights_touch_only_uid_zero_and_the_incentive_uid(env, daily_usd,
     await fwd.forward(self)
 
     assert env.updates == [vector]
-    assert set(np.flatnonzero(self.scores).tolist()) <= {0, UID_STAR}
+    assert set(np.flatnonzero(self.scores).tolist()) <= {0, UID_A}
     assert {row_["uid"] for row_ in env.snapshots[0]["state"]["weights"]} == set(vector[0])
 
 
@@ -750,7 +772,7 @@ async def test_a_failure_after_ledger_changes_burns_and_discards_them(env, monke
         assert not state.vesting.has(article_id(URL_B))
         assert state.last_scored_epoch == failing_epoch
     assert self.scores.tolist() == [1.0, 0.0, 0.0] and env.updates[-1] == ([0], [1.0])
-    assert burns(env) == [f"INCENTIVE_BURN epoch={failing_epoch} reason=error "
+    assert burns(env) == [f"EPOCH_BURN epoch={failing_epoch} reason=error "
                           f"(RuntimeError: snapshot endpoint unavailable)"]
 
     # The next successful epoch releases the missed installment too.
@@ -762,8 +784,8 @@ async def test_a_failure_after_ledger_changes_burns_and_discards_them(env, monke
     entry = self.herald_state.vesting.entry(article_id(URL_A))
     assert (entry.remaining, entry.last_release_epoch) == (1, epoch_of(env))
     assert self.herald_state.pool_spent == {"b1": pytest.approx(375.0)}
-    assert any(line.startswith(f"INCENTIVE_WEIGHT epoch={epoch_of(env)} w=0.250000 payable_usd=250.000000 ")
-               for line in env.logs)
+    assert (f"MINER_WEIGHT epoch={epoch_of(env)} uid={UID_A} hotkey={MINER_A} usd=250.000000 "
+            f"w=0.250000") in env.logs
 
 
 @pytest.mark.asyncio
@@ -788,7 +810,7 @@ async def test_pricing_error_burns_the_epoch_and_the_ledger_catches_up_next_epoc
     assert on_disk["last_scored_epoch"] == epoch_of(env)
     assert env.updates[-1] == ([0], [1.0]) and self.scores.tolist() == [1.0, 0.0, 0.0]
     assert env.feed_calls == feed_calls and len(env.snapshots) == 1
-    assert burns(env) == [f"INCENTIVE_BURN epoch={epoch_of(env)} reason=pricing_error "
+    assert burns(env) == [f"EPOCH_BURN epoch={epoch_of(env)} reason=pricing_error "
                           f"(TAO/USD price unavailable after 3 attempts)"]
 
     env.price = {"alpha_tao": 0.004, "alpha_out": 1.0, "ratio": 1.0, "daily_miner_alpha": 1000.0,
@@ -799,25 +821,13 @@ async def test_pricing_error_burns_the_epoch_and_the_ledger_catches_up_next_epoc
     assert entry.last_release_epoch == epoch_of(env) and entry.remaining == 1  # two installments
     assert first_epoch == epoch_of(env) - 2
     # Two $125 installments against $1000 of daily miner emission.
-    assert any(line.startswith(f"INCENTIVE_WEIGHT epoch={epoch_of(env)} w=0.250000 payable_usd=250.000000 ")
-               for line in env.logs)
-    assert env.updates[-1] == ([0, UID_STAR], [0.75, 0.25])
+    assert (f"MINER_WEIGHT epoch={epoch_of(env)} uid={UID_A} hotkey={MINER_A} usd=250.000000 "
+            f"w=0.250000") in env.logs
+    assert env.updates[-1] == ([0, UID_A], [0.75, 0.25])
 
 
-def _missing_hotkey(env, self, monkeypatch):
-    self.metagraph.hotkeys = ["hkOwner", "hkMiner", "hkOther"]
-
-
-def _wallet_is_incentive_hotkey(env, self, monkeypatch):
-    self.wallet.hotkey.ss58_address = STAR
-
-
-def _incentive_hotkey_at_uid_zero(env, self, monkeypatch):
-    self.metagraph.hotkeys = [STAR, "hkMiner", "hkOther"]
-
-
-def _unset_hotkey(env, self, monkeypatch):
-    monkeypatch.setattr(fwd, "HERALD_INCENTIVE_HOTKEY", "")
+def _owner_read_error(env, self, monkeypatch):
+    env.owners = ConnectionError("owner read failed")
 
 
 def _feed_unavailable(env, self, monkeypatch):
@@ -844,14 +854,11 @@ def _no_chain_time(env, self, monkeypatch):
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("setup, reason, price_calls, feed_calls", [
-    (_unset_hotkey, "incentive_hotkey_unset", 0, 0),
-    (_missing_hotkey, "incentive_hotkey_not_registered", 0, 0),
-    (_wallet_is_incentive_hotkey, "incentive_hotkey_is_validator_hotkey", 0, 0),
-    (_incentive_hotkey_at_uid_zero, "incentive_hotkey_at_burn_uid", 0, 0),
     (_no_chain_time, "chain_time_unavailable", 0, 0),
     (_pricing_error, "pricing_error (subnet 69 has no dynamic info at block 1)", 1, 0),
     (_registry_error, "error (RuntimeError: registry signature invalid)", 1, 0),
     (_feed_unavailable, "feed_unavailable", 1, 1),
+    (_owner_read_error, "error (ConnectionError: owner read failed)", 1, 1),
 ])
 async def test_shared_failures_burn_the_whole_epoch(env, monkeypatch, setup, reason, price_calls,
                                                     feed_calls):
@@ -862,7 +869,7 @@ async def test_shared_failures_burn_the_whole_epoch(env, monkeypatch, setup, rea
     await fwd.forward(self)
 
     epoch = epoch_of(env)
-    assert burns(env) == [f"INCENTIVE_BURN epoch={epoch} reason={reason}"]
+    assert burns(env) == [f"EPOCH_BURN epoch={epoch} reason={reason}"]
     assert env.updates == [([0], [1.0])] and self.scores.tolist() == [1.0, 0.0, 0.0]
     assert self.herald_state.last_scored_epoch == epoch
     assert self.herald_state.vesting.to_dict()["entries"] == {}
@@ -874,61 +881,133 @@ async def test_shared_failures_burn_the_whole_epoch(env, monkeypatch, setup, rea
 
 
 @pytest.mark.asyncio
-async def test_incentive_hotkey_registered_at_a_new_uid_is_paid_there(env):
+async def test_two_miners_are_each_paid_on_their_own_uid_in_proportion(env):
+    env.rows = [row("sub-1", URL_A, miner="A"), row("sub-2", URL_B, miner="B")]
+    self = make_validator(env)
+
+    await fwd.forward(self)
+
+    vesting = self.herald_state.vesting
+    assert (vesting.entry(article_id(URL_A)).hotkey, vesting.entry(article_id(URL_B)).hotkey) == (
+        MINER_A, MINER_B)
+    # $250 (tier 1) and $150 (tier 2) installments against $1000: 0.25 and 0.15, and 0.6 burned.
+    [(uids, weights)] = env.updates
+    assert (uids, weights) == ([0, UID_B, UID_A], pytest.approx([0.6, 0.15, 0.25]))
+    assert self.herald_state.weight_hotkeys == {UID_A: MINER_A, UID_B: MINER_B}
+    snapshot = env.snapshots[0]["state"]
+    assert snapshot["rewards"] == [
+        {"uid": UID_B, "hotkey": MINER_B, "reward_microusd": 150_000_000},
+        {"uid": UID_A, "hotkey": MINER_A, "reward_microusd": 250_000_000}]
+    assert [weight["uid"] for weight in snapshot["weights"]] == [0, UID_B, UID_A]
+
+
+@pytest.mark.asyncio
+async def test_a_coldkey_that_does_not_own_the_hotkey_is_not_credited_and_the_next_candidate_is(env):
+    env.owners[MINER_A] = COLD_B  # the chain says someone else owns A's hotkey
+    env.rows = [row("sub-a", URL_A, uploaded_ts=UPLOADED - 60, miner="A"),
+                row("sub-b", URL_A, uploaded_ts=UPLOADED, miner="B")]
+    self = make_validator(env)
+
+    await fwd.forward(self)
+
+    assert tried(env) == ["SUBMISSION_RESULT sub-a hotkey_not_owned", "SUBMISSION_RESULT sub-b ok"]
+    entry = self.herald_state.vesting.entry(article_id(URL_A))
+    assert (entry.hotkey, entry.reveal) == (MINER_B, {"submission_id": "sub-b", "coldkey": COLD_B})
+    assert env.updates == [([0, UID_B], [0.75, 0.25])]
+
+
+@pytest.mark.asyncio
+async def test_an_unowned_hotkey_is_never_credited(env):
+    env.owners = {}
+    env.rows = [row("sub-1", URL_A)]
+    self = make_validator(env)
+
+    await fwd.forward(self)
+
+    assert tried(env) == ["SUBMISSION_RESULT sub-1 hotkey_not_owned"]
+    assert self.herald_state.vesting.to_dict()["entries"] == {}
+    assert env.updates == [([0], [1.0])]
+
+
+@pytest.mark.asyncio
+async def test_a_miner_that_is_not_registered_holds_its_vesting_until_it_registers_again(env, monkeypatch):
+    monkeypatch.setattr(statemod, "VEST_EPOCHS", 4)
+    env.rows = [row("sub-1", URL_A)]
+    self = make_validator(env, hotkeys=["hkOwner", MINER_B, "hkOther"])  # A is not registered
+
+    await fwd.forward(self)
+    first_epoch = epoch_of(env)
+    entry = self.herald_state.vesting.entry(article_id(URL_A))
+    # Credited to A's hotkey, but nothing is released while it holds no UID.
+    assert (entry.hotkey, entry.uid, entry.status, entry.remaining) == (MINER_A, -1, "VESTING", 4)
+    assert entry.last_release_epoch == -1
+    assert "VESTING_HELD_UNREGISTERED 1" in env.logs
+    assert env.updates == [([0], [1.0])] and self.herald_state.weight_hotkeys == {}
+
+    # A registers again, at UID 2: the held installment and the new one are released together.
+    self.metagraph.hotkeys = list(HOTKEYS)
+    next_epoch(env)
+    await fwd.forward(self)
+    assert (entry.uid, entry.remaining, entry.last_release_epoch) == (UID_A, 2, first_epoch + 1)
+    # Two $125 installments against $1000 of daily miner emission.
+    assert env.updates[-1] == ([0, UID_A], [0.75, 0.25])
+
+
+@pytest.mark.asyncio
+async def test_a_miner_re_registered_at_a_new_uid_is_paid_there(env):
     env.rows = [row("sub-1", URL_A)]
     self = make_validator(env)
     await fwd.forward(self)
-    assert env.updates[-1] == ([0, UID_STAR], [0.75, 0.25])
+    assert env.updates[-1] == ([0, UID_A], [0.75, 0.25])
 
-    self.metagraph.hotkeys = ["hkOwner", STAR, "hkReplacement"]
+    self.metagraph.hotkeys = ["hkOwner", MINER_A, "hkReplacement"]
     next_epoch(env)
     await fwd.forward(self)
 
     assert env.updates[-1] == ([0, 1], [0.75, 0.25])
     assert self.scores.tolist() == [0.75, 0.25, 0.0]
+    assert self.herald_state.weight_hotkeys == {1: MINER_A}
     snapshot = env.snapshots[-1]["state"]
-    assert snapshot["rewards"] == [{"uid": 1, "hotkey": STAR, "reward_microusd": 250_000_000}]
+    assert snapshot["rewards"] == [{"uid": 1, "hotkey": MINER_A, "reward_microusd": 250_000_000}]
     assert [weight["uid"] for weight in snapshot["weights"]] == [0, 1]
 
 
 @pytest.mark.asyncio
-async def test_incentive_hotkey_moving_uid_inside_a_scored_epoch_burns_once(env):
+async def test_a_scored_uid_changing_hands_inside_the_epoch_is_left_to_the_submission_rule(env):
+    from herald.validator.news.emission import allowed_emit_vector
+
     env.rows = [row("sub-1", URL_A)]
     self = make_validator(env)
     await fwd.forward(self)
     epoch = epoch_of(env)
-    self.herald_state.last_weight_epoch = epoch  # already submitted
 
-    self.metagraph.hotkeys = ["hkOwner", STAR, "hkReplacement"]
+    self.metagraph.hotkeys = ["hkOwner", MINER_A, "hkReplacement"]
     await fwd.forward(self)
 
-    assert self.scores.tolist() == [1.0, 0.0, 0.0]
-    assert burns(env) == [f"INCENTIVE_BURN epoch={epoch} reason=stale_scores"]
-    # The ledger is untouched: the burn is the latest stored vector, and the block-cadence
-    # submission sends it like any other.
-    assert self.herald_state.last_weight_epoch == epoch
-
-    await fwd.forward(self)
-    assert self.herald_state.last_weight_epoch == epoch and len(burns(env)) == 1
+    # The scored epoch is not re-scored or burned wholesale: only the UID that changed hands loses its
+    # weight, to UID 0, when the vector is submitted.
+    assert burns(env) == [] and self.herald_state.last_scored_epoch == epoch
+    assert self.scores.tolist() == [0.75, 0.0, 0.25]
+    assert allowed_emit_vector(self.scores, self.metagraph.hotkeys,
+                               self.herald_state.weight_hotkeys, 1) == ([0], [65535])
 
 
 # --- release cutover --------------------------------------------------------------------------------
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("submitted_offset", [0, -2])
-async def test_cutover_discards_per_miner_scores_and_only_ever_submits_the_burn(env, monkeypatch,
-                                                                                tmp_path,
-                                                                                submitted_offset):
+async def test_cutover_discards_the_previous_releases_scores_and_only_ever_submits_the_burn(
+        env, monkeypatch, tmp_path, submitted_offset):
     n = 256
     hotkeys = ["hkOwner"] + [f"hk{uid}" for uid in range(1, n)]
-    hotkeys[UID_STAR] = STAR
+    hotkeys[UID_A] = MINER_A
     epoch = epoch_of(env)
 
-    # Files written by the previous release for this epoch: per-miner scores and the Herald ledger.
+    # Files written by the previous release (spec 20) for this epoch: its scores and the ledger.
     old_scores = np.zeros(n, dtype=np.float32)
     old_scores[3], old_scores[157] = 0.5, 0.5
     np.savez(tmp_path / "state.npz", step=4321, scores=old_scores, hotkeys=np.array(hotkeys),
-             spec_version=10)
+             spec_version=20)
     ledger = HeraldState.fresh()
     ledger.last_scored_epoch = epoch
     ledger.last_weight_epoch = epoch + submitted_offset
@@ -978,14 +1057,14 @@ async def test_cutover_discards_per_miner_scores_and_only_ever_submits_the_burn(
     assert np.flatnonzero(scores).tolist() == [0]
     state = validator.herald_state
     assert (state.last_scored_epoch, state.last_weight_epoch) == (epoch, epoch + submitted_offset)
-    assert burns(env) == [f"INCENTIVE_BURN epoch={epoch} reason=stale_scores"]
+    assert burns(env) == [f"EPOCH_BURN epoch={epoch} reason=stale_scores"]
     assert env.feed_calls == 0 and env.price_calls == 0
 
     # The next sync submits the burn.
     validator.sync()
     [submitted] = submissions
     assert (submitted["uids"], submitted["weights"]) == ([0], [65535])
-    assert submitted["version_key"] == 20
+    assert submitted["version_key"] == 21
     assert state.last_weight_epoch == epoch
     assert HeraldState.load(str(tmp_path / "herald_state.json")).last_weight_epoch == epoch
     assert [receipt["epoch"] for receipt in receipts] == [epoch]
@@ -1066,7 +1145,7 @@ async def test_scoring_runs_once_per_epoch_while_its_vector_is_resubmitted(env, 
                                                                            tmp_path):
     monkeypatch.setattr(fwd, "VALIDATOR_STEPS_INTERVAL", 1)  # every step runs a Herald pass
     env.rows = [row("sub-1", URL_A)]
-    validator, chain = chain_validator(env, monkeypatch, tmp_path, ["hkOwner", "hkValidator", STAR],
+    validator, chain = chain_validator(env, monkeypatch, tmp_path, ["hkOwner", "hkValidator", MINER_A],
                                        uid=1, wallet_hotkey="hkValidator")
     epoch, first_block = epoch_of(env), env.block
 
@@ -1077,8 +1156,8 @@ async def test_scoring_runs_once_per_epoch_while_its_vector_is_resubmitted(env, 
         validator.step += 1
 
     await loop_step(0)  # scores the epoch; the chain has no record for this uid yet
-    incentive = ([0, UID_STAR], [65535, 21845])
-    assert vectors(chain) == [incentive]
+    paid = ([0, UID_A], [65535, 21845])
+    assert vectors(chain) == [paid]
     reveal(validator, env)
 
     for _ in range(3):
@@ -1090,9 +1169,9 @@ async def test_scoring_runs_once_per_epoch_while_its_vector_is_resubmitted(env, 
         reveal(validator, env)
 
     assert epoch_of(env) == epoch
-    assert vectors(chain) == [incentive] * 4
+    assert vectors(chain) == [paid] * 4
     assert [receipt["epoch"] for receipt in chain.receipts] == [epoch] * 4
-    weight_lines = [line for line in env.logs if line.startswith("INCENTIVE_WEIGHT")]
+    weight_lines = [line for line in env.logs if line.startswith("EPOCH_WEIGHTS")]
     assert len(weight_lines) == 1
     assert (env.feed_calls, env.price_calls, len(env.snapshots), len(env.results)) == (1, 1, 1, 1)
     assert validator.herald_state.last_scored_epoch == epoch
@@ -1113,13 +1192,13 @@ async def test_scoring_runs_once_per_epoch_while_its_vector_is_resubmitted(env, 
 
 
 @pytest.mark.asyncio
-async def test_per_miner_scores_kept_by_a_restart_are_only_ever_resubmitted_as_the_burn(
+async def test_restored_scores_on_uids_the_epoch_did_not_score_are_only_ever_resubmitted_as_the_burn(
         env, monkeypatch, tmp_path):
-    # A score checkpoint from THIS spec version still holding per-miner scores (UIDs 3 and 157) is
-    # restored, and the first weight step comes before any Herald pass of this run.
+    # A score checkpoint from THIS spec version holding scores on UIDs 3 and 157, which the ledger's
+    # scored epoch never paid, is restored, and the first weight step comes before any Herald pass.
     n = 256
     hotkeys = ["hkOwner"] + [f"hk{uid}" for uid in range(1, n)]
-    hotkeys[UID_STAR] = STAR
+    hotkeys[UID_A] = MINER_A
     epoch = epoch_of(env)
     old_scores = np.zeros(n, dtype=np.float32)
     old_scores[3], old_scores[157] = 0.5, 0.5
@@ -1140,281 +1219,7 @@ async def test_per_miner_scores_kept_by_a_restart_are_only_ever_resubmitted_as_t
     validator.sync()
 
     assert vectors(chain) == [([0], [65535]), ([0], [65535])]
-    assert sum(line.startswith("WEIGHT_VECTOR_BURN reason=incentive_uid_changed")
+    assert sum(line.startswith("WEIGHT_VECTOR_BURN reason=hotkey_changed")
                for line in env.logs) == 2
-    assert all(not {3, 157} & set(uids) for uids, _ in vectors(chain))
-    assert env.feed_calls == 0 and env.price_calls == 0
-
-
-# --- full incentive: HERALD_BURN_UNEARNED=false, the default ----------------------------------------
-
-@pytest.fixture
-def full(env, monkeypatch):
-    monkeypatch.setattr(fwd, "HERALD_BURN_UNEARNED", False)
-    return env
-
-
-def fulls(env):
-    return [line for line in env.logs if line.startswith("INCENTIVE_FULL")]
-
-
-@pytest.mark.asyncio
-async def test_without_the_burn_a_scored_day_gives_the_incentive_uid_all_the_weight(full):
-    env = full
-    env.rows = [row("sub-1", URL_A)]
-    self = make_validator(env, scores=[0.1, 0.6, 0.3])
-
-    await fwd.forward(self)
-
-    epoch = epoch_of(env)
-    # The article vests exactly as it does with the burn.
-    entry = self.herald_state.vesting.entry(article_id(URL_A))
-    assert (entry.hotkey, entry.uid, entry.remaining, entry.total_usd) == (STAR, UID_STAR, 1, 500.0)
-    assert env.updates == [([UID_STAR], [1.0])]
-    assert self.scores.tolist() == [0.0, 0.0, 1.0]
-    # $250 payable against $1000 of daily miner emission: a quarter of the receipt is owed.
-    assert (f"INCENTIVE_WEIGHT epoch={epoch} w=1.000000 payable_usd=250.000000 daily_usd=1000.000000 "
-            f"alpha_tao=0.004000000 tao_usd=250.000000 daily_miner_alpha=1000.000000 "
-            f"uid_star={UID_STAR} burn_unearned=false contributor_share_ppb=250000000") in env.logs
-    [snapshot] = env.snapshots
-    state = snapshot["state"]
-    assert (state["burn_unearned"], state["contributor_share_ppb"]) == (False, 250_000_000)
-    assert state["rewards"] == [{"uid": UID_STAR, "hotkey": STAR, "reward_microusd": 250_000_000}]
-    assert state["weights"] == [{"uid": UID_STAR, "hotkey": STAR, "weight_u16": 65535}]
-    assert burns(env) == [] and fulls(env) == []
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize("daily_usd, share", [
-    (1000.0, 250_000_000), (3000.0, 83_333_333), (250.0, 1_000_000_000), (100.0, 1_000_000_000),
-])
-async def test_without_the_burn_the_snapshot_states_the_share_owed_capped_at_1e9(full, daily_usd,
-                                                                                share):
-    env = full
-    env.price["daily_usd"] = daily_usd
-    env.rows = [row("sub-1", URL_A)]
-    self = make_validator(env)
-
-    await fwd.forward(self)
-
-    assert env.updates == [([UID_STAR], [1.0])]
-    assert env.snapshots[0]["state"]["contributor_share_ppb"] == share
-    assert f" burn_unearned=false contributor_share_ppb={share}" in [
-        line for line in env.logs if line.startswith("INCENTIVE_WEIGHT")][0]
-
-
-@pytest.mark.asyncio
-async def test_without_the_burn_a_day_with_nothing_payable_owes_nothing_and_keeps_full_weight(full):
-    env = full
-    env.rows = []
-    self = make_validator(env)
-
-    await fwd.forward(self)
-
-    assert env.updates == [([UID_STAR], [1.0])]
-    [snapshot] = env.snapshots
-    assert (snapshot["state"]["burn_unearned"], snapshot["state"]["contributor_share_ppb"]) == (False, 0)
-    assert snapshot["state"]["weights"] == [{"uid": UID_STAR, "hotkey": STAR, "weight_u16": 65535}]
-    assert any(line.startswith("INCENTIVE_WEIGHT") and " w=1.000000 payable_usd=0.000000 " in line
-               and line.endswith(" contributor_share_ppb=0") for line in env.logs)
-
-
-@pytest.mark.asyncio
-async def test_without_the_burn_empty_briefs_give_the_incentive_uid_all_the_weight(full, monkeypatch):
-    env = full
-    monkeypatch.setenv("HERALD_REGISTRY_AUTHORITY_HOTKEY", AUTHORITY)
-    env.briefs = []
-    self = make_validator(env, scores=[0.2, 0.5, 0.3])
-
-    await fwd.forward(self)
-
-    epoch = epoch_of(env)
-    assert env.updates == [([UID_STAR], [1.0])]
-    assert self.scores.tolist() == [0.0, 0.0, 1.0]
-    assert self.herald_state.last_scored_epoch == epoch
-    assert (env.commitment_reads, env.feed_calls, env.registry_calls, env.price_calls) == (0, 0, [], 0)
-    assert env.snapshots == [] and env.results == []
-    assert fulls(env) == [f"INCENTIVE_FULL epoch={epoch} reason=no_briefs uid_star={UID_STAR}"]
-    assert burns(env) == []
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize("setup, reason, price_calls, feed_calls", [
-    (_no_chain_time, "chain_time_unavailable", 0, 0),
-    (_pricing_error, "pricing_error (subnet 69 has no dynamic info at block 1)", 1, 0),
-    (_registry_error, "error (RuntimeError: registry signature invalid)", 1, 0),
-    (_feed_unavailable, "feed_unavailable", 1, 1),
-])
-async def test_without_the_burn_a_failed_day_still_gives_the_incentive_uid_all_the_weight(
-        full, monkeypatch, setup, reason, price_calls, feed_calls):
-    env = full
-    env.rows = [row("sub-1", URL_A)]
-    self = make_validator(env, scores=[0.2, 0.5, 0.3])
-    setup(env, self, monkeypatch)
-
-    await fwd.forward(self)
-
-    epoch = epoch_of(env)
-    assert fulls(env) == [f"INCENTIVE_FULL epoch={epoch} reason={reason} uid_star={UID_STAR}"]
-    assert burns(env) == []
-    assert env.updates == [([UID_STAR], [1.0])] and self.scores.tolist() == [0.0, 0.0, 1.0]
-    assert self.herald_state.last_scored_epoch == epoch
-    assert self.herald_state.vesting.to_dict()["entries"] == {}
-    assert (env.price_calls, env.feed_calls) == (price_calls, feed_calls)
-    assert env.snapshots == [] and env.results == []
-
-    await fwd.forward(self)  # the failed epoch is not scored again, and its vector stays
-    assert len(env.updates) == 1 and env.price_calls == price_calls and len(fulls(env)) == 1
-
-
-@pytest.mark.asyncio
-async def test_without_the_burn_a_failure_after_ledger_changes_discards_them_and_keeps_full_weight(
-        full, monkeypatch, tmp_path):
-    env = full
-    monkeypatch.setattr(statemod, "VEST_EPOCHS", 4)
-    env.rows = [row("sub-1", URL_A)]
-    self = make_validator(env)
-    self.config.neuron.full_path = str(tmp_path)
-    state_file = str(tmp_path / "herald_state.json")
-    await fwd.forward(self)
-    assert env.snapshots[-1]["state"]["contributor_share_ppb"] == 125_000_000
-    saved = HeraldState.load(state_file).to_dict()
-
-    next_epoch(env)
-
-    def unavailable(endpoint, snapshot, hotkey):
-        raise RuntimeError("snapshot endpoint unavailable")
-
-    monkeypatch.setattr(fwd, "publish_snapshot", unavailable)
-    await fwd.forward(self)
-
-    on_disk = HeraldState.load(state_file).to_dict()
-    assert on_disk["vesting"] == saved["vesting"] and on_disk["pool_spent"] == saved["pool_spent"]
-    assert on_disk["last_scored_epoch"] == epoch_of(env)
-    assert env.updates[-1] == ([UID_STAR], [1.0]) and self.scores.tolist() == [0.0, 0.0, 1.0]
-    assert fulls(env) == [f"INCENTIVE_FULL epoch={epoch_of(env)} reason=error "
-                          f"(RuntimeError: snapshot endpoint unavailable) uid_star={UID_STAR}"]
-
-    # The next successful epoch releases the missed installment too: two $125 installments.
-    monkeypatch.setattr(fwd, "publish_snapshot",
-                        lambda endpoint, snapshot, hotkey: env.snapshots.append(snapshot) or True)
-    next_epoch(env)
-    await fwd.forward(self)
-    assert env.updates[-1] == ([UID_STAR], [1.0])
-    assert env.snapshots[-1]["epoch"] == epoch_of(env)
-    assert env.snapshots[-1]["state"]["contributor_share_ppb"] == 250_000_000
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize("setup, reason", [
-    (_unset_hotkey, "incentive_hotkey_unset"),
-    (_missing_hotkey, "incentive_hotkey_not_registered"),
-    (_wallet_is_incentive_hotkey, "incentive_hotkey_is_validator_hotkey"),
-    (_incentive_hotkey_at_uid_zero, "incentive_hotkey_at_burn_uid"),
-])
-@pytest.mark.parametrize("briefs", [STANDING, []])
-async def test_without_the_burn_an_unresolvable_incentive_uid_still_burns(full, monkeypatch, setup,
-                                                                         reason, briefs):
-    env = full
-    env.briefs = briefs
-    env.rows = [row("sub-1", URL_A)]
-    self = make_validator(env, scores=[0.2, 0.5, 0.3])
-    setup(env, self, monkeypatch)
-
-    await fwd.forward(self)
-
-    epoch = epoch_of(env)
-    assert burns(env) == [f"INCENTIVE_BURN epoch={epoch} reason={reason}"]
-    assert fulls(env) == []
-    assert env.updates == [([0], [1.0])] and self.scores.tolist() == [1.0, 0.0, 0.0]
-    assert self.herald_state.last_scored_epoch == epoch
-    assert (env.price_calls, env.feed_calls) == (0, 0)
-    assert env.snapshots == [] and env.results == []
-
-
-@pytest.mark.asyncio
-async def test_without_the_burn_a_scored_epoch_follows_the_incentive_hotkey_uid(full):
-    env = full
-    env.rows = [row("sub-1", URL_A)]
-    self = make_validator(env)
-    await fwd.forward(self)
-    epoch = epoch_of(env)
-    assert env.updates == [([UID_STAR], [1.0])]
-
-    # The incentive hotkey moves to UID 1 inside the scored epoch: the weight moves with it.
-    self.metagraph.hotkeys = ["hkOwner", STAR, "hkReplacement"]
-    await fwd.forward(self)
-    assert self.scores.tolist() == [0.0, 1.0, 0.0]
-    assert fulls(env) == [f"INCENTIVE_FULL epoch={epoch} reason=stale_scores uid_star=1"]
-    await fwd.forward(self)
-    assert len(fulls(env)) == 1 and burns(env) == []
-
-    # Deregistered: nothing else can be weighted, so the epoch burns.
-    self.metagraph.hotkeys = ["hkOwner", "hkMiner", "hkOther"]
-    await fwd.forward(self)
-    assert self.scores.tolist() == [1.0, 0.0, 0.0]
-    assert burns(env) == [f"INCENTIVE_BURN epoch={epoch} reason=stale_scores"]
-
-    # Registered again: all the weight returns to it, without scoring the epoch again.
-    self.metagraph.hotkeys = list(HOTKEYS)
-    await fwd.forward(self)
-    assert self.scores.tolist() == [0.0, 0.0, 1.0]
-    assert len(fulls(env)) == 2 and len(burns(env)) == 1
-    assert (env.price_calls, env.feed_calls, len(env.snapshots)) == (1, 1, 1)
-    assert self.herald_state.last_scored_epoch == epoch
-
-
-@pytest.mark.asyncio
-async def test_without_the_burn_scored_and_failed_days_both_submit_all_the_weight_to_the_incentive_uid(
-        full, monkeypatch, tmp_path):
-    env = full
-    monkeypatch.setattr(fwd, "VALIDATOR_STEPS_INTERVAL", 1)  # every step runs a Herald pass
-    env.rows = [row("sub-1", URL_A)]
-    validator, chain = chain_validator(env, monkeypatch, tmp_path, ["hkOwner", "hkValidator", STAR],
-                                       uid=1, wallet_hotkey="hkValidator")
-
-    await fwd.forward(validator)
-    validator.sync()
-    assert vectors(chain) == [([UID_STAR], [65535])]
-    reveal(validator, env)
-
-    next_epoch(env)
-    env.price = PricingError("TAO/USD price unavailable after 3 attempts")
-    await fwd.forward(validator)
-    validator.sync()
-
-    assert vectors(chain) == [([UID_STAR], [65535])] * 2
-    assert fulls(env) == [f"INCENTIVE_FULL epoch={epoch_of(env)} reason=pricing_error "
-                          f"(TAO/USD price unavailable after 3 attempts) uid_star={UID_STAR}"]
-    assert [receipt["epoch"] for receipt in chain.receipts] == [epoch_of(env) - 1, epoch_of(env)]
-
-
-@pytest.mark.asyncio
-async def test_without_the_burn_a_release_cutover_submits_all_the_weight_to_the_incentive_uid(
-        full, monkeypatch, tmp_path):
-    env = full
-    monkeypatch.setattr(fwd, "VALIDATOR_STEPS_INTERVAL", 1)
-    n = 256
-    hotkeys = ["hkOwner"] + [f"hk{uid}" for uid in range(1, n)]
-    hotkeys[UID_STAR] = STAR
-    epoch = epoch_of(env)
-    # An earlier release's per-miner scores for an epoch it already scored.
-    old_scores = np.zeros(n, dtype=np.float32)
-    old_scores[3], old_scores[157] = 0.5, 0.5
-    np.savez(tmp_path / "state.npz", step=4321, scores=old_scores, hotkeys=np.array(hotkeys),
-             spec_version=Validator.spec_version)
-    ledger = HeraldState.fresh()
-    ledger.last_scored_epoch = ledger.last_weight_epoch = epoch
-    ledger.save(str(tmp_path / "herald_state.json"))
-    validator, chain = chain_validator(env, monkeypatch, tmp_path, hotkeys, uid=1,
-                                       wallet_hotkey="hk1")
-    validator.load_state()
-
-    await fwd.forward(validator)
-    assert np.flatnonzero(validator.scores).tolist() == [UID_STAR]
-    assert fulls(env) == [f"INCENTIVE_FULL epoch={epoch} reason=stale_scores uid_star={UID_STAR}"]
-    validator.sync()
-
-    assert vectors(chain) == [([UID_STAR], [65535])]
     assert all(not {3, 157} & set(uids) for uids, _ in vectors(chain))
     assert env.feed_calls == 0 and env.price_calls == 0

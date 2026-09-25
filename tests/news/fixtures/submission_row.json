@@ -5,5 +5,8 @@
   "brief_id": "brief-0001",
   "url": "https://www.example.com/news/2026/09/10/subnet-pilot",
   "draft_text": "Herald, a Bittensor subnet that pays for verified media coverage, opened its public pilot to PR firms and PR professionals this week. Contributors upload the text they plan to publish, then add the link once the article is live. Validators fetch each article, confirm the outlet and the publication date, and check that the uploaded text appears in the published story before any reward begins to vest.",
-  "uploaded_ts": 1788966000
+  "uploaded_ts": 1788966000,
+  "hotkey": "5DvXcWbJqDbFhYH8aqcUkqfSzW21R3WAHo6jLPGaT1AN22AS",
+  "coldkey": "5DRzRamZDBxiLZoQsKrWgVTW335yh9UdweRv5RrGjJPXpffK",
+  "signature": "0x20cc671394db97c15d3e44ec047ac3a41468368f2cc81fb873c1d72f9ae7e10b31574f795c8cfe57279e2a3498559512c4975872a671ba3531ffd74c67157089"
 }

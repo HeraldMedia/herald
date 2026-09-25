@@ -10,6 +10,7 @@ from herald.validator.news import submissions
 from herald.validator.news.submissions import fetch_submissions, select_new, validate_rows
 from herald.validator.news.url import article_id
 from herald.validator.news.vesting import VestingLedger
+from tests.news.signing import UNSIGNABLE, address, sign_row
 
 FIXTURE = Path(__file__).parent / "fixtures" / "submission_row.json"
 NETWORK, NETUID = "finney", 69
@@ -22,11 +23,11 @@ DRAFT = ("A Bittensor subnet opened its public pilot to PR firms and PR professi
          "the uploaded text appears in the published story before any reward begins to vest.")
 
 
-def row(submission_id="sub-1", url=STORY, **over):
+def row(submission_id="sub-1", url=STORY, miner="A", **over):
     fields = {"submission_id": submission_id, "network": NETWORK, "netuid": NETUID,
               "brief_id": "brief-1", "url": url, "draft_text": DRAFT, "uploaded_ts": UPLOADED}
     fields.update(over)
-    return fields
+    return sign_row(fields, miner)
 
 
 def kept_ids(rows):
@@ -39,7 +40,8 @@ def candidate_ids(selected):
 
 def test_fixture_row_has_exactly_the_feed_keys_and_validates():
     data = json.loads(FIXTURE.read_text(encoding="utf-8"))
-    assert set(data) == {"submission_id", "network", "netuid", "brief_id", "url", "draft_text", "uploaded_ts"}
+    assert set(data) == {"submission_id", "network", "netuid", "brief_id", "url", "draft_text", "uploaded_ts",
+                         "hotkey", "coldkey", "signature"}
     assert set(data) == set(submissions.ROW_KEYS)
     assert validate_rows([data], NETWORK, NETUID, NOW_TS) == [data]
 
@@ -321,3 +323,47 @@ def test_unset_endpoint_returns_none_without_a_request(monkeypatch):
     monkeypatch.setattr(submissions.httpx, "get", unexpected)
     assert fetch_submissions("", NETWORK, NETUID) is None
     assert fetch_submissions(None, NETWORK, NETUID) is None
+
+
+# ── The coldkey's signature binds each row to its hotkey ─────────────────────────────────────────
+
+def test_a_row_signed_by_its_coldkey_is_kept_and_a_wallet_wrapped_signature_verifies_too():
+    plain = row("plain")
+    wrapped = sign_row({k: v for k, v in row("wrapped", url=STORY + "-2").items()
+                        if k != "signature"}, "A", wrapped=True)
+    assert kept_ids([plain, wrapped]) == ["plain", "wrapped"]
+
+
+def test_a_row_signed_by_another_coldkey_is_dropped():
+    forged = sign_row({"submission_id": "forged", "network": NETWORK, "netuid": NETUID,
+                       "brief_id": "brief-1", "url": STORY, "draft_text": DRAFT,
+                       "uploaded_ts": UPLOADED}, "A", coldkey="Mallory")
+    assert kept_ids([forged]) == []
+
+
+@pytest.mark.parametrize("field, value", [
+    ("hotkey", address("BHot")),
+    ("brief_id", "brief-2"),
+    ("draft_text", DRAFT + " Added after signing."),
+    ("netuid", 70),
+])
+def test_a_row_changed_after_it_was_signed_is_dropped(field, value):
+    changed = dict(row("changed"), **{field: value})
+    scope_netuid = value if field == "netuid" else NETUID
+    assert validate_rows([changed], NETWORK, scope_netuid, NOW_TS) == []
+
+
+@pytest.mark.parametrize("bad", [
+    {"hotkey": None}, {"hotkey": "5NotAnAddress"}, {"coldkey": ""}, {"coldkey": 7},
+    {"signature": None}, {"signature": "0x1234"}, {"signature": UNSIGNABLE},
+    {"signature": "zz" * 64}, {"signature": "0x" + "gg" * 64},
+])
+def test_rows_with_a_bad_address_or_signature_are_dropped(bad):
+    assert validate_rows([dict(row(), **bad)], NETWORK, NETUID, NOW_TS) == []
+
+
+@pytest.mark.parametrize("missing", ["hotkey", "coldkey", "signature"])
+def test_rows_without_a_hotkey_coldkey_or_signature_are_dropped(missing):
+    incomplete = row()
+    del incomplete[missing]
+    assert validate_rows([incomplete], NETWORK, NETUID, NOW_TS) == []

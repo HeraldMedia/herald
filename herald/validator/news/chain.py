@@ -27,3 +27,13 @@ def get_commitments_with_block(subtensor, netuid: int, block=None) -> dict:
         except Exception:
             continue
     return result
+
+
+def get_hotkey_owners(subtensor, hotkeys, block=None) -> dict:
+    """{hotkey: the coldkey that owns it at `block`, or None when the chain records no owner}.
+
+    Read from SubtensorModule.Owner, which the chain sets to the coldkey that first registers or
+    associates a hotkey and which only that coldkey can change. One read per distinct hotkey. A read
+    that fails raises, so an epoch is never scored on a guessed owner.
+    """
+    return {hotkey: subtensor.get_hotkey_owner(hotkey, block=block) for hotkey in sorted(set(hotkeys))}

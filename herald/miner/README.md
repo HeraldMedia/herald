@@ -1,24 +1,27 @@
 # Herald Miner
 
-> **Deprecated.** Registered miner hotkeys no longer earn on Herald. Validators do not pull
-> `ClaimSynapse` responses, read miner commitments or weight miner UIDs; they set weight only on one
-> incentive hotkey and burn the rest to UID 0. The miner neuron (`neurons/miner.py`) and the
-> `herald-miner` CLI in this directory are deprecated and earn nothing. PR firms and
-> PR professionals take part through the Herald website with Google sign-in; see
-> [docs/miner.md](../../docs/miner.md).
+> **Deprecated.** The miner neuron (`neurons/miner.py`) and the `herald-miner` CLI in this
+> directory are not used: validators do not pull `ClaimSynapse` responses or read miner
+> commitments, so running them earns nothing. PR firms and PR professionals take part through the
+> Herald website with Google sign-in: each registers their own hotkey on netuid 69 from the website
+> and signs every submission with their wallet, and validators weight that hotkey by the verified
+> value of its articles. See [docs/miner.md](../../docs/miner.md).
 
 ## Taking part now
 
-1. Sign in to the Herald website with Google and pick an open brief.
-2. On the brief's page, upload the text you will publish, before publishing it.
+1. Sign in to the Herald website with Google and register your own hotkey on netuid 69, signing
+   with a wallet extension (Talisman, SubWallet or Polkadot.js).
+2. Pick an open brief. On the brief's page, upload the text you will publish, before publishing
+   it, and sign the submission with the coldkey that owns your hotkey.
 3. Publish, then add the article's link on the brief's page.
-4. Validators verify the article against the outlet's own page: a listed outlet, published inside
-   the brief window and on or after the day of the upload, most of the uploaded text present, not
-   paid content, and on topic.
-5. A verified article earns a share of the alpha the incentive hotkey receives. Earnings
-   accumulate on your account and are claimed to a wallet you connect on the website.
+4. Validators check the signature and, on chain, that your coldkey owns the hotkey, then verify the
+   article against the outlet's own page: a listed outlet, published inside the brief window and on
+   or after the day of the upload, most of the uploaded text present, not paid content, and on
+   topic.
+5. A verified article vests on your hotkey. Validators set weight on its UID, and the chain emits
+   your share to that hotkey.
 
-No wallet, hotkey or command line is needed to contribute.
+No miner server or command line is needed to contribute.
 
 Paid posts, advertorials, press-release wires, contributor programs classified as non-editorial,
 and outlet-specific branded-content products are not eligible.

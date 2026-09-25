@@ -45,7 +45,7 @@ def test_any_other_target_or_no_netuid_is_not_mainnet(argv, env):
 
 def test_mainnet_fills_unset_and_empty_settings_and_keeps_explicit_ones():
     env = {
-        "HERALD_INCENTIVE_HOTKEY": "",
+        "HERALD_REGISTRY_AUTHORITY_HOTKEY": "",
         "HERALD_REGISTRY_PUBKEY": "   ",
         "HERALD_EPOCH_LAG": "7",
         "HERALD_RESULTS_ENDPOINT": "https://backend.example",
@@ -58,26 +58,24 @@ def test_mainnet_fills_unset_and_empty_settings_and_keeps_explicit_ones():
                       if name not in ("HERALD_EPOCH_LAG", "HERALD_RESULTS_ENDPOINT")]
     assert env["HERALD_EPOCH_LAG"] == "7"
     assert env["HERALD_RESULTS_ENDPOINT"] == "https://backend.example"
-    assert env["HERALD_INCENTIVE_HOTKEY"] == MAINNET_DEFAULTS["HERALD_INCENTIVE_HOTKEY"]
+    assert env["HERALD_REGISTRY_AUTHORITY_HOTKEY"] == MAINNET_DEFAULTS["HERALD_REGISTRY_AUTHORITY_HOTKEY"]
     assert env["HERALD_REGISTRY_PUBKEY"] == MAINNET_DEFAULTS["HERALD_REGISTRY_PUBKEY"]
     assert env["UNRELATED"] == "kept"
 
 
 def test_off_mainnet_nothing_is_filled():
-    env = {"HERALD_INCENTIVE_HOTKEY": ""}
+    env = {"HERALD_REGISTRY_AUTHORITY_HOTKEY": ""}
     assert apply_mainnet_defaults(["--netuid", "535", "--subtensor.network", "test"], env) == []
-    assert env == {"HERALD_INCENTIVE_HOTKEY": ""}
+    assert env == {"HERALD_REGISTRY_AUTHORITY_HOTKEY": ""}
     assert apply_mainnet_defaults([], {}) == []
 
 
 def test_the_mainnet_values_are_well_formed():
     from bittensor_wallet import Keypair
 
-    incentive = MAINNET_DEFAULTS["HERALD_INCENTIVE_HOTKEY"]
-    authority = MAINNET_DEFAULTS["HERALD_REGISTRY_AUTHORITY_HOTKEY"]
-    for address in (incentive, authority):
-        Keypair(ss58_address=address)
-    assert incentive != authority
+    Keypair(ss58_address=MAINNET_DEFAULTS["HERALD_REGISTRY_AUTHORITY_HOTKEY"])
+    # Each miner's own hotkey is paid, so no incentive hotkey is built in.
+    assert "HERALD_INCENTIVE_HOTKEY" not in MAINNET_DEFAULTS
     for name in ("HERALD_REGISTRY_PUBKEY", "HERALD_BRIEFS_PUBKEY"):
         assert re.fullmatch(r"[0-9a-f]{64}", MAINNET_DEFAULTS[name])
     for name in ("HERALD_RESULTS_ENDPOINT", "HERALD_REGISTRY_ENDPOINT"):
@@ -101,7 +99,7 @@ def test_mainnet_settings_satisfy_the_production_preflight_trust_anchors(tmp_pat
     apply_mainnet_defaults(["--netuid", "69"], env)
     errors = validator_environment_errors(env, network="finney", netuid=69)
 
-    for setting in ("HERALD_INCENTIVE_HOTKEY", "HERALD_REGISTRY_PUBKEY",
+    for setting in ("HERALD_REGISTRY_PUBKEY",
                     "HERALD_REGISTRY_AUTHORITY_HOTKEY", "HERALD_BRIEFS_PUBKEY",
                     "HERALD_RESULTS_ENDPOINT", "HERALD_BRIEFS_ENDPOINT", "signed registry",
                     "signed briefs", "finney",
@@ -138,17 +136,17 @@ def test_a_validator_relying_on_the_release_computes_the_same_fingerprint_as_one
 
 
 def test_the_validator_config_takes_the_mainnet_values_for_its_target():
-    probe = ("from herald.validator.utils import config as c; "
-             "print(c.HERALD_INCENTIVE_HOTKEY or '-', c.HERALD_EPOCH_LAG, "
+    probe = ("import os; from herald.validator.utils import config as c; "
+             "print(os.environ.get('HERALD_REGISTRY_AUTHORITY_HOTKEY') or '-', c.HERALD_EPOCH_LAG, "
              "','.join(c.MAINNET_DEFAULTS_APPLIED) or '-')")
 
     mainnet = _run_herald(["-c", probe, "--netuid", "69", "--subtensor.network", "finney"])
-    assert mainnet == (f"{MAINNET_DEFAULTS['HERALD_INCENTIVE_HOTKEY']} "
+    assert mainnet == (f"{MAINNET_DEFAULTS['HERALD_REGISTRY_AUTHORITY_HOTKEY']} "
                        f"{MAINNET_DEFAULTS['HERALD_EPOCH_LAG']} {','.join(MAINNET_DEFAULTS)}")
 
     testnet = _run_herald(["-c", probe, "--netuid", "535", "--subtensor.network", "test"])
     assert testnet == "- 10 -"
 
     overridden = _run_herald(["-c", probe, "--netuid", "69"],
-                             {"HERALD_INCENTIVE_HOTKEY": "5Override", "HERALD_EPOCH_LAG": "3"})
+                             {"HERALD_REGISTRY_AUTHORITY_HOTKEY": "5Override", "HERALD_EPOCH_LAG": "3"})
     assert overridden.startswith("5Override 3 ")
