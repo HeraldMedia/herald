@@ -367,8 +367,9 @@ entry releases over `HERALD_VEST_EPOCHS` daily installments while the article st
 `HERALD_DEAD_CONFIRM_EPOCHS` consecutive confirmed-dead epochs the remaining installments are clawed
 back; there is no slashing.
 
-**Unregistered hotkeys.** Every pass looks up each vesting article's hotkey in the metagraph and
-pays whichever UID it holds then. While the hotkey is not registered (for example after it was
+**Unregistered hotkeys.** Every pass first resyncs the metagraph, so registrations are read as they
+stand when the epoch is scored rather than at the last periodic sync. It then looks up each vesting
+article's hotkey and pays whichever UID it holds then. While the hotkey is not registered (for example after it was
 deregistered), a live article holds: nothing is released, and the pass logs
 `VESTING_HELD_UNREGISTERED <n>`. When the hotkey registers again, the installments it missed are
 released together. An article more than `HERALD_VEST_EPOCHS + HERALD_VEST_GRACE_EPOCHS` epochs
@@ -465,6 +466,7 @@ A pass that does not score the day puts all of its weight on UID 0 and logs
 | `chain_time_unavailable` | The scoring block's timestamp could not be read. |
 | `pricing_error (<detail>)` | A pricing input failed (§8.4). |
 | `feed_unavailable` | The submissions feed could not be read (§8.1). |
+| `metagraph_unavailable` | The metagraph could not be resynced before scoring (§8.2). |
 | `error (<type>: <detail>)` | Any other error in the shared steps, for example loading the outlet registry or its on-chain anchor, or reading hotkey owners from the chain. |
 | `stale_scores` | An already scored epoch's stored scores are empty (for example after a score checkpoint from another spec version was discarded at startup) or reach a UID the epoch did not score. They are replaced with all weight on UID 0 for the rest of the epoch, and the next weight submission sends the replacement. The ledger is not touched. |
 

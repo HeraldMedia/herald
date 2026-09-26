@@ -230,6 +230,13 @@ def _fail_epoch(self, epoch: int, before: dict, reason: str):
         bt.logging.error(f"Saving the weights for epoch {epoch} failed: {e}")
 
 
+def _resync_before_scoring(self):
+    try:
+        self.resync_metagraph()
+    except Exception as exc:
+        raise _EpochBurn("metagraph_unavailable") from exc
+
+
 def _miner_uids(self) -> dict:
     """{hotkey: uid} for every hotkey registered on the subnet except the owner's UID 0."""
     return {hotkey: uid for uid, hotkey in enumerate(self.metagraph.hotkeys) if uid != BURN_UID}
@@ -424,6 +431,11 @@ async def forward(self):
         return
 
     try:
+        # Registrations are read as they stand when the epoch is scored, not at the last periodic
+        # sync: a hotkey that lost its UID since then holds, instead of being released to a UID that
+        # has changed hands (and burned there). A failed resync burns the epoch; nothing is lost, the
+        # releases catch up with the next one.
+        _resync_before_scoring(self)
         _score_epoch(self, state, epoch, block)
     except Exception as e:
         _fail_epoch(self, epoch, before, _burn_reason(e))

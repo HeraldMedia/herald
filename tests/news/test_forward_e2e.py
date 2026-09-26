@@ -74,7 +74,9 @@ def env(monkeypatch):
     env = SimpleNamespace(
         briefs=STANDING, rows=[], pages={}, block=fwd.VEST_EPOCH_LEN * 1000 + 100,
         feed_calls=0, commitment_reads=0, registry_calls=[], updates=[], results=[],
-        snapshots=[], logs=[],
+        snapshots=[], logs=[], resyncs=0,
+        # The subnet's registrations as a resync reads them; None leaves the metagraph as it is.
+        registrations=None,
     )
     monkeypatch.setattr(statemod, "VEST_EPOCHS", 2)
     monkeypatch.setattr(fwd, "HERALD_DEAD_CONFIRM_EPOCHS", 2)
@@ -156,7 +158,15 @@ def make_validator(env, hotkeys=HOTKEYS, scores=None):
         self.scores = alpha * scattered + (1 - alpha) * self.scores
         env.updates.append((list(uids), [float(r) for r in rewards]))
 
+    def resync_metagraph():
+        env.resyncs += 1
+        if isinstance(env.registrations, Exception):
+            raise env.registrations
+        if env.registrations is not None:
+            self.metagraph.hotkeys = list(env.registrations)
+
     self.update_scores = update_scores
+    self.resync_metagraph = resync_metagraph
     return self
 
 
@@ -992,6 +1002,69 @@ async def test_a_scored_uid_changing_hands_inside_the_epoch_is_left_to_the_submi
                                self.herald_state.weight_hotkeys, 1) == ([0], [65535])
 
 
+@pytest.mark.asyncio
+async def test_registrations_are_resynced_once_before_each_scored_epoch(env):
+    env.rows = [row("sub-1", URL_A)]
+    self = make_validator(env)
+
+    await fwd.forward(self)
+    await fwd.forward(self)  # the same epoch: not scored again, not resynced
+    assert env.resyncs == 1
+    next_epoch(env)
+    await fwd.forward(self)
+    assert env.resyncs == 2
+
+
+@pytest.mark.asyncio
+async def test_a_miner_pruned_since_the_last_sync_holds_instead_of_paying_its_old_uid(env, monkeypatch):
+    monkeypatch.setattr(statemod, "VEST_EPOCHS", 4)
+    env.rows = [row("sub-1", URL_A)]
+    self = make_validator(env)
+    await fwd.forward(self)
+    entry = self.herald_state.vesting.entry(article_id(URL_A))
+    assert (entry.uid, entry.remaining) == (UID_A, 3)
+
+    # A's UID changed hands after the validator's last periodic sync: the metagraph it holds still
+    # shows A there, but scoring reads the registrations as they stand.
+    env.registrations = ["hkOwner", MINER_B, "hkReplacement"]
+    next_epoch(env)
+    await fwd.forward(self)
+
+    assert (entry.uid, entry.remaining) == (-1, 3)
+    assert "VESTING_HELD_UNREGISTERED 1" in env.logs
+    assert env.updates[-1] == ([0], [1.0]) and self.herald_state.weight_hotkeys == {}
+
+    # A registers again: the held installment and the new one are released together.
+    env.registrations = list(HOTKEYS)
+    next_epoch(env)
+    await fwd.forward(self)
+    assert (entry.uid, entry.remaining) == (UID_A, 1)
+    assert env.updates[-1] == ([0, UID_A], [0.75, 0.25])
+
+
+@pytest.mark.asyncio
+async def test_a_failed_resync_burns_the_epoch_and_its_releases_catch_up(env, monkeypatch):
+    monkeypatch.setattr(statemod, "VEST_EPOCHS", 4)
+    env.rows = [row("sub-1", URL_A)]
+    self = make_validator(env)
+    await fwd.forward(self)
+    entry = self.herald_state.vesting.entry(article_id(URL_A))
+
+    env.registrations = RuntimeError("chain unreachable")
+    next_epoch(env)
+    await fwd.forward(self)
+    entry = self.herald_state.vesting.entry(article_id(URL_A))
+    assert burns(env) and "metagraph_unavailable" in burns(env)[-1]
+    assert entry.remaining == 3 and env.updates[-1] == ([0], [1.0])
+
+    env.registrations = None
+    next_epoch(env)
+    await fwd.forward(self)
+    entry = self.herald_state.vesting.entry(article_id(URL_A))
+    assert entry.remaining == 1
+    assert env.updates[-1] == ([0, UID_A], [0.75, 0.25])
+
+
 # --- release cutover --------------------------------------------------------------------------------
 
 @pytest.mark.asyncio
@@ -1039,6 +1112,7 @@ async def test_cutover_discards_the_previous_releases_scores_and_only_ever_submi
     validator.scores = np.zeros(n, dtype=np.float32)
     validator.check_registered = lambda: None
     validator.should_sync_metagraph = lambda: False
+    validator.resync_metagraph = lambda: None  # registrations are fixed in these tests
     monkeypatch.setattr(Validator, "block", property(lambda self: env.block))
     monkeypatch.setattr(BaseNeuron, "should_set_weights", lambda self: True)
     monkeypatch.setattr(BaseValidatorNeuron, "_check_pending_weight_commit", lambda self: False)
@@ -1125,6 +1199,7 @@ def chain_validator(env, monkeypatch, tmp_path, hotkeys, *, uid, wallet_hotkey):
     validator.hotkeys = list(hotkeys)
     validator.check_registered = lambda: None
     validator.should_sync_metagraph = lambda: False
+    validator.resync_metagraph = lambda: None  # registrations are fixed in these tests
     monkeypatch.setattr(Validator, "block", property(lambda self: env.block))
     monkeypatch.setattr("neurons.validator.publish_weight_receipt",
                         lambda endpoint, receipt, hotkey: chain.receipts.append(receipt))
