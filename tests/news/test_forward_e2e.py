@@ -1138,7 +1138,7 @@ async def test_cutover_discards_the_previous_releases_scores_and_only_ever_submi
     validator.sync()
     [submitted] = submissions
     assert (submitted["uids"], submitted["weights"]) == ([0], [65535])
-    assert submitted["version_key"] == 21
+    assert submitted["version_key"] == 22
     assert state.last_weight_epoch == epoch
     assert HeraldState.load(str(tmp_path / "herald_state.json")).last_weight_epoch == epoch
     assert [receipt["epoch"] for receipt in receipts] == [epoch]
