@@ -64,7 +64,7 @@ python neurons/validator.py --netuid 69 --wallet.name <w> --wallet.hotkey <hk> \
   --neuron.disable_auto_update
 ```
 
-The current release is `0.2.1` (spec version 21). Validators verify the outlet registry's ed25519
+The current release is `0.2.2` (spec version 22). Validators verify the outlet registry's ed25519
 signature when `HERALD_REGISTRY_PUBKEY` is set. See `.env.example` for configuration and
 [docs/validator.md](docs/validator.md) for the validator guide.
 

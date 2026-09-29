@@ -8,6 +8,17 @@ from herald.validator.news.pricing import PricingError, daily_miner_usd
 
 NETUID = 69
 BLOCK = 9_000_000
+COIN_RECORD_URL = pricing.COINGECKO_API + pricing.TAO_USD_PATHS[1]
+
+
+@pytest.fixture(autouse=True)
+def keyless_and_no_waits(monkeypatch):
+    """Keyless CoinGecko access unless a test sets a key, and backoff pauses recorded, not slept."""
+    monkeypatch.delenv("HERALD_COINGECKO_API_KEY", raising=False)
+    monkeypatch.delenv("HERALD_COINGECKO_API_PLAN", raising=False)
+    waits = []
+    monkeypatch.setattr(pricing.time, "sleep", waits.append)
+    return waits
 
 
 class FakeSubtensor:
@@ -59,9 +70,11 @@ class FakeHttp:
     def __init__(self, *responses):
         self.responses = list(responses)
         self.calls = []
+        self.headers = []
 
-    def __call__(self, url, timeout=None):
+    def __call__(self, url, timeout=None, headers=None):
         self.calls.append((url, timeout))
+        self.headers.append(dict(headers or {}))
         response = self.responses.pop(0) if len(self.responses) > 1 else self.responses[0]
         if isinstance(response, Exception):
             raise response
@@ -78,6 +91,10 @@ def test_constants_are_fixed_in_code():
     assert pricing.MECHANISM_ID == 0
     assert pricing.TAO_USD_URL == (
         "https://api.coingecko.com/api/v3/simple/price?ids=bittensor&vs_currencies=usd"
+    )
+    assert COIN_RECORD_URL == (
+        "https://api.coingecko.com/api/v3/coins/bittensor?localization=false&tickers=false"
+        "&market_data=true&community_data=false&developer_data=false&sparkline=false"
     )
     assert pricing.PRICE_SOURCE == "chain_spot_alpha_x_coingecko_tao_usd_v1"
 
@@ -120,11 +137,53 @@ def test_unusable_mechanism_count_is_a_pricing_error(count):
         daily_miner_usd(FakeSubtensor(split=None, count=count), NETUID, BLOCK, http_get=tao_at(1.0))
 
 
-def test_tao_usd_server_errors_fail_after_three_attempts():
+def test_tao_usd_server_errors_fail_after_three_rounds_of_both_routes(keyless_and_no_waits):
     http = FakeHttp(FakeResponse(status=503))
     with pytest.raises(PricingError, match="after 3 attempts"):
         daily_miner_usd(FakeSubtensor(), NETUID, BLOCK, http_get=http)
-    assert len(http.calls) == 3
+    assert [url for url, _timeout in http.calls] == [pricing.TAO_USD_URL, COIN_RECORD_URL] * 3
+    assert keyless_and_no_waits == [10.0, 30.0]
+
+
+def test_a_refused_simple_price_falls_back_to_the_coin_record(keyless_and_no_waits):
+    http = FakeHttp(FakeResponse(status=403),
+                    FakeResponse(payload={"market_data": {"current_price": {"usd": 310.77, "eur": 1.0}}}))
+    result = daily_miner_usd(FakeSubtensor(), NETUID, BLOCK, http_get=http)
+    assert result["tao_usd"] == pytest.approx(310.77)
+    assert [url for url, _timeout in http.calls] == [pricing.TAO_USD_URL, COIN_RECORD_URL]
+    assert keyless_and_no_waits == []
+
+
+def test_keyless_requests_carry_no_key():
+    http = tao_at(300.0)
+    daily_miner_usd(FakeSubtensor(), NETUID, BLOCK, http_get=http)
+    assert http.headers == [{"accept": "application/json"}]
+
+
+def test_a_demo_key_is_sent_to_the_public_api_as_a_header(monkeypatch):
+    monkeypatch.setenv("HERALD_COINGECKO_API_KEY", " CG-demo-key ")
+    http = FakeHttp(FakeResponse(status=429), FakeResponse(status=429),
+                    FakeResponse(payload={"bittensor": {"usd": 300.0}}))
+    daily_miner_usd(FakeSubtensor(), NETUID, BLOCK, http_get=http)
+    assert all(url.startswith("https://api.coingecko.com/api/v3/") for url, _timeout in http.calls)
+    assert all(headers == {"accept": "application/json", "x-cg-demo-api-key": "CG-demo-key"}
+               for headers in http.headers)
+
+
+def test_a_pro_key_goes_to_the_pro_api(monkeypatch):
+    monkeypatch.setenv("HERALD_COINGECKO_API_KEY", "CG-pro-key")
+    monkeypatch.setenv("HERALD_COINGECKO_API_PLAN", "Pro")
+    http = tao_at(300.0)
+    daily_miner_usd(FakeSubtensor(), NETUID, BLOCK, http_get=http)
+    assert http.calls == [(pricing.COINGECKO_PRO_API + pricing.TAO_USD_PATHS[0], 10.0)]
+    assert http.headers == [{"accept": "application/json", "x-cg-pro-api-key": "CG-pro-key"}]
+
+
+def test_the_key_never_appears_in_a_pricing_error(monkeypatch):
+    monkeypatch.setenv("HERALD_COINGECKO_API_KEY", "CG-secret-key")
+    with pytest.raises(PricingError) as failure:
+        daily_miner_usd(FakeSubtensor(), NETUID, BLOCK, http_get=FakeHttp(FakeResponse(status=403)))
+    assert "CG-secret-key" not in str(failure.value)
 
 
 def test_a_transient_tao_usd_failure_is_retried():

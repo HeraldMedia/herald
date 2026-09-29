@@ -49,7 +49,9 @@ search-API calls, chain RPC, one price API). The optional LLM judge is a *remote
   - **Results credentials** — the shared results token, or a per-validator write and read token
     pair (secret). The read credential is what reads the submissions feed.
   - The **signed registry file** (byte-identical to what the backend serves).
-- **Outbound HTTPS to CoinGecko** for the TAO/USD price (public API, no key).
+- **Outbound HTTPS to CoinGecko** for the TAO/USD price. A free Demo API key
+  (`HERALD_COINGECKO_API_KEY`) is recommended: keyless access is rate limited per IP, and busy
+  addresses are refused outright (§8.4).
 - The subnet's **MinAllowedWeights must be 1** (§8.6).
 
 Rough cost: server ~$20–40/mo + API keys (ScrapingBee is the main line item), scaling with subnet
@@ -429,7 +431,7 @@ daily_usd         = daily_miner_alpha × alpha_tao × tao_usd
 | `alpha_out` | The subnet's per-block alpha emission (`alpha_out_emission`) from its dynamic info at the scoring block. |
 | `mechanism_ratio` | Mechanism 0's share of the subnet's mechanism emission split at the scoring block; an even split across mechanisms when none is set. |
 | `alpha_tao` | The subnet's alpha price in TAO at the scoring block. |
-| `tao_usd` | CoinGecko's public simple-price API (`bittensor` in USD): up to 3 attempts, 10 s timeout each, no API key. |
+| `tao_usd` | CoinGecko's current `bittensor` price in USD: its simple-price endpoint, or the coin's own record (`market_data.current_price.usd`) when that one is refused or rate limited. Up to 3 rounds over both, 10 and 30 seconds apart, with a 10 s timeout per request. |
 | `BLOCKS_PER_DAY` | `7200` (one evaluation epoch). |
 | `MINER_EMISSION_SHARE` | `0.41`, the share of each block's alpha emission that goes to miners. |
 
@@ -437,6 +439,17 @@ The constants and the price source name `chain_spot_alpha_x_coingecko_tao_usd_v1
 `herald/validator/news/pricing.py`, not in the environment, and are part of the fingerprint. An
 input that cannot be read, or is not a finite positive number, fails the day (§8.5) with
 `reason=pricing_error (<detail>)`.
+
+**CoinGecko API key.** Keyless requests share a per-IP rate limit, and CoinGecko refuses busy
+addresses outright (`403 Forbidden`), which fails every day until it lifts. Set a key:
+
+| Setting | Meaning |
+|---|---|
+| `HERALD_COINGECKO_API_KEY` | A CoinGecko API key. A free Demo key covers one read a day; it is sent as the `x-cg-demo-api-key` header to the public API. |
+| `HERALD_COINGECKO_API_PLAN` | `pro` for a paid key, sent as `x-cg-pro-api-key` to `pro-api.coingecko.com`. Leave it unset for a Demo key. |
+
+The key is a credential, not a consensus parameter: the price is CoinGecko's either way, so the
+fingerprint does not change and validators with and without a key agree.
 
 ### 8.5 Weights and the burn
 
@@ -538,7 +551,22 @@ on which one miner's pay covers the whole miner emission, so on a subnet whose M
 above 1 those vectors are refused and no weights are set. Check `min_allowed_weights` with
 `btcli subnet hyperparameters --netuid 69 --network finney`.
 
-### 8.7 Release 0.2.1 (spec version 21)
+### 8.7 Releases 0.2.2 (spec version 22) and 0.2.1 (spec version 21)
+
+**0.2.2.**
+- **TAO/USD from CoinGecko.** It survives a refused or rate-limited simple-price endpoint by reading
+  the coin's own record, and it spaces its retry rounds (§8.4).
+- **Optional API key.** `HERALD_COINGECKO_API_KEY` (and `HERALD_COINGECKO_API_PLAN`) send a
+  CoinGecko key.
+- **Unchanged.** The consensus parameters and fingerprint.
+- **Spec version.** It is `22`, so the spec-21 score checkpoint is discarded at startup
+  (`Discarding score checkpoint from spec 21; current spec is 22`). The rest of an epoch 0.2.1
+  already scored then keeps all its weight on UID 0 until the next epoch is scored.
+- **Upgrading from 0.2.1.** A pull and a recreate, optionally with a key in `.env`. 0.2.1 and 0.2.2
+  validators agree on everything but the retries.
+
+**0.2.1.**
+
 
 - `herald/__init__.py` is `0.2.1`, so the spec version, sent as `version_key` with every weight
   submission, is `21`. The spec-20 score checkpoint (`state.npz`) is discarded at startup
