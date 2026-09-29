@@ -35,7 +35,6 @@ def _valid_env(tmp_path):
         "HERALD_REGISTRY_PATH": str(path),
         "HERALD_REGISTRY_PUBKEY": public_key,
         "HERALD_REGISTRY_AUTHORITY_HOTKEY": "5Authority",
-        "HERALD_INCENTIVE_HOTKEY": ALICE,
         "HERALD_REQUIRE_SIGNED_REGISTRY": "true",
         "HERALD_REQUIRE_SIGNED_BRIEFS": "true",
         "HERALD_BRIEFS_PUBKEY": "11" * 32,
@@ -160,33 +159,12 @@ def test_validator_production_environment_needs_a_results_credential_for_each_sc
     assert not any("write-token" in error for error in errors)
 
 
-@pytest.mark.parametrize("value, message", [
-    (None, "HERALD_INCENTIVE_HOTKEY is required"),
-    ("", "HERALD_INCENTIVE_HOTKEY is required"),
-    ("5Incentive", "HERALD_INCENTIVE_HOTKEY must be a valid SS58 address"),
-    (ALICE[:-1] + "Z", "HERALD_INCENTIVE_HOTKEY must be a valid SS58 address"),
-])
-def test_validator_production_environment_requires_a_valid_incentive_hotkey(tmp_path, value, message):
+@pytest.mark.parametrize("value", [None, "", "5Incentive", ALICE])
+def test_the_retired_incentive_hotkey_is_not_a_preflight_requirement(tmp_path, value):
     from herald.production import validator_environment_errors
 
     env = _valid_env(tmp_path)
-    if value is None:
-        env.pop("HERALD_INCENTIVE_HOTKEY")
-    else:
+    if value is not None:
         env["HERALD_INCENTIVE_HOTKEY"] = value
 
-    assert validator_environment_errors(env, actual_consensus="expected-fingerprint") == [message]
-
-
-def test_incentive_hotkey_must_differ_from_the_registry_authority(tmp_path):
-    from herald.production import validator_environment_errors
-
-    env = _valid_env(tmp_path)
-    env["HERALD_REGISTRY_AUTHORITY_HOTKEY"] = ALICE
-    env["HERALD_INCENTIVE_HOTKEY"] = ALICE
-    assert validator_environment_errors(env, actual_consensus="expected-fingerprint") == [
-        "HERALD_INCENTIVE_HOTKEY must differ from HERALD_REGISTRY_AUTHORITY_HOTKEY"
-    ]
-
-    env["HERALD_INCENTIVE_HOTKEY"] = BOB
     assert validator_environment_errors(env, actual_consensus="expected-fingerprint") == []

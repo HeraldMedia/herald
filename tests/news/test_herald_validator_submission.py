@@ -20,17 +20,17 @@ from neurons.validator import Validator
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-STAR = "hkStar"
+MINER = "hkMinerA"
 UID = 1  # this validator
-UID_STAR = 2
-HOTKEYS = ["hkOwner", "hkValidator", STAR, "hkMiner"]
-INCENTIVE_AND_BURN = (0.75, 0.0, 0.25, 0.0)
+UID_MINER = 2
+HOTKEYS = ["hkOwner", "hkValidator", MINER, "hkMinerB"]
+# The latest epoch paid the miner at UID 2 a quarter of the day and burned the rest.
+MINER_AND_BURN = (0.75, 0.0, 0.25, 0.0)
 
 
 @pytest.fixture(autouse=True)
 def _submission_env(monkeypatch):
     monkeypatch.setattr(valmod, "WEIGHT_RESUBMIT_BLOCKS", 180)
-    monkeypatch.setattr(cfg, "HERALD_INCENTIVE_HOTKEY", STAR)
     monkeypatch.setattr(Validator, "block", property(lambda self: self._block), raising=False)
 
 
@@ -43,7 +43,7 @@ def logs(monkeypatch):
     return lines
 
 
-def _validator(tmp_path, *, scored_epoch=10, weight_epoch=10, scores=INCENTIVE_AND_BURN,
+def _validator(tmp_path, *, scored_epoch=10, weight_epoch=10, scores=MINER_AND_BURN,
                block=1000, last_update=700, pending=False, min_allowed=1, epoch_length=100,
                disable_set_weights=False, hotkeys=HOTKEYS):
     """A validator on a fake chain: the real base-class gates run and every extrinsic is recorded.
@@ -63,6 +63,7 @@ def _validator(tmp_path, *, scored_epoch=10, weight_epoch=10, scores=INCENTIVE_A
     validator.herald_state = HeraldState.fresh()
     validator.herald_state.last_scored_epoch = scored_epoch
     validator.herald_state.last_weight_epoch = weight_epoch
+    validator.herald_state.weight_hotkeys = {UID_MINER: MINER}
     record = np.zeros(len(hotkeys), dtype=np.int64)
     record[UID] = last_update
     validator.metagraph = SimpleNamespace(n=len(hotkeys), uids=np.arange(len(hotkeys)),
@@ -112,7 +113,7 @@ def test_a_submitted_epoch_is_resubmitted_once_the_chain_record_is_stale(tmp_pat
 
     validator.sync()
 
-    assert _vectors(chain) == [([0, UID_STAR], [65535, 21845])]
+    assert _vectors(chain) == [([0, UID_MINER], [65535, 21845])]
     assert _submission_lines(logs) == [
         "Re-submitting Herald epoch 10 weights: the chain record for uid 1 is 300 blocks old (>= 180)"
     ]
@@ -125,7 +126,7 @@ def test_a_newly_scored_epoch_is_submitted_under_the_same_rule(tmp_path, logs):
 
     validator.sync()
 
-    assert _vectors(chain) == [([0, UID_STAR], [65535, 21845])]
+    assert _vectors(chain) == [([0, UID_MINER], [65535, 21845])]
     assert _submission_lines(logs) == [
         "Submitting Herald epoch 10 weights: the chain record for uid 1 is 300 blocks old (>= 180)"
     ]
@@ -182,21 +183,21 @@ def test_a_burn_only_vector_is_resubmitted(tmp_path, logs):
 
 
 @pytest.mark.parametrize("min_allowed", [1, 2])
-@pytest.mark.parametrize("scores", [
-    (0.5, 0.0, 0.0, 0.5),   # a registered miner's UID
-    (0.0, 0.3, 0.0, 0.0),   # this validator's own UID
-    (0.4, 0.0, 0.3, 0.3),   # the incentive UID and another UID
+@pytest.mark.parametrize("scores, vector", [
+    ((0.5, 0.0, 0.0, 0.5), ([0], [65535])),                # a registered miner the epoch did not score
+    ((0.0, 0.3, 0.0, 0.0), ([0], [65535])),                # this validator's own UID
+    ((0.4, 0.0, 0.3, 0.3), ([0, UID_MINER], [65535, 28086])),  # the scored miner and another UID
 ])
-def test_a_stored_vector_outside_uid_zero_and_the_incentive_uid_is_never_emitted(
-        tmp_path, logs, scores, min_allowed):
+def test_a_stored_score_outside_uid_zero_and_the_scored_miners_moves_to_uid_zero(
+        tmp_path, logs, scores, vector, min_allowed):
     validator, chain = _validator(tmp_path, scores=scores, min_allowed=min_allowed)
 
     validator.sync()
 
-    assert any(msg.startswith("WEIGHT_VECTOR_BURN reason=incentive_uid_changed")
+    assert any(msg.startswith("WEIGHT_VECTOR_BURN reason=hotkey_changed")
                for msg in _messages(logs, "warning"))
-    if min_allowed == 1:
-        assert _vectors(chain) == [([0], [65535])]  # burned
+    if len(vector[0]) >= min_allowed:
+        assert _vectors(chain) == [vector]
     else:
         assert chain.submissions == []  # refused
         assert _messages(logs, "error") == [
@@ -205,17 +206,18 @@ def test_a_stored_vector_outside_uid_zero_and_the_incentive_uid_is_never_emitted
 
 
 @pytest.mark.parametrize("hotkeys", [
-    ["hkOwner", "hkValidator", "hkReplacement", STAR],    # the incentive hotkey moved to UID 3
-    ["hkOwner", "hkValidator", "hkReplacement", "hkMiner"],  # it is no longer registered
+    ["hkOwner", "hkValidator", "hkReplacement", MINER],    # the miner re-registered at UID 3
+    ["hkOwner", "hkValidator", "hkReplacement", "hkMinerB"],  # it is no longer registered
 ])
-def test_a_resubmission_after_the_incentive_hotkey_moved_uid_burns(tmp_path, logs, hotkeys):
-    validator, chain = _validator(tmp_path, scores=INCENTIVE_AND_BURN)
+def test_a_resubmission_after_a_scored_miners_uid_changed_hands_burns_its_weight(tmp_path, logs,
+                                                                               hotkeys):
+    validator, chain = _validator(tmp_path, scores=MINER_AND_BURN)
     validator.metagraph.hotkeys = list(hotkeys)
 
     validator.sync()
 
     assert _vectors(chain) == [([0], [65535])]
-    assert any(msg.startswith("WEIGHT_VECTOR_BURN reason=incentive_uid_changed")
+    assert any(msg.startswith("WEIGHT_VECTOR_BURN reason=hotkey_changed")
                for msg in _messages(logs, "warning"))
 
 

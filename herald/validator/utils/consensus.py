@@ -29,21 +29,19 @@ def consensus_params() -> dict:
         "base_payout": cfg.HERALD_BASE_PAYOUT_USD,
         "tier_mult": cfg.HERALD_TIER_MULTIPLIER,
         "no_search_floor": cfg.HERALD_NO_SEARCH_FLOOR,
-        # weights: the share owed to contributors is verified USD over the USD value of the day's
-        # miner emission. With burn_unearned the incentive hotkey's weight is that share and UID 0
-        # receives the rest; without it the incentive hotkey receives all the weight and the epoch
-        # snapshot states the share (contributor_share_ppb).
-        "emission_mode": "incentive_burn_v1",
+        # weights: each miner UID's weight is its verified USD over the USD value of the day's miner
+        # emission (the miners share all of it when their total is larger), paid to the hotkey each
+        # submission's coldkey signed for; UID 0 receives the rest, which is burned.
+        "emission_mode": "miner_hotkeys_v1",
         "burn_uid": BURN_UID,
-        "burn_unearned": cfg.HERALD_BURN_UNEARNED,
-        "incentive_hotkey": cfg.HERALD_INCENTIVE_HOTKEY,
         "price_source": pricing.PRICE_SOURCE,
         "miner_emission_share": pricing.MINER_EMISSION_SHARE,
         "blocks_per_day": pricing.BLOCKS_PER_DAY,
-        # submission intake and verification. v2: exact publication times are compared with the
-        # upload time, the earliest matching draft of an article is credited, and articles are
-        # verified in order of their earliest upload.
-        "intake": "backend_submissions_draft_match_v2",
+        # submission intake and verification. v3: every submission carries the contributor's
+        # hotkey and a signature by the coldkey that owns it (checked on chain), exact publication
+        # times are compared with the upload time, the earliest matching draft of an article is
+        # credited, and articles are verified in order of their earliest upload.
+        "intake": "backend_submissions_signed_v3",
         "draft_match_threshold": cfg.HERALD_DRAFT_MATCH_THRESHOLD,
         "publish_buffer_days": cfg.HERALD_PUBLISH_BUFFER_DAYS,
         "max_article_age_days": cfg.HERALD_MAX_ARTICLE_AGE_DAYS,

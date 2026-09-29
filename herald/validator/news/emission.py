@@ -1,7 +1,6 @@
-"""Turn each epoch's payable installments into its weight vector and the contributors' share."""
+"""Turn each epoch's payable installments into its weight vector over the miners' own UIDs."""
 
 import math
-from fractions import Fraction
 from typing import Dict, List, Tuple
 
 import bittensor as bt
@@ -9,11 +8,9 @@ import numpy as np
 
 from herald.base.utils.weight_utils import convert_weights_and_uids_for_emit
 
-# UID 0 receives the share of the day's miner emission that verified value does not cover when that
-# share is burned, and all of it when there is no incentive UID.
+# UID 0 receives, and so burns, the share of the day's miner emission that verified value does not
+# cover, and all of it on a day that is not scored.
 BURN_UID = 0
-# contributor_share_ppb of a whole receipt: parts per billion.
-SHARE_PPB = 1_000_000_000
 
 
 class WeightVectorRefused(Exception):
@@ -71,94 +68,65 @@ def apply_reward_pools(
     return usd_by_uid
 
 
-def incentive_uid(hotkeys, incentive_hotkey: str):
-    """The incentive hotkey's UID, or None when it is unset, unregistered or holds UID 0."""
-    hotkeys = list(hotkeys)
-    if not incentive_hotkey or incentive_hotkey not in hotkeys:
-        return None
-    uid = hotkeys.index(incentive_hotkey)
-    return None if uid == BURN_UID else uid
+def miner_weight_vector(usd_by_uid: Dict[int, float], daily_usd) -> Tuple[List[int], np.ndarray]:
+    """The epoch's weight vector: each miner UID's payable USD over the day's miner emission in USD.
 
-
-def incentive_burn_vector(payable_usd, daily_usd, uid_star) -> Tuple[List[int], np.ndarray]:
-    """([0, uid_star], [1 - w, w]) with w = min(1, payable_usd / daily_usd); zero entries dropped.
-
-    Everything goes to UID 0 ([0], [1.0]) when there is no incentive UID, nothing is payable, or the
-    USD value of the day's miner emission is not a finite positive number.
+    With U the total payable and d the USD value of the day's miner emission: when U <= d each miner
+    UID receives usd / d and UID 0 the rest, 1 - U / d, which is burned; when U > d the miners share all
+    of it, usd / U each, and UID 0 receives nothing. Everything goes to UID 0 ([0], [1.0]) when nothing
+    is payable or d is not a finite positive number. UID 0 itself and non-positive or non-finite
+    amounts never count as a miner's pay. UIDs come out in ascending order.
     """
     burn = ([BURN_UID], np.array([1.0], dtype=np.float32))
-    if uid_star is None or int(uid_star) <= BURN_UID:
-        return burn
-    payable = float(payable_usd)
     daily = float(daily_usd)
-    if not math.isfinite(payable) or payable <= 0 or not math.isfinite(daily) or daily <= 0:
+    paid = {}
+    for uid, usd in usd_by_uid.items():
+        uid, usd = int(uid), float(usd)
+        if uid > BURN_UID and math.isfinite(usd) and usd > 0:
+            paid[uid] = usd
+    if not paid or not math.isfinite(daily) or daily <= 0:
         return burn
-    w = min(1.0, payable / daily)
-    pairs = [(uid, share) for uid, share in ((BURN_UID, 1.0 - w), (int(uid_star), w)) if share > 0]
+    total = math.fsum(paid[uid] for uid in sorted(paid))
+    denominator = max(total, daily)
+    pairs = [(uid, paid[uid] / denominator) for uid in sorted(paid)]
+    if total < daily:
+        pairs.insert(0, (BURN_UID, (daily - total) / daily))
     return [uid for uid, _ in pairs], np.array([share for _, share in pairs], dtype=np.float32)
 
 
-def full_incentive_vector(uid_star) -> Tuple[List[int], np.ndarray]:
-    """([uid_star], [1.0]) whatever was verified; ([0], [1.0]) when there is no incentive UID."""
-    if uid_star is None or int(uid_star) <= BURN_UID:
-        return [BURN_UID], np.array([1.0], dtype=np.float32)
-    return [int(uid_star)], np.array([1.0], dtype=np.float32)
-
-
-def incentive_weight_vector(payable_usd, daily_usd, uid_star,
-                            burn_unearned: bool) -> Tuple[List[int], np.ndarray]:
-    """The epoch's weight vector.
-
-    With burn_unearned, incentive_burn_vector(): the incentive UID's weight is the verified share
-    and UID 0 receives the rest. Without it, full_incentive_vector(): all weight on the incentive
-    UID.
-    """
-    if burn_unearned:
-        return incentive_burn_vector(payable_usd, daily_usd, uid_star)
-    return full_incentive_vector(uid_star)
-
-
-def contributor_share_ppb(payable_usd, daily_usd, burn_unearned: bool) -> int:
-    """The part of the incentive UID's receipt for the epoch owed to contributors, in ppb.
-
-    With burn_unearned the chain already scales the receipt to verified value, so all of it is
-    owed: SHARE_PPB. Without it the receipt is the whole incentive and the owed part is
-    floor(min(1, payable_usd / daily_usd) * 1e9), computed exactly from the two values with
-    rational arithmetic so every validator states the same integer; 0 when nothing is payable or
-    the USD value of the day's miner emission is not a finite positive number.
-    """
-    if burn_unearned:
-        return SHARE_PPB
-    payable = float(payable_usd)
-    daily = float(daily_usd)
-    if not math.isfinite(payable) or payable <= 0 or not math.isfinite(daily) or daily <= 0:
-        return 0
-    return min(SHARE_PPB, int((Fraction(payable) * SHARE_PPB) // Fraction(daily)))
-
-
-def allowed_emit_vector(scores, hotkeys, incentive_hotkey: str,
+def allowed_emit_vector(scores, hotkeys, weight_hotkeys: Dict[int, str],
                         min_allowed_weights) -> Tuple[List[int], List[int]]:
     """The u16 (uids, weights) to submit, or WeightVectorRefused.
 
-    Only UID 0 and the incentive hotkey's current UID may receive weight. Scores on any other UID
-    (for example after the incentive hotkey moved to a new UID) put all weight on UID 0. Weights are
-    max-upscaled to u16 with zero entries dropped; they are never padded with other UIDs or clipped
-    to a maximum weight. The vector is refused when it is empty, reaches another UID, or is shorter
-    than MinAllowedWeights (refused as well when MinAllowedWeights is unknown).
+    UID 0 and the miner UIDs the latest epoch was scored on may receive weight. `weight_hotkeys` maps
+    each of those UIDs to the hotkey it held when the epoch was scored. A positive score on any other
+    UID, or on a UID now held by a different hotkey (the miner was deregistered and someone else took
+    the UID), moves to UID 0 and is logged, so a miner's pay never reaches another account. Weights are
+    max-upscaled to u16 with zero entries dropped; they are never padded with other UIDs or clipped to
+    a maximum weight. The vector is refused when it is empty, reaches a UID that is not allowed, or is
+    shorter than MinAllowedWeights (refused as well when MinAllowedWeights is unknown).
     """
     values = np.asarray(scores, dtype=np.float64).reshape(-1)
-    uid_star = incentive_uid(hotkeys, incentive_hotkey)
-    allowed = {BURN_UID} if uid_star is None else {BURN_UID, uid_star}
+    hotkeys = list(hotkeys)
+    scored = {int(uid): hotkey for uid, hotkey in (weight_hotkeys or {}).items()}
     support = [int(uid) for uid in np.flatnonzero(np.isfinite(values) & (values > 0))]
-    if not support or not set(support) <= allowed:
-        bt.logging.warning(
-            f"WEIGHT_VECTOR_BURN reason=incentive_uid_changed: scores on UIDs {support[:10]} are not "
-            f"limited to UID {BURN_UID} and the incentive hotkey's UID {uid_star}"
-        )
+    if not support:
+        bt.logging.warning("WEIGHT_VECTOR_BURN reason=no_scores")
         support_uids, shares = [BURN_UID], np.array([1.0])
     else:
-        support_uids = support
-        shares = values[support] / math.fsum(values[support])
+        moved = [uid for uid in support if uid != BURN_UID
+                 and (uid >= len(hotkeys) or scored.get(uid) is None or scored[uid] != hotkeys[uid])]
+        total = math.fsum(values[support])
+        share_by_uid = {uid: values[uid] / total for uid in support if uid not in moved}
+        if moved:
+            bt.logging.warning(
+                f"WEIGHT_VECTOR_BURN reason=hotkey_changed: scores on UIDs {moved[:10]} are not held by "
+                f"the hotkeys the epoch was scored for; their weight moves to UID {BURN_UID}"
+            )
+            share_by_uid[BURN_UID] = share_by_uid.get(BURN_UID, 0.0) + math.fsum(values[moved]) / total
+        support_uids = sorted(share_by_uid)
+        shares = np.array([share_by_uid[uid] for uid in support_uids])
+    allowed = {BURN_UID} | {uid for uid in support_uids if uid in scored}
     uids, weights = convert_weights_and_uids_for_emit(
         uids=np.asarray(support_uids, dtype=np.int64), weights=shares,
     )

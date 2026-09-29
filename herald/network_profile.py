@@ -22,8 +22,6 @@ MAINNET_NETWORK = "finney"
 MAINNET_NETUID = 69
 
 MAINNET_DEFAULTS = {
-    # The only UID besides 0 that receives weight: herald-miner/miner1.
-    "HERALD_INCENTIVE_HOTKEY": "5CK1qDSktB7i28rr8dnCpG1sTr13CTwg2EffhkD9eNWRDB6x",
     # Aligns evaluation epochs fleet-wide: epoch 1258 began at block 9044797.
     "HERALD_EPOCH_LAG": "-12803",
     # The canonical backend: submissions feed, results, briefs and the active registry edition.

@@ -1,35 +1,43 @@
 # Herald Miner Guide (Bittensor netuid 69 · finney)
 
-> **Deprecated: registered miner hotkeys no longer earn.** Herald validators do not query miner
-> neurons, read miner commitments or weight miner UIDs. They set weight only on the subnet's single
-> incentive hotkey and burn the rest to UID 0. `herald-miner` (`python -m herald.miner.cli`) and the
-> miner neuron (`neurons/miner.py`) are deprecated: commits, claims and served reveals earn nothing.
-> **PR firms and PR professionals now take part through the Herald website**, as described below. No
-> wallet, hotkey, registration, server or command line is needed to contribute.
+> **PR firms and PR professionals take part through the Herald website, with their own hotkey.**
+> Each contributor registers their own hotkey on netuid 69 from the website and signs every
+> submission with their wallet; validators weight that hotkey by the verified value of its
+> articles. No miner server, axon or command line is needed. `herald-miner`
+> (`python -m herald.miner.cli`) and the miner neuron (`neurons/miner.py`) are deprecated:
+> validators do not query miner neurons or read miner commitments, so commits, claims and served
+> reveals earn nothing.
 
 ---
 
 ## 1. How contributing works
 
 ```
-  sign in (Google) ──▶ pick a brief ──▶ UPLOAD your text ──▶ publish ──▶ add the LINK
-                                        (before publishing)               ──▶ validators verify
-                                                                          ──▶ earnings accumulate
-                                                                          ──▶ claim to your wallet
+  sign in (Google) ──▶ register your hotkey (once, with your wallet extension)
+  pick a brief ──▶ UPLOAD your text + SIGN ──▶ publish ──▶ add the LINK
+                   (before publishing)                     ──▶ validators verify
+                                                           ──▶ your hotkey earns
 ```
 
 1. **Sign in** to the Herald website with Google. Sign-in is required to submit.
-2. **Pick a brief.** A brief is a topic or campaign. It may have a start and end date and, for a
+2. **Register your hotkey (once).** From the website, register your own hotkey on netuid 69,
+   signing with a wallet extension: Talisman, SubWallet or Polkadot.js. The account that signs is
+   your coldkey, which owns the hotkey on chain. Registration costs the subnet's registration fee
+   in TAO, as on any Bittensor subnet, and the fee is not refunded.
+3. **Pick a brief.** A brief is a topic or campaign. It may have a start and end date and, for a
    client brief, a prepaid reward pool.
-3. **Upload your text before publishing.** On the brief's page, upload the text you will publish
-   (300 to 40,000 characters). The time of the upload is recorded.
-4. **Publish, then add the link.** Once the article is live in the outlet, return to the brief's
-   page and add the article's link. That is all you need to do.
-5. **Validators verify.** Once a day every validator checks the article on the outlet's own page
-   (§2). The brief's page shows the status of each submission.
-6. **Earn and claim.** A verified article earns a share of the alpha the subnet's incentive hotkey
-   receives (§3). Earnings accumulate on your account even with no wallet connected. Connect a
-   wallet on the website when you want to claim them.
+4. **Upload your text before publishing, and sign.** On the brief's page, upload the text you will
+   publish (300 to 40,000 characters) and sign the submission with your wallet, using the coldkey
+   that owns your hotkey. The signature covers the subnet, the brief, a fingerprint (SHA-256) of
+   your text and your hotkey, so the submission can only be credited to your hotkey. The time of
+   the upload is recorded.
+5. **Publish, then add the link.** Once the article is live in the outlet, return to the brief's
+   page and add the article's link.
+6. **Validators verify.** Once a day every validator checks your signature, that your coldkey owns
+   the hotkey on chain, and the article on the outlet's own page (§2). The brief's page shows the
+   status of each submission.
+7. **Earn.** A verified article vests on your hotkey (§3). Validators set weight on your hotkey's
+   UID, and the chain emits your share to your hotkey directly, as for any Bittensor miner.
 
 Validators use the uploaded text only to verify your article. They never publish, store or log it.
 
@@ -41,6 +49,7 @@ Checks run in order and stop at the first failure. Every submitted article must 
 
 | Check | What it means for you | Result when it fails |
 |---|---|---|
+| **Signed by your hotkey's owner** | Your wallet's signature is valid, and the coldkey that signed owns your hotkey on chain when validators score the submission. | `hotkey_not_owned`; a submission whose signature does not verify is dropped with no result |
 | **Brief active** | The brief is still open when validators score the submission. | `brief_not_active` |
 | **Outlet listed** | The link's domain is an outlet in the signed **outlet registry**; its **tier** sets the value. | `outlet_not_listed` |
 | **Outlet supported** | Validators read the outlet's page themselves, directly or through their fetch provider. | `outlet_not_supported` |
@@ -77,14 +86,18 @@ Each installment needs the article to still be **live**. A temporary fetch failu
 installment and it is released later. If the article is confirmed removed, or changed to paid
 content, on 2 consecutive daily checks, the remaining installments are forfeited.
 
+**Keep your hotkey registered.** Installments are paid to your hotkey's UID. If the hotkey is
+deregistered, its live articles hold, and the missed installments are released together once it is
+registered again. An article still vesting more than 60 days after it started (30 installments
+plus 30 days' grace) expires with whatever it has not released.
+
 **Reward pools:** a client brief pays from its prepaid reward pool. Once the pool is spent, its
 articles earn nothing more. Standing briefs pay their full installments.
 
-**From value to alpha:** each day validators give the incentive hotkey a share of the subnet's
-miner emission equal to the day's verified installments divided by the USD value of that day's
-miner emission, capped at 100%. The rest is burned. The alpha the incentive hotkey receives is
-shared among contributors by the value of their verified articles, accumulates on each account,
-and is claimed to the wallet connected on the website.
+**From value to alpha:** each day validators give your hotkey's UID a share of the subnet's miner
+emission equal to your payable installments divided by the USD value of that day's miner emission.
+What verified value does not cover goes to UID 0 and is burned. When all contributors' installments
+together exceed the day's emission, they share all of it in proportion to their installments.
 
 > These are consensus parameters set by the subnet operator and can change; treat the numbers as
 > current defaults, not guarantees.
@@ -93,6 +106,8 @@ and is claimed to the wallet connected on the website.
 
 ## 4. Rules & common pitfalls
 
+- **Sign with the wallet that owns your hotkey.** A submission signed by any other account is
+  rejected.
 - **Upload before you publish.** An article published before your upload is rejected: to the second
   when the page states its publication time with a time zone (other than exactly midnight),
   otherwise by the date the outlet states against the UTC day of your upload.
@@ -105,6 +120,8 @@ and is claimed to the wallet connected on the website.
   rejected, and once an article is credited to a contributor it is not checked again.
 - **Keep it live for the full vesting window (about 30 days).** A take-down forfeits the remaining
   installments.
+- **Keep your hotkey registered.** While it is deregistered nothing is released; the missed
+  installments catch up once it registers again, within the limit in §3.
 
 ---
 
@@ -112,7 +129,7 @@ and is claimed to the wallet connected on the website.
 
 - The miner neuron, the `herald-miner` commands (`briefs`, `commit`, `claim`, `resubmit`, `list`,
   `pull-reveals`) and `claims.json` no longer affect rewards, and the neuron can be stopped.
-- Registered miner hotkeys receive no weight. Bittensor's subnet registration burn is not refunded.
+- A hotkey earns only through submissions signed on the website by the coldkey that owns it.
 - Vesting entries that started from on-chain claims are expired by validators and pay nothing
   further.
 - To keep placing articles, use the Herald website (§1).

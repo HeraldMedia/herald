@@ -6,15 +6,10 @@ import pytest
 from herald.validator.news import emission
 from herald.validator.news.emission import (
     BURN_UID,
-    SHARE_PPB,
     WeightVectorRefused,
     allowed_emit_vector,
     apply_reward_pools,
-    contributor_share_ppb,
-    full_incentive_vector,
-    incentive_burn_vector,
-    incentive_uid,
-    incentive_weight_vector,
+    miner_weight_vector,
 )
 from herald.validator.news.vesting import VestingLedger
 
@@ -228,11 +223,8 @@ def test_live_canary_overlap_pool_clipping_and_next_epoch_exhaustion():
     assert spent["client"] == pytest.approx(20.0)
 
 
-# --- incentive and burn vector ----------------------------------------------------------------------
+# --- weight vectors ---------------------------------------------------------------------------------
 
-UID_STAR = 7
-HOTKEYS = [f"hk{uid}" for uid in range(256)]
-STAR = HOTKEYS[UID_STAR]
 
 
 def as_lists(vector):
@@ -248,211 +240,106 @@ def scores_on(shares, n=256):
     return scores
 
 
-@pytest.mark.parametrize("payable", [0.0, -5.0, math.nan])
-def test_nothing_payable_burns_everything(payable):
-    assert as_lists(incentive_burn_vector(payable, 1000.0, UID_STAR)) == ([BURN_UID], [1.0])
+# ── The weight rule: each miner UID's verified USD over the day's miner emission ─────────────────
+
+def test_each_miner_receives_its_usd_over_the_daily_value_and_uid_zero_the_rest():
+    uids, weights = as_lists(miner_weight_vector({7: 250.0, 3: 150.0}, 1000.0))
+    assert (uids, weights) == ([0, 3, 7], pytest.approx([0.6, 0.15, 0.25]))
 
 
-def test_payable_half_the_daily_value_splits_the_vector():
-    assert as_lists(incentive_burn_vector(500.0, 1000.0, UID_STAR)) == ([0, UID_STAR], [0.5, 0.5])
+def test_a_single_miner_below_the_daily_value_splits_with_uid_zero():
+    assert as_lists(miner_weight_vector({12: 500.0}, 1000.0)) == ([0, 12], [0.5, 0.5])
 
 
-def test_share_is_payable_over_the_daily_value():
-    uids, weights = as_lists(incentive_burn_vector(250.0, 1000.0, UID_STAR))
-    assert uids == [0, UID_STAR] and weights == pytest.approx([0.75, 0.25])
+@pytest.mark.parametrize("usd", [{4: 1000.0}, {4: 600.0, 9: 400.0}])
+def test_miners_paying_exactly_the_daily_value_leave_nothing_to_burn(usd):
+    uids, weights = as_lists(miner_weight_vector(usd, 1000.0))
+    assert BURN_UID not in uids
+    assert math.fsum(weights) == pytest.approx(1.0)
 
 
-@pytest.mark.parametrize("payable", [1000.0, 5000.0])
-def test_payable_at_or_above_the_daily_value_pays_only_the_incentive_uid(payable):
-    assert as_lists(incentive_burn_vector(payable, 1000.0, UID_STAR)) == ([UID_STAR], [1.0])
+def test_miners_above_the_daily_value_share_all_of_it_in_proportion():
+    assert as_lists(miner_weight_vector({2: 3000.0, 5: 1000.0}, 1000.0)) == ([2, 5], [0.75, 0.25])
 
 
-@pytest.mark.parametrize("uid_star", [None, 0])
-def test_no_incentive_uid_burns_everything(uid_star):
-    assert as_lists(incentive_burn_vector(500.0, 1000.0, uid_star)) == ([BURN_UID], [1.0])
+@pytest.mark.parametrize("usd", [{}, {4: 0.0}, {4: -5.0}, {4: math.nan}, {4: math.inf},
+                                 {BURN_UID: 400.0}, {-1: 400.0}])
+def test_nothing_payable_to_a_miner_uid_burns_everything(usd):
+    assert as_lists(miner_weight_vector(usd, 1000.0)) == ([BURN_UID], [1.0])
 
 
 @pytest.mark.parametrize("daily", [0.0, -1.0, math.nan, math.inf])
-def test_unusable_daily_value_burns_everything(daily):
-    assert as_lists(incentive_burn_vector(500.0, daily, UID_STAR)) == ([BURN_UID], [1.0])
+def test_an_unusable_daily_value_burns_everything(daily):
+    assert as_lists(miner_weight_vector({4: 250.0}, daily)) == ([BURN_UID], [1.0])
 
 
-# --- the burn setting: both modes' vectors and the contributors' share ------------------------------
-
-PAYABLE_DAILY = [
-    (0.0, 1000.0), (-5.0, 1000.0), (math.nan, 1000.0), (math.inf, 1000.0), (250.0, 1000.0),
-    (500.0 / 30, 1234.5678), (1000.0 / 3, 1000.0), (999.999, 1000.0), (1000.0, 1000.0),
-    (5000.0, 1000.0), (500.0, 0.0), (500.0, -1.0), (500.0, math.nan), (500.0, math.inf),
-]
+def test_the_vector_is_independent_of_input_order():
+    one = as_lists(miner_weight_vector({9: 100.0, 2: 200.0, 5: 300.0}, 1000.0))
+    two = as_lists(miner_weight_vector({5: 300.0, 9: 100.0, 2: 200.0}, 1000.0))
+    assert one == two and one[0] == [0, 2, 5, 9]
 
 
-@pytest.mark.parametrize("payable, daily", PAYABLE_DAILY)
-@pytest.mark.parametrize("uid_star", [UID_STAR, 1, 255, None, 0])
-def test_with_the_burn_the_vector_is_exactly_the_incentive_and_burn_vector(payable, daily, uid_star):
-    uids, weights = incentive_weight_vector(payable, daily, uid_star, True)
-    expected_uids, expected_weights = incentive_burn_vector(payable, daily, uid_star)
-    assert uids == expected_uids
-    assert weights.dtype == expected_weights.dtype == np.float32
-    assert weights.tobytes() == expected_weights.tobytes()
+# ── The submission guard: only UID 0 and the miner UIDs the epoch was scored for ─────────────────
+
+HOTKEYS = [f"hk{uid}" for uid in range(12)]
+SCORED = {3: "hk3", 7: "hk7"}
 
 
-@pytest.mark.parametrize("payable, daily, vector", [
-    (0.0, 1000.0, ([BURN_UID], [1.0])),
-    (250.0, 1000.0, ([0, UID_STAR], [0.75, 0.25])),
-    (500.0, 1000.0, ([0, UID_STAR], [0.5, 0.5])),
-    (100.0, 300.0, ([0, UID_STAR], [float(np.float32(1 - 1 / 3)), float(np.float32(1 / 3))])),
-    (1000.0, 1000.0, ([UID_STAR], [1.0])),
-    (5000.0, 1000.0, ([UID_STAR], [1.0])),
-    (500.0, math.nan, ([BURN_UID], [1.0])),
-])
-def test_with_the_burn_the_vectors_are_unchanged(payable, daily, vector):
-    assert as_lists(incentive_weight_vector(payable, daily, UID_STAR, True)) == vector
-
-
-@pytest.mark.parametrize("payable, daily", PAYABLE_DAILY)
-def test_without_the_burn_the_incentive_uid_receives_all_the_weight(payable, daily):
-    # Whatever was verified, priced or payable: the incentive UID's receipt does not depend on it.
-    assert as_lists(incentive_weight_vector(payable, daily, UID_STAR, False)) == ([UID_STAR], [1.0])
-
-
-@pytest.mark.parametrize("burn_unearned", [False, True])
-@pytest.mark.parametrize("uid_star", [None, 0])
-def test_without_an_incentive_uid_both_modes_burn_everything(burn_unearned, uid_star):
-    assert as_lists(incentive_weight_vector(5000.0, 1000.0, uid_star, burn_unearned)) == (
-        [BURN_UID], [1.0])
-
-
-def test_the_full_incentive_vector_is_a_single_entry():
-    assert as_lists(full_incentive_vector(UID_STAR)) == ([UID_STAR], [1.0])
-    assert as_lists(full_incentive_vector(np.int64(3))) == ([3], [1.0])
-    assert as_lists(full_incentive_vector(None)) == ([BURN_UID], [1.0])
-    assert as_lists(full_incentive_vector(0)) == ([BURN_UID], [1.0])
-
-
-@pytest.mark.parametrize("payable, daily", PAYABLE_DAILY)
-def test_with_the_burn_all_of_the_receipt_is_owed_to_contributors(payable, daily):
-    # The chain already scaled the incentive UID's receipt to verified value.
-    assert contributor_share_ppb(payable, daily, True) == SHARE_PPB == 1_000_000_000
-
-
-@pytest.mark.parametrize("payable, daily, share", [
-    (250.0, 1000.0, 250_000_000),
-    (500.0, 1000.0, 500_000_000),
-    (100.0, 1000.0, 100_000_000),
-    (1000.0 / 3, 1000.0, 333_333_333),
-    (2000.0 / 3, 1000.0, 666_666_666),
-    (1.0, 1e9, 1),
-    (1.0, 2e9, 0),  # half a part per billion rounds down
-    # The exact floor of the two values held: 0.3 is 0.29999999999999998889... as a float, so a
-    # rounded float product (300000000.0) would overstate it.
-    (0.3, 1.0, 299_999_999),
-    (999.999, 1000.0, 999_999_000),
-    (1000.0, 1000.0, 1_000_000_000),
-    (5000.0, 1000.0, 1_000_000_000),
-    (math.inf, 1000.0, 0),
-])
-def test_without_the_burn_the_share_is_the_floor_of_payable_over_daily_capped_at_1e9(payable, daily,
-                                                                                    share):
-    result = contributor_share_ppb(payable, daily, False)
-    assert result == share and type(result) is int
-    assert 0 <= result <= 1_000_000_000
-
-
-@pytest.mark.parametrize("payable, daily", [
-    (0.0, 1000.0), (-5.0, 1000.0), (math.nan, 1000.0),
-    (500.0, 0.0), (500.0, -1.0), (500.0, math.nan), (500.0, math.inf),
-])
-def test_without_the_burn_nothing_payable_or_an_unusable_daily_value_owes_nothing(payable, daily):
-    assert contributor_share_ppb(payable, daily, False) == 0
-
-
-def test_the_share_owes_contributors_what_the_burn_would_have_paid_them():
-    # Burn on: the receipt is w of the day's miner emission, all owed. Burn off: the receipt is
-    # the whole emission and the share owed is w, to within one part per billion.
-    for payable, daily in ((250.0, 1000.0), (500.0 / 30, 1234.5678), (999.999, 1000.0)):
-        [w] = [float(weight) for uid, weight in zip(*incentive_burn_vector(payable, daily, UID_STAR))
-               if uid == UID_STAR]
-        owed_with_burn = w * contributor_share_ppb(payable, daily, True) / 1e9
-        owed_without = 1.0 * contributor_share_ppb(payable, daily, False) / 1e9
-        assert owed_without == pytest.approx(owed_with_burn, rel=1e-6, abs=1e-9)
-
-
-def test_incentive_uid_resolves_only_a_registered_hotkey_above_uid_zero():
-    assert incentive_uid(HOTKEYS, STAR) == UID_STAR
-    assert incentive_uid(HOTKEYS, "unregistered") is None
-    assert incentive_uid(HOTKEYS, "") is None
-    assert incentive_uid(HOTKEYS, HOTKEYS[0]) is None
-
-
-@pytest.mark.parametrize("min_allowed", [0, 1, 2, 3])
-def test_incentive_and_burn_scores_reach_only_their_two_uids(min_allowed):
-    scores = scores_on({0: 0.9, UID_STAR: 0.1})
-    if min_allowed > 2:
+@pytest.mark.parametrize("min_allowed", [0, 1, 3, 4])
+def test_scores_on_uid_zero_and_the_scored_miners_are_submitted(min_allowed):
+    scores = scores_on({0: 0.6, 3: 0.25, 7: 0.15}, n=len(HOTKEYS))
+    if min_allowed > 3:
         with pytest.raises(WeightVectorRefused, match="below_min_allowed_weights"):
-            allowed_emit_vector(scores, HOTKEYS, STAR, min_allowed)
+            allowed_emit_vector(scores, HOTKEYS, SCORED, min_allowed)
         return
-    uids, weights = allowed_emit_vector(scores, HOTKEYS, STAR, min_allowed)
-    assert set(uids) <= {0, UID_STAR}
-    # Max-upscaled, not clipped to a maximum weight: 0.1 / 0.9 * 65535 = 7281.7.
-    assert (uids, weights) == ([0, UID_STAR], [65535, 7282])
-
-
-@pytest.mark.parametrize("min_allowed", [0, 1, 2, 3])
-def test_burn_only_scores_are_never_padded(min_allowed):
-    scores = scores_on({0: 1.0})
-    if min_allowed > 1:
-        with pytest.raises(WeightVectorRefused, match="below_min_allowed_weights"):
-            allowed_emit_vector(scores, HOTKEYS, STAR, min_allowed)
-        return
-    assert allowed_emit_vector(scores, HOTKEYS, STAR, min_allowed) == ([0], [65535])
+    uids, weights = allowed_emit_vector(scores, HOTKEYS, SCORED, min_allowed)
+    # Max-upscaled, never padded or clipped: 0.25 / 0.6 * 65535 = 27306.25; 0.15 / 0.6 = 16383.75.
+    assert (uids, weights) == ([0, 3, 7], [65535, 27306, 16384])
 
 
 @pytest.mark.parametrize("min_allowed", [0, 1, 2])
-def test_full_incentive_weight_is_a_single_entry(min_allowed):
-    scores = scores_on({UID_STAR: 0.3})
+def test_burn_only_scores_are_never_padded(min_allowed):
+    scores = scores_on({0: 1.0}, n=len(HOTKEYS))
     if min_allowed > 1:
-        with pytest.raises(WeightVectorRefused):
-            allowed_emit_vector(scores, HOTKEYS, STAR, min_allowed)
+        with pytest.raises(WeightVectorRefused, match="below_min_allowed_weights"):
+            allowed_emit_vector(scores, HOTKEYS, SCORED, min_allowed)
         return
-    assert allowed_emit_vector(scores, HOTKEYS, STAR, min_allowed) == ([UID_STAR], [65535])
+    assert allowed_emit_vector(scores, HOTKEYS, SCORED, min_allowed) == ([0], [65535])
 
 
-@pytest.mark.parametrize("shares", [
-    {3: 0.5, 157: 0.5},
-    {0: 0.9, UID_STAR: 0.1, 3: 0.01},
-])
-def test_scores_on_any_other_uid_burn(shares):
-    assert allowed_emit_vector(scores_on(shares), HOTKEYS, STAR, 1) == ([0], [65535])
+def test_a_score_on_a_uid_the_epoch_did_not_score_moves_to_uid_zero():
+    scores = scores_on({0: 0.5, 3: 0.25, 9: 0.25}, n=len(HOTKEYS))
+    # UID 9 was never scored: its quarter joins UID 0's half; UID 3 keeps its quarter.
+    assert allowed_emit_vector(scores, HOTKEYS, SCORED, 1) == ([0, 3], [65535, 21845])
 
 
-def test_incentive_hotkey_moved_to_a_new_uid_burns_scores_left_on_the_old_one():
+def test_a_scored_uid_another_hotkey_has_taken_moves_to_uid_zero_and_the_others_stay():
     hotkeys = list(HOTKEYS)
-    hotkeys[UID_STAR] = "hk-replacement"
-    hotkeys[9] = STAR
-    assert allowed_emit_vector(scores_on({0: 0.5, UID_STAR: 0.5}), hotkeys, STAR, 1) == ([0], [65535])
-    assert allowed_emit_vector(scores_on({0: 0.5, 9: 0.5}), hotkeys, STAR, 1) == ([0, 9], [65535, 65535])
+    hotkeys[7] = "hk-new-registrant"
+    scores = scores_on({0: 0.6, 3: 0.25, 7: 0.15}, n=len(hotkeys))
+    assert allowed_emit_vector(scores, hotkeys, SCORED, 1) == ([0, 3], [65535, 21845])
 
 
-@pytest.mark.parametrize("hotkeys, incentive_hotkey", [
-    ([hk for hk in HOTKEYS if hk != STAR], STAR),
-    ([STAR] + HOTKEYS[1:UID_STAR] + ["hk-other"] + HOTKEYS[UID_STAR + 1:], STAR),
-    (HOTKEYS, ""),
-])
-def test_absent_unset_or_uid_zero_incentive_hotkey_burns(hotkeys, incentive_hotkey):
-    scores = scores_on({0: 0.9, UID_STAR: 0.1}, n=len(hotkeys))
-    assert allowed_emit_vector(scores, hotkeys, incentive_hotkey, 1) == ([0], [65535])
+def test_a_scored_uid_beyond_the_metagraph_moves_to_uid_zero():
+    scores = scores_on({0: 0.5, 3: 0.5}, n=len(HOTKEYS))
+    assert allowed_emit_vector(scores, HOTKEYS[:3], SCORED, 1) == ([0], [65535])
+
+
+def test_with_nothing_scored_every_miner_score_moves_to_uid_zero():
+    scores = scores_on({3: 0.5, 7: 0.5}, n=len(HOTKEYS))
+    assert allowed_emit_vector(scores, HOTKEYS, {}, 1) == ([0], [65535])
 
 
 def test_zero_or_non_finite_scores_burn():
-    assert allowed_emit_vector(np.zeros(256), HOTKEYS, STAR, 1) == ([0], [65535])
-    scores = scores_on({UID_STAR: 1.0})
+    assert allowed_emit_vector(np.zeros(len(HOTKEYS)), HOTKEYS, SCORED, 1) == ([0], [65535])
+    scores = scores_on({3: 1.0}, n=len(HOTKEYS))
     scores[5] = np.nan
-    assert allowed_emit_vector(scores, HOTKEYS, STAR, 1) == ([UID_STAR], [65535])
+    assert allowed_emit_vector(scores, HOTKEYS, SCORED, 1) == ([3], [65535])
 
 
 def test_unknown_min_allowed_weights_is_refused():
     with pytest.raises(WeightVectorRefused, match="min_allowed_weights_unknown"):
-        allowed_emit_vector(scores_on({0: 1.0}), HOTKEYS, STAR, None)
+        allowed_emit_vector(scores_on({0: 1.0}, n=len(HOTKEYS)), HOTKEYS, SCORED, None)
 
 
 @pytest.mark.parametrize("converted, reason", [
@@ -462,4 +349,4 @@ def test_unknown_min_allowed_weights_is_refused():
 def test_emitted_uids_are_checked_after_conversion(monkeypatch, converted, reason):
     monkeypatch.setattr(emission, "convert_weights_and_uids_for_emit", lambda uids, weights: converted)
     with pytest.raises(WeightVectorRefused, match=reason):
-        allowed_emit_vector(scores_on({0: 0.9, UID_STAR: 0.1}), HOTKEYS, STAR, 0)
+        allowed_emit_vector(scores_on({0: 0.9, 3: 0.1}, n=len(HOTKEYS)), HOTKEYS, SCORED, 0)

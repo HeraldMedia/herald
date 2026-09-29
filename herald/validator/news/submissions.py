@@ -1,11 +1,14 @@
 """Contributor submissions: read the backend feed, validate its rows and choose which to verify.
 
 ``GET /api/v4/validator/submissions`` returns rows ``{submission_id, network, netuid, brief_id, url,
-draft_text, uploaded_ts}``: the text the contributor uploaded before publishing, and the unix time (UTC
-seconds) of that upload. Every row is validated here, and each chosen article is verified by the oracle
-before anything vests. Several contributors may submit the same article: its submissions are tried
-earliest upload first, and the first that passes every check is credited. Draft text is used only for
-verification; it is never published, stored or logged.
+draft_text, uploaded_ts, hotkey, coldkey, signature}``: the text the contributor uploaded before
+publishing, the unix time (UTC seconds) of that upload, the contributor's own registered hotkey, and the
+signature by the coldkey that owns it over the submission (signatures.py). Every row is validated here,
+signature included; whether the coldkey owns the hotkey is read from the chain when the epoch is scored.
+Each chosen article is verified by the oracle before anything vests. Several contributors may submit
+the same article: its submissions are tried earliest upload first, and the first that passes every
+check is credited to its hotkey. Draft text is used only for verification; it is never published,
+stored or logged.
 """
 
 import re
@@ -20,6 +23,7 @@ from herald.validator.utils.config import (
     HERALD_MAX_SUBMISSIONS_PER_EPOCH,
 )
 from .publish import RESULTS_READ_TOKEN_ENV, results_headers
+from .signatures import verify_submission
 from .url import article_id, canonicalize
 
 FEED_PATH = "/api/v4/validator/submissions"
@@ -28,7 +32,8 @@ MAX_FEED_ROWS = 10_000
 MAX_URL_LENGTH = 2048
 MIN_DRAFT_CHARS = 300
 MAX_DRAFT_CHARS = 40_000
-ROW_KEYS = ("submission_id", "network", "netuid", "brief_id", "url", "draft_text", "uploaded_ts")
+ROW_KEYS = ("submission_id", "network", "netuid", "brief_id", "url", "draft_text", "uploaded_ts",
+            "hotkey", "coldkey", "signature")
 
 _ID = re.compile(r"[A-Za-z0-9._:-]{1,128}")
 _URL_CHARACTERS = re.compile(r"[\x21-\x7e]+")  # printable ASCII, no whitespace
@@ -87,8 +92,9 @@ def _valid_upload_time(uploaded_ts, now_ts: float) -> bool:
 def validate_rows(rows: list, network: str, netuid: int, now_ts: float) -> List[dict]:
     """Rows that are well formed and belong to this network and netuid, from the first MAX_FEED_ROWS.
 
-    A row needs a draft of MIN_DRAFT_CHARS to MAX_DRAFT_CHARS characters (after stripping) and an
-    upload time no later than chain time `now_ts`. Each kept row carries exactly ROW_KEYS.
+    A row needs a draft of MIN_DRAFT_CHARS to MAX_DRAFT_CHARS characters (after stripping), an
+    upload time no later than chain time `now_ts`, and a signature by its coldkey over the submission
+    for its hotkey. Each kept row carries exactly ROW_KEYS.
     """
     valid = []
     for row in rows[:MAX_FEED_ROWS]:
@@ -102,6 +108,8 @@ def validate_rows(rows: list, network: str, netuid: int, now_ts: float) -> List[
         if not _valid_url(row.get("url")):
             continue
         if not (_valid_draft(row.get("draft_text")) and _valid_upload_time(row.get("uploaded_ts"), now_ts)):
+            continue
+        if not verify_submission(row):
             continue
         valid.append({key: row[key] for key in ROW_KEYS})
     return valid

@@ -29,15 +29,6 @@ def _load_registry(env) -> tuple[dict | None, str | None]:
         return None, "HERALD_REGISTRY_PATH must point to a readable registry"
 
 
-def _valid_ss58(address: str) -> bool:
-    from bittensor_wallet import Keypair
-    try:
-        Keypair(ss58_address=address)
-    except Exception:
-        return False
-    return True
-
-
 def validator_environment_errors(
     env=None, *, network: str = None, netuid: int = None,
     actual_consensus: str = None,
@@ -75,13 +66,6 @@ def validator_environment_errors(
         errors.append("HERALD_REGISTRY_PUBKEY is required")
     if not env.get("HERALD_REGISTRY_AUTHORITY_HOTKEY"):
         errors.append("HERALD_REGISTRY_AUTHORITY_HOTKEY is required")
-    incentive_hotkey = env.get("HERALD_INCENTIVE_HOTKEY", "")
-    if not incentive_hotkey:
-        errors.append("HERALD_INCENTIVE_HOTKEY is required")
-    elif not _valid_ss58(incentive_hotkey):
-        errors.append("HERALD_INCENTIVE_HOTKEY must be a valid SS58 address")
-    elif incentive_hotkey == env.get("HERALD_REGISTRY_AUTHORITY_HOTKEY"):
-        errors.append("HERALD_INCENTIVE_HOTKEY must differ from HERALD_REGISTRY_AUTHORITY_HOTKEY")
     registry, registry_error = _load_registry(env)
     if registry_error:
         errors.append(registry_error)

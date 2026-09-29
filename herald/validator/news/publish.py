@@ -9,6 +9,10 @@ import httpx
 
 
 SNAPSHOT_DOMAIN = b"HERALD_VALIDATOR_SNAPSHOT_V1\n"
+# Snapshot schema 2: each miner's own hotkey is paid by weight, so the state names that emission mode
+# and no longer carries schema 1's burn setting or contributors' share of a single incentive hotkey.
+SNAPSHOT_SCHEMA_VERSION = 2
+EMISSION_MODE = "miner_hotkeys_v1"
 RECEIPT_DOMAIN = b"HERALD_WEIGHT_RECEIPT_V1\n"
 
 
@@ -133,19 +137,12 @@ def build_epoch_snapshot(vesting, briefs: list, pool_spent: dict, rewards_by_uid
                          weights, uids: list, hotkey_by_uid: dict, *, network: str,
                          netuid: int, validator_hotkey: str, validator_uid: int,
                          chain_block: int, epoch: int, registry_version: int,
-                         registry_hash: str, consensus: str, burn_unearned: bool,
-                         contributor_share_ppb: int) -> dict:
+                         registry_hash: str, consensus: str) -> dict:
     """The epoch's snapshot, with a state every validator scoring the same inputs agrees on.
 
-    Besides the articles, briefs, rewards and weights, the state records the burn setting the epoch
-    was scored under (`burn_unearned`) and `contributor_share_ppb`, the part of what the incentive
-    hotkey receives for the epoch that is owed to contributors, in parts per billion
-    (0..1_000_000_000).
+    The state holds the articles (each with the hotkey it vests to), the briefs' pools, each miner
+    UID's payable USD for the epoch (`rewards`), the u16 weight vector, and the emission mode.
     """
-    if isinstance(contributor_share_ppb, bool) or not isinstance(contributor_share_ppb, int):
-        raise ValueError("contributor_share_ppb must be an integer")
-    if not 0 <= contributor_share_ppb <= 1_000_000_000:
-        raise ValueError("contributor_share_ppb must be between 0 and 1000000000")
     articles = []
     for item in build_result_items(
         vesting, network=network, netuid=netuid, validator_hotkey=validator_hotkey,
@@ -182,15 +179,14 @@ def build_epoch_snapshot(vesting, briefs: list, pool_spent: dict, rewards_by_uid
                    for uid, value in sorted(rewards_by_uid.items()) if uid in hotkey_by_uid]
     weight_rows = normalized_u16(weights, uids, hotkey_by_uid)
     item = {
-        "schema_version": 1, "network": str(network), "netuid": int(netuid),
+        "schema_version": SNAPSHOT_SCHEMA_VERSION, "network": str(network), "netuid": int(netuid),
         "epoch": int(epoch), "chain_block": int(chain_block),
         "validator_hotkey": validator_hotkey, "validator_uid": int(validator_uid),
         "consensus": consensus, "registry_version": int(registry_version),
         "registry_hash": registry_hash,
         "state": {"articles": article_rows, "briefs": brief_rows,
                   "rewards": reward_rows, "weights": weight_rows,
-                  "burn_unearned": bool(burn_unearned),
-                  "contributor_share_ppb": contributor_share_ppb},
+                  "emission": EMISSION_MODE},
     }
     material = {key: item[key] for key in (
         "schema_version", "network", "netuid", "epoch", "consensus",

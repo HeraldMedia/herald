@@ -8,7 +8,7 @@ from herald.base import validator as base_validator
 from herald.base.validator import BaseValidatorNeuron
 
 UNKNOWN_BLOCK = "UnknownBlock: Header was not found in the database"
-INCENTIVE_HOTKEY = "incentive-hotkey"
+MINER_HOTKEY = "miner-hotkey"
 ENDPOINT = "wss://entrypoint-finney.opentensor.ai:443"
 FALLBACK = "wss://fallback.example:443"
 
@@ -16,6 +16,9 @@ FALLBACK = "wss://fallback.example:443"
 class ConcreteValidator(BaseValidatorNeuron):
     async def forward(self):
         return None
+
+    def _weight_hotkeys(self):
+        return dict(getattr(self, "scored_hotkeys", {}))
 
     def run(self):
         return None
@@ -31,8 +34,6 @@ def _weight_check_env(monkeypatch):
 
 @pytest.fixture(autouse=True)
 def _submission_rules(monkeypatch):
-    monkeypatch.setattr(base_validator.validator_config, "HERALD_INCENTIVE_HOTKEY", INCENTIVE_HOTKEY)
-
     def never(**kwargs):
         raise AssertionError("the SDK weight processing must not be used")
 
@@ -52,8 +53,9 @@ def _validator(monkeypatch, *, pending=False):
         n=2,
         uids=np.array([0, 1]),
         last_update=np.array([0, 100]),
-        hotkeys=["owner-hotkey", INCENTIVE_HOTKEY],
+        hotkeys=["owner-hotkey", MINER_HOTKEY],
     )
+    validator.scored_hotkeys = {1: MINER_HOTKEY}
     validator.wallet = SimpleNamespace(
         hotkey=SimpleNamespace(ss58_address="validator-hotkey")
     )
@@ -119,11 +121,13 @@ def test_zero_scores_skip_weight_submission(monkeypatch):
 
 # --- weight vector rules --------------------------------------------------------------------------
 
-def _wide_validator(monkeypatch, scores, *, incentive_uid=2, min_allowed=1, limit=0.1):
-    """Four registered UIDs, the incentive hotkey at ``incentive_uid``; records every extrinsic."""
+def _wide_validator(monkeypatch, scores, *, miner_uid=2, min_allowed=1, limit=0.1):
+    """Four registered UIDs; the latest epoch scored only the miner at ``miner_uid``. Records every
+    extrinsic."""
     validator = _validator(monkeypatch)
     hotkeys = ["owner-hotkey", "hk1", "hk2", "hk3"]
-    hotkeys[incentive_uid] = INCENTIVE_HOTKEY
+    hotkeys[miner_uid] = MINER_HOTKEY
+    validator.scored_hotkeys = {miner_uid: MINER_HOTKEY}
     validator.metagraph = SimpleNamespace(n=4, uids=np.arange(4), last_update=np.zeros(4),
                                           hotkeys=hotkeys)
     validator.scores = np.asarray(scores, dtype=np.float32)
@@ -167,21 +171,24 @@ def test_submitted_weights_are_not_reshaped_by_max_weight_limit(monkeypatch, lim
     [submitted] = _submitted(events)
     assert set(submitted["uids"]) <= {0, 2}
     assert (submitted["uids"], submitted["weights"]) == ([0, 2], [65535, 7282])
-    assert submitted["version_key"] == 20
+    assert submitted["version_key"] == 21
     assert ("info", "WEIGHT_VECTOR uids=[0, 2] weights=[65535, 7282]") in events
     assert events.index(("info", "WEIGHT_VECTOR uids=[0, 2] weights=[65535, 7282]")) < [
         kind for kind, _ in events].index("submit")
     assert validator._last_submitted_weight_vector == [[0, 65535], [2, 7282]]
 
 
-def test_scores_on_other_uids_submit_only_uid_zero(monkeypatch):
+def test_scores_on_uids_the_epoch_did_not_score_move_to_uid_zero(monkeypatch):
     validator, events = _wide_validator(monkeypatch, [0.0, 0.6, 0.1, 0.3], min_allowed=1)
 
     assert validator.set_weights() is True
 
     [submitted] = _submitted(events)
-    assert (submitted["uids"], submitted["weights"]) == ([0], [65535])
+    # UIDs 1 and 3 were not scored: their 0.9 goes to UID 0; the scored miner keeps its 0.1.
+    assert (submitted["uids"], submitted["weights"]) == ([0, 2], [65535, 7282])
     assert _refusals(events) == []
+    assert any(kind == "warning" and msg.startswith("WEIGHT_VECTOR_BURN reason=hotkey_changed")
+               for kind, msg in events)
 
 
 def test_burn_only_vector_below_min_allowed_weights_is_refused_not_padded(monkeypatch):
@@ -473,3 +480,40 @@ def test_fallback_connection_is_built_with_bittensor_debug_muted(monkeypatch):
     assert validator.should_set_weights() is True
     assert level["while_connecting"] >= logging.INFO
     assert level["now"] == logging.DEBUG
+
+
+# --- a replaced hotkey's score ---------------------------------------------------------------------
+
+def test_a_replaced_miners_score_moves_to_uid_zero_and_the_others_keep_their_share():
+    from herald.validator.news.emission import allowed_emit_vector
+
+    scores = np.array([0.6, 0.0, 0.25, 0.15], dtype=np.float32)
+    old = ["owner-hotkey", "hk1", "miner-a", "miner-b"]
+    new = ["owner-hotkey", "hk1", "miner-a", "new-registrant"]
+
+    base_validator.burn_replaced_scores(scores, old, new)
+
+    assert scores.tolist() == pytest.approx([0.75, 0.0, 0.25, 0.0])
+    # Miner A still receives exactly its quarter: 0.25 / 0.75 of max, not 0.25 / 0.85.
+    assert allowed_emit_vector(scores, new, {2: "miner-a", 3: "miner-b"}, 1) == ([0, 2], [65535, 21845])
+
+
+def test_a_replaced_uid_zero_is_dropped_and_a_shrunk_metagraph_is_tolerated():
+    scores = np.array([0.5, 0.5, 0.0], dtype=np.float32)
+    base_validator.burn_replaced_scores(scores, ["owner", "miner", "hk2"], ["new-owner", "miner"])
+    assert scores.tolist() == [0.0, 0.5, 0.0]
+
+
+def test_a_checkpoint_restored_after_a_miner_was_replaced_burns_that_miners_score(monkeypatch, tmp_path):
+    validator = _validator(monkeypatch)
+    validator.config.neuron.full_path = str(tmp_path)
+    validator.metagraph = SimpleNamespace(n=4, uids=np.arange(4), last_update=np.zeros(4),
+                                          hotkeys=["owner-hotkey", "hk1", "miner-a", "new-registrant"])
+    np.savez(tmp_path / "state.npz", step=12, spec_version=validator.spec_version,
+             scores=np.array([0.6, 0.0, 0.25, 0.15], dtype=np.float32),
+             hotkeys=np.array(["owner-hotkey", "hk1", "miner-a", "miner-b"]))
+
+    validator.load_state()
+
+    assert validator.step == 12
+    assert validator.scores.tolist() == pytest.approx([0.75, 0.0, 0.25, 0.0])
