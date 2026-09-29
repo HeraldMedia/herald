@@ -69,7 +69,8 @@ weight vector checks and log tags.
   credential (reports)
 - ScrapingBee credentials for the shipped registry's `proxy:*`-strategy outlets
 - SerpAPI and/or Brave credentials for the search-index multiplier
-- Outbound HTTPS to CoinGecko for the TAO/USD price
+- Outbound HTTPS to CoinGecko for the TAO/USD price (a free Demo API key in `HERALD_COINGECKO_API_KEY`
+  is recommended: keyless access is rate limited per IP)
 - A subnet MinAllowedWeights of 1, so single-entry vectors (all weight on UID 0, or on one miner
   UID) are accepted
 
@@ -228,7 +229,7 @@ docker compose logs -f validator
 Compose persists the wallet, score checkpoint, Herald ledger, and logs in the
 `validator_state` volume. It also applies a configurable memory limit.
 
-The score checkpoint records the producing spec version (21 for release `0.2.1`); a mismatch
+The score checkpoint records the producing spec version (22 for release `0.2.2`); a mismatch
 discards old scores instead of publishing an old emission model under a new version key. The
 Herald ledger separately records the last scored epoch, so an epoch is scored once, and the last
 successfully submitted weight epoch, as bookkeeping. Back up and restore both state files together.

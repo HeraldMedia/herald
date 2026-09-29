@@ -171,7 +171,7 @@ def test_submitted_weights_are_not_reshaped_by_max_weight_limit(monkeypatch, lim
     [submitted] = _submitted(events)
     assert set(submitted["uids"]) <= {0, 2}
     assert (submitted["uids"], submitted["weights"]) == ([0, 2], [65535, 7282])
-    assert submitted["version_key"] == 21
+    assert submitted["version_key"] == 22
     assert ("info", "WEIGHT_VECTOR uids=[0, 2] weights=[65535, 7282]") in events
     assert events.index(("info", "WEIGHT_VECTOR uids=[0, 2] weights=[65535, 7282]")) < [
         kind for kind, _ in events].index("submit")
