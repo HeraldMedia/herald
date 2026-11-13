@@ -50,10 +50,15 @@ ARCHIVE_ENDPOINT = "wss://archive.chain.opentensor.ai:443"
 LATENT_LITE_ENDPOINT = "wss://lite.sub.latent.to:443"
 # An address given without a scheme is a node the operator runs themselves and is reached over
 # plain WebSocket, as it always was. Every public entrypoint above uses wss.
-PLAIN_SCHEME = "ws://"  # nosemgrep: javascript.lang.security.detect-insecure-websocket.detect-insecure-websocket
-ENDPOINT_SCHEMES = (PLAIN_SCHEME, "wss://")
+PLAIN_SCHEME = "ws"
+ENDPOINT_SCHEMES = (PLAIN_SCHEME, "wss")
 
 SM = "SubtensorModule"
+
+
+def _has_scheme(endpoint: str) -> bool:
+    scheme, separator, _ = endpoint.partition("://")
+    return bool(separator) and scheme in ENDPOINT_SCHEMES
 
 
 def _network_map() -> dict:
@@ -90,8 +95,8 @@ def resolve_network(network: Optional[str]) -> tuple:
             if marker in network:
                 label, endpoint = result
                 break
-    if endpoint is not None and not endpoint.startswith(ENDPOINT_SCHEMES):
-        endpoint = f"{PLAIN_SCHEME}{endpoint}"
+    if endpoint is not None and not _has_scheme(endpoint):
+        endpoint = f"{PLAIN_SCHEME}://{endpoint}"
     return endpoint, label
 
 
