@@ -4,7 +4,20 @@
 directly so every validator derives the same commit ordering regardless of when it observed.
 """
 
-from bittensor.core.chain_data.utils import decode_metadata
+def decode_metadata(metadata) -> str:
+    """The text of a Commitments.CommitmentOf value: its first field's bytes as UTF-8.
+
+    The value is ``{"deposit", "block", "info": {"fields": [{"Raw<n>": "0x..."}, ...]}}``. Only the
+    first field is read; a field without a payload (a unit variant such as ``"None"``) reads as "",
+    and bytes that are not valid UTF-8 are dropped.
+    """
+    commitment = metadata["info"]["fields"][0]
+    if isinstance(commitment, str):
+        return ""
+    payload = next(iter(commitment.values()))
+    if isinstance(payload, (bytes, bytearray)):
+        return bytes(payload).decode("utf-8", errors="ignore")
+    return bytes.fromhex(payload.removeprefix("0x")).decode("utf-8", errors="ignore")
 
 
 def _block_of(value) -> int:
@@ -20,8 +33,7 @@ def get_commitments_with_block(subtensor, netuid: int, block=None) -> dict:
     )
     for id_, value in query:
         try:
-            # bittensor >= 10 decodes the map key to an ss58 string directly (9.x handed back the
-            # raw account bytes that needed decode_account_id, which 10.x removed).
+            # Map keys come back ss58-decoded (strings); a (hotkey,) tuple is also accepted.
             hotkey = id_ if isinstance(id_, str) else id_[0]
             result[hotkey] = (decode_metadata(value), _block_of(value))
         except Exception:

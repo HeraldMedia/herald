@@ -12,7 +12,7 @@ arithmetic on every scoring pass behind forward()'s catch-all.
 from dataclasses import fields
 from typing import Dict, Type, TypeVar
 
-import bittensor as bt
+from herald.sdk.log import log
 
 T = TypeVar("T")
 
@@ -50,7 +50,7 @@ def rebuild_records(record_type: Type[T], records, *, label: str) -> Dict[str, T
     for name in sorted(dropped):
         keys = dropped[name]
         sample = ", ".join(repr(k) for k in keys[:3]) + (", ..." if len(keys) > 3 else "")
-        bt.logging.warning(
+        log.warning(
             f"Dropping unknown {label} field {name!r} from {len(keys)} record(s) ({sample}); it was "
             "probably written by a newer Herald version and is not kept on the next save"
         )

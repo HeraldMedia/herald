@@ -5,7 +5,7 @@ This module provides the OpenRouter-specific LLM client implementation.
 OpenRouter provides access to multiple LLM providers through a unified API.
 """
 
-import bittensor as bt
+from herald.sdk.log import log
 import requests
 from typing import Dict, Any
 from tenacity import retry, stop_after_attempt, wait_exponential
@@ -52,10 +52,10 @@ class OpenRouterClient(BaseLLMClient):
             return response.json()
             
         except requests.exceptions.RequestException as e:
-            bt.logging.warning(f"OpenRouter API error (attempting retry): {e}")
+            log.warning(f"OpenRouter API error (attempting retry): {e}")
             raise
         except Exception as e:
-            bt.logging.error(f"Unexpected error during OpenRouter request: {e}")
+            log.error(f"Unexpected error during OpenRouter request: {e}")
             raise
 
     def get_provider_name(self) -> str:

@@ -8,7 +8,7 @@ enabling easy switching between providers via configuration.
 import os
 import re
 import secrets
-import bittensor as bt
+from herald.sdk.log import log
 from abc import ABC, abstractmethod
 from threading import Lock
 from diskcache import Cache
@@ -145,7 +145,7 @@ def parse_llm_response(text_response: str, response_type: str = "brief_evaluatio
         else:
             # Fallback: assume no exploit detected if format not followed
             injection_detected = False
-            bt.logging.warning("Injection verdict not in expected format, defaulting to FALSE (no exploit detected)")
+            log.warning("Injection verdict not in expected format, defaulting to FALSE (no exploit detected)")
         
         # Extract reasoning from Analysis section
         analysis_match = re.search(r'## Analysis\s*\n\s*(.*?)(?:\n##|\n```|$)', text_response, re.DOTALL | re.IGNORECASE)

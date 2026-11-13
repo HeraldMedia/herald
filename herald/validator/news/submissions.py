@@ -15,7 +15,7 @@ import re
 from typing import Dict, List, Optional, Tuple
 from urllib.parse import urlsplit
 
-import bittensor as bt
+from herald.sdk.log import log
 import httpx
 
 from herald.validator.utils.config import (
@@ -42,7 +42,7 @@ _URL_CHARACTERS = re.compile(r"[\x21-\x7e]+")  # printable ASCII, no whitespace
 def fetch_submissions(endpoint: str, network: str, netuid: int) -> Optional[list]:
     """The feed's rows, or None when the feed cannot be read or its body is not a JSON list."""
     if not endpoint:
-        bt.logging.warning("Submissions feed not configured: HERALD_RESULTS_ENDPOINT is unset")
+        log.warning("Submissions feed not configured: HERALD_RESULTS_ENDPOINT is unset")
         return None
     try:
         response = httpx.get(
@@ -54,10 +54,10 @@ def fetch_submissions(endpoint: str, network: str, netuid: int) -> Optional[list
         response.raise_for_status()
         body = response.json()
     except Exception as exc:
-        bt.logging.warning(f"Submissions feed read failed: {exc}")
+        log.warning(f"Submissions feed read failed: {exc}")
         return None
     if not isinstance(body, list):
-        bt.logging.warning("Submissions feed body is not a list")
+        log.warning("Submissions feed body is not a list")
         return None
     return body
 

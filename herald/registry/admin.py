@@ -4,8 +4,8 @@ import argparse
 import json
 import os
 
-import bittensor as bt
-
+from herald.sdk.chain import Subtensor
+from herald.sdk.keys import Wallet
 from herald.validator.news.chain import get_commitments_with_block
 from herald.validator.news.registry_anchor import (
     content_hash,
@@ -136,10 +136,10 @@ def cmd_publish_anchor(args):
     if not args.yes:
         raise SystemExit("refusing on-chain write without --yes")
 
-    wallet = bt.Wallet(name=args.wallet_name, hotkey=args.wallet_hotkey,
-                       path=args.wallet_path) if args.wallet_path else \
-        bt.Wallet(name=args.wallet_name, hotkey=args.wallet_hotkey)
-    subtensor = bt.Subtensor(network=args.network)
+    wallet = Wallet(name=args.wallet_name, hotkey=args.wallet_hotkey,
+                    path=args.wallet_path) if args.wallet_path else \
+        Wallet(name=args.wallet_name, hotkey=args.wallet_hotkey)
+    subtensor = Subtensor(network=args.network)
     subtensor.set_commitment(
         wallet,
         args.netuid,
@@ -152,7 +152,7 @@ def cmd_publish_anchor(args):
 
 
 def cmd_verify_live_anchor(args):
-    subtensor = bt.Subtensor(network=args.network)
+    subtensor = Subtensor(network=args.network)
     record = get_commitments_with_block(subtensor, args.netuid).get(args.authority)
     if record is None:
         raise SystemExit("registry authority has no on-chain commitment")

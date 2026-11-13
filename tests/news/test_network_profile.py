@@ -71,7 +71,7 @@ def test_off_mainnet_nothing_is_filled():
 
 
 def test_the_mainnet_values_are_well_formed():
-    from bittensor_wallet import Keypair
+    from herald.sdk.keys import Keypair
 
     Keypair(ss58_address=MAINNET_DEFAULTS["HERALD_REGISTRY_AUTHORITY_HOTKEY"])
     # Each miner's own hotkey is paid, so no incentive hotkey is built in.

@@ -6,7 +6,7 @@ using the MiniMax model through the Chutes API.
 """
 
 import time
-import bittensor as bt
+from herald.sdk.log import log
 import requests
 from typing import Dict, Any
 from tenacity import retry, stop_after_attempt, wait_exponential, before_sleep_log
@@ -23,7 +23,7 @@ class ChuteClient(BaseLLMClient):
     PROMPT_INJECTION_MODEL = "Qwen/Qwen3-32B"
     API_URL = "https://llm.chutes.ai/v1/chat/completions"
 
-    @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=4, max=10), before_sleep=before_sleep_log(logging.getLogger("bittensor"), logging.WARNING))
+    @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=4, max=10), before_sleep=before_sleep_log(logging.getLogger("herald"), logging.WARNING))
     def _make_request(self, model: str, **kwargs) -> Dict[str, Any]:
         """Make Chutes API request with retry logic."""
         self.request_count += 1
@@ -53,7 +53,7 @@ class ChuteClient(BaseLLMClient):
             
             result = response.json()
             usage = result.get("usage", {})
-            bt.logging.info(
+            log.info(
                 f"Chutes request completed in {elapsed:.1f}s "
                 f"(model={model}, "
                 f"prompt_tokens={usage.get('prompt_tokens', '?')}, "
@@ -62,10 +62,10 @@ class ChuteClient(BaseLLMClient):
             return result
             
         except requests.exceptions.RequestException as e:
-            bt.logging.warning(f"Chutes API error (attempting retry): {e}")
+            log.warning(f"Chutes API error (attempting retry): {e}")
             raise
         except Exception as e:
-            bt.logging.error(f"Unexpected error during Chutes request: {e}")
+            log.error(f"Unexpected error during Chutes request: {e}")
             raise
 
     def get_provider_name(self) -> str:

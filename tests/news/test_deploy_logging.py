@@ -1,11 +1,12 @@
-"""The shipped validator launch configs start at INFO (bittensor's default is WARNING)."""
+"""The shipped validator launch configs start at INFO (the default without a flag is WARNING)."""
 
 import argparse
 import os
 import re
 
-import bittensor as bt
 import yaml
+
+from herald.sdk.log import log
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 LOGGING_ARG = "${HERALD_VALIDATOR_LOGGING:---logging.info}"
@@ -23,9 +24,9 @@ def test_compose_validator_starts_with_info_logging_overridable_by_env():
     assert (name, default) == ("HERALD_VALIDATOR_LOGGING", "--logging.info")
 
 
-def test_logging_flags_are_accepted_by_the_pinned_bittensor():
+def test_logging_flags_are_accepted_by_the_validator():
     parser = argparse.ArgumentParser()
-    bt.logging.add_args(parser)
+    log.add_args(parser)
     for flag in ("--logging.info", "--logging.debug", "--logging.trace"):
         assert getattr(parser.parse_args([flag]), flag[2:]) is True
     assert getattr(parser.parse_args([]), "logging.info") is False  # no flag: WARNING

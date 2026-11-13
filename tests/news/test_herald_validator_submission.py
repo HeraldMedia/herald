@@ -38,7 +38,7 @@ def _submission_env(monkeypatch):
 def logs(monkeypatch):
     lines = []
     for level in ("info", "warning", "error"):
-        monkeypatch.setattr(valmod.bt.logging, level,
+        monkeypatch.setattr(valmod.log, level,
                             lambda msg="", *a, _level=level, **k: lines.append((_level, str(msg))))
     return lines
 
@@ -380,7 +380,7 @@ def test_startup_logs_whether_the_wallet_hotkey_holds_uid_zero(tmp_path, monkeyp
 
     monkeypatch.setattr(BaseValidatorNeuron, "__init__", init_with_chain_view)
     logs = []
-    monkeypatch.setattr("neurons.validator.bt.logging.info", lambda msg, *a, **k: logs.append(str(msg)))
+    monkeypatch.setattr("neurons.validator.log.info", lambda msg, *a, **k: logs.append(str(msg)))
 
     Validator()
 

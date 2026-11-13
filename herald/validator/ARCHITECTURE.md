@@ -58,8 +58,9 @@ the chain emits each miner UID's share to the contributor's hotkey
   value on the contributors' hotkeys, and set weights on those hotkeys' UIDs and UID 0.
 
 A miner hotkey earns only through signed submissions credited to it; the validator sends no queries
-to miners. The miner neuron (`neurons/miner.py`), `herald/miner/`, `herald/protocol.py`,
-`herald/commit.py` and `herald/evidence.py` are deprecated and unused by the validator.
+to miners. The miner neuron, `herald/miner/` and the axon synapse were removed; `herald/protocol.py`
+(the claim record), `herald/commit.py` and `herald/evidence.py` remain and are unused by the
+validator.
 
 ## Trust boundaries
 

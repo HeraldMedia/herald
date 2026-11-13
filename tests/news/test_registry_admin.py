@@ -95,8 +95,8 @@ def test_publish_anchor_verifies_and_uses_current_bittensor_api(tmp_path, monkey
         def set_commitment(self, got_wallet, netuid, value, **kwargs):
             calls.update(wallet=got_wallet, netuid=netuid, value=value, kwargs=kwargs)
 
-    monkeypatch.setattr(admin.bt, "Wallet", lambda name, hotkey: wallet)
-    monkeypatch.setattr(admin.bt, "Subtensor", lambda network: FakeSubtensor())
+    monkeypatch.setattr(admin, "Wallet", lambda name, hotkey: wallet)
+    monkeypatch.setattr(admin, "Subtensor", lambda network: FakeSubtensor())
 
     run([
         "publish-anchor", str(signed), "--pubkey", pub, "--effective-block", "5000",
@@ -118,7 +118,7 @@ def test_publish_anchor_requires_explicit_confirmation(tmp_path, monkeypatch):
     signed = tmp_path / "outlets.signed.json"
     signed.write_text(json.dumps(data))
     monkeypatch.setattr(
-        admin.bt, "Subtensor",
+        admin, "Subtensor",
         lambda network: pytest.fail("must not connect without --yes"),
     )
 
@@ -138,7 +138,7 @@ def test_verify_live_anchor_reads_authority_commitment(tmp_path, monkeypatch, ca
     anchor = encode_anchor(7, content_hash(data), 5000)
 
     subtensor = object()
-    monkeypatch.setattr(admin.bt, "Subtensor", lambda network: subtensor)
+    monkeypatch.setattr(admin, "Subtensor", lambda network: subtensor)
     monkeypatch.setattr(
         admin,
         "get_commitments_with_block",

@@ -14,7 +14,7 @@ def test_non_successful_result_publish_is_reported(monkeypatch):
             raise RuntimeError("401 Unauthorized")
 
     monkeypatch.setattr(publish.httpx, "post", lambda *args, **kwargs: Response())
-    monkeypatch.setattr(publish.bt.logging, "warning", warnings.append)
+    monkeypatch.setattr(publish.log, "warning", warnings.append)
 
     publish.publish_results("https://board.example", [{"article_id": "a"}])
 

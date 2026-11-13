@@ -17,9 +17,12 @@
 
 import copy
 
-import bittensor as bt
-
 from abc import ABC, abstractmethod
+
+from herald.sdk.chain import Subtensor
+from herald.sdk.keys import wallet_from_config
+from herald.sdk.log import log
+from herald.sdk.metagraph import Metagraph
 
 # Sync calls set weights and also resyncs the metagraph.
 from herald.utils.config import check_config, add_args, config
@@ -30,7 +33,7 @@ from herald.production import validate_neuron_environment, validate_registry_anc
 
 class BaseNeuron(ABC):
     """
-    Base class for Bittensor miners. This class is abstract and should be inherited by a subclass. It contains the core logic for all neurons; validators and miners.
+    Base class for Herald neurons. This class is abstract and should be inherited by a subclass. It contains the core logic shared by neurons.
 
     In addition to creating a wallet, subtensor, and metagraph, this class also handles the synchronization of the network state via a basic checkpointing mechanism based on epoch length.
     """
@@ -38,7 +41,7 @@ class BaseNeuron(ABC):
     neuron_type: str = "BaseNeuron"
 
     @classmethod
-    def check_config(cls, config: "bt.Config"):
+    def check_config(cls, config):
         check_config(cls, config)
 
     @classmethod
@@ -49,9 +52,9 @@ class BaseNeuron(ABC):
     def config(cls):
         return config(cls)
 
-    subtensor: "bt.Subtensor"
-    wallet: "bt.Wallet"
-    metagraph: "bt.Metagraph"
+    subtensor: "Subtensor"
+    wallet: "Wallet"
+    metagraph: "Metagraph"
     spec_version: int = spec_version
 
     @property
@@ -70,36 +73,26 @@ class BaseNeuron(ABC):
         )
 
         # Set up logging with the provided configuration.
-        bt.logging.set_config(config=self.config.logging)
+        log.set_config(self.config.logging)
 
         # If a gpu is required, set the device to cuda:N (e.g. cuda:0)
         self.device = self.config.neuron.device
 
         # Log the configuration for reference.
-        bt.logging.info(self.config)
+        log.info(self.config)
 
-        # Build Bittensor objects
-        # These are core Bittensor classes to interact with the network.
-        bt.logging.info("Setting up bittensor objects.")
+        # Build the chain objects: the wallet, the chain connection and the metagraph view.
+        log.info("Setting up bittensor objects.")
 
-        # The wallet holds the cryptographic key pairs for the miner.
-        self.wallet = bt.Wallet(config=self.config)
-        self.subtensor = bt.Subtensor(config=self.config)
-        # Bittensor 10.5's public Metagraph.sync() also fetches the complete
-        # subnet "extra info" payload. Herald does not consume that payload,
-        # and a slow/unavailable payload must not prevent an Axon from starting.
-        self.metagraph = bt.Metagraph(
-            netuid=self.config.netuid,
-            network=self.subtensor.chain_endpoint,
-            lite=True,
-            sync=False,
-            subtensor=self.subtensor,
-        )
+        # The wallet holds the cryptographic key pairs for the neuron.
+        self.wallet = wallet_from_config(self.config)
+        self.subtensor = Subtensor(config=self.config)
+        self.metagraph = Metagraph(netuid=self.config.netuid, subtensor=self.subtensor, sync=False)
         self.sync_core_metagraph()
 
-        bt.logging.info(f"Wallet: {self.wallet}")
-        bt.logging.info(f"Subtensor: {self.subtensor}")
-        bt.logging.info(f"Metagraph: {self.metagraph}")
+        log.info(f"Wallet: {self.wallet}")
+        log.info(f"Subtensor: {self.subtensor}")
+        log.info(f"Metagraph: {self.metagraph}")
 
         # Check if the miner is registered on the Bittensor network before proceeding further.
         self.check_registered()
@@ -114,23 +107,18 @@ class BaseNeuron(ABC):
                 self.config.netuid,
                 current_block=self.subtensor.get_current_block(),
             )
-        bt.logging.info(
+        log.info(
             f"Running neuron on subnet: {self.config.netuid} with uid {self.uid} using network: {self.subtensor.chain_endpoint}"
         )
         self.step = 0
 
     def sync_core_metagraph(self):
-        """Sync the chain fields Herald consumes without optional subnet metadata."""
+        """Sync the chain fields Herald consumes (neurons and stakes), all read at one block."""
         block = self.subtensor.get_current_block()
-        # The pinned Bittensor SDK does not expose a public switch for omitting
-        # only extra metagraph metadata, so use the same three core phases as
-        # Metagraph.sync(lite=True) and deliberately skip _apply_extra_info().
-        self.metagraph._assign_neurons(block, True, self.subtensor)
-        self.metagraph._set_metagraph_attributes(block)
-        self.metagraph._get_all_stakes_from_chain(block)
+        self.metagraph.sync(block=block, lite=True, subtensor=self.subtensor)
 
     @abstractmethod
-    async def forward(self, synapse: bt.Synapse) -> bt.Synapse:
+    async def forward(self):
         ...
 
     @abstractmethod
@@ -159,7 +147,7 @@ class BaseNeuron(ABC):
             netuid=self.config.netuid,
             hotkey_ss58=self.wallet.hotkey.ss58_address,
         ):
-            bt.logging.error(
+            log.error(
                 f"Wallet: {self.wallet} is not registered on netuid {self.config.netuid}."
                 f" Please register the hotkey using `btcli subnets register` before trying again"
             )
@@ -187,14 +175,14 @@ class BaseNeuron(ABC):
             (self.block - self.metagraph.last_update[self.uid])
             > self.config.neuron.epoch_length
             and self.neuron_type != "MinerNeuron"
-        )  # don't set weights if you're a miner
+        )
 
     def save_state(self):
-        bt.logging.trace(
+        log.trace(
             "save_state() not implemented for this neuron. You can implement this function to save model checkpoints or other useful data."
         )
 
     def load_state(self):
-        bt.logging.trace(
+        log.trace(
             "load_state() not implemented for this neuron. You can implement this function to load model checkpoints or other useful data."
         )

@@ -203,23 +203,31 @@ class ChainReader:
     def __init__(self, network: str):
         import bittensor as bt
 
-        self._subtensor = bt.Subtensor(network=network)
+        # Only the given network or endpoint answers: no fallback or archive pools.
+        self._subtensor = bt.Subtensor(network, fallback_endpoints=[], archive_endpoints=[])
+        self._subtensor.connect()
+
+    def _subnet_param(self, name: str, netuid: int):
+        """SubtensorModule.<name>[netuid], or None when the subnet does not exist."""
+        if not self._subtensor.query(("SubtensorModule", "NetworksAdded"), [netuid]):
+            return None
+        return self._subtensor.query(("SubtensorModule", name), [netuid])
 
     def current_block(self) -> int:
-        return int(self._subtensor.get_current_block())
+        return int(self._subtensor.block)
 
     def uid_for_hotkey(self, hotkey: str, netuid: int) -> Optional[int]:
-        uid = self._subtensor.get_uid_for_hotkey_on_subnet(hotkey, netuid)
+        uid = self._subtensor.query(("SubtensorModule", "Uids"), [netuid, hotkey])
         return None if uid is None else int(uid)
 
     def last_update(self, netuid: int, uid: int) -> Optional[int]:
-        values = self._subtensor.get_hyperparameter("LastUpdate", netuid=netuid)
+        values = self._subnet_param("LastUpdate", netuid)
         if not values or uid >= len(values):
             return None
         return int(values[uid])
 
     def activity_cutoff(self, netuid: int) -> int:
-        return int(self._subtensor.get_hyperparameter("ActivityCutoff", netuid=netuid))
+        return int(self._subnet_param("ActivityCutoff", netuid))
 
 
 class BackendReader:

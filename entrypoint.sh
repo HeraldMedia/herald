@@ -1,6 +1,7 @@
 #!/bin/bash
 # Container entrypoint - bootstraps Bittensor wallet files from secrets
-# before launching the miner or validator.
+# before launching the validator. The miner neuron was removed: a command that
+# starts neurons/miner.py prints a notice and exits 0 before any key is written.
 #
 # Only the hotkey (private) and coldkeypub (public) are needed for runtime.
 # Coldkey private key is intentionally excluded for security.
@@ -19,6 +20,15 @@
 #   COLDKEYPUB_DATA    - content for coldkeypub.txt (public address)
 
 set -euo pipefail
+
+for arg in "$@"; do
+    case "$arg" in
+        neurons/miner.py|*/neurons/miner.py)
+            echo "[entrypoint] The miner neuron was removed; contributors take part through the Herald website, so there is nothing to run."
+            exit 0
+            ;;
+    esac
+done
 
 WALLET_BASE="${WALLET_PATH:-/root/.bittensor/wallets}"
 WALLET_NAME="${WALLET_NAME:-default}"
