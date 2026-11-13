@@ -48,6 +48,10 @@ FINNEY_ENDPOINT = "wss://entrypoint-finney.opentensor.ai:443"
 TEST_ENDPOINT = "wss://test.finney.opentensor.ai:443"
 ARCHIVE_ENDPOINT = "wss://archive.chain.opentensor.ai:443"
 LATENT_LITE_ENDPOINT = "wss://lite.sub.latent.to:443"
+# An address given without a scheme is a node the operator runs themselves and is reached over
+# plain WebSocket, as it always was. Every public entrypoint above uses wss.
+PLAIN_SCHEME = "ws://"  # nosemgrep: javascript.lang.security.detect-insecure-websocket.detect-insecure-websocket
+ENDPOINT_SCHEMES = (PLAIN_SCHEME, "wss://")
 
 SM = "SubtensorModule"
 
@@ -67,7 +71,7 @@ def resolve_network(network: Optional[str]) -> tuple:
 
     Names map to their public entrypoints. An endpoint is labelled finney, test or archive when it
     is that network's entrypoint, local when it points at 127.0.0.1 or localhost, and unknown
-    otherwise; an endpoint without a scheme gets ws://.
+    otherwise; an endpoint without a scheme is taken as a plain WebSocket address.
     """
     if network is None:
         return None, None
@@ -86,8 +90,8 @@ def resolve_network(network: Optional[str]) -> tuple:
             if marker in network:
                 label, endpoint = result
                 break
-    if endpoint is not None and not endpoint.startswith(("ws://", "wss://")):
-        endpoint = f"ws://{endpoint}"
+    if endpoint is not None and not endpoint.startswith(ENDPOINT_SCHEMES):
+        endpoint = f"{PLAIN_SCHEME}{endpoint}"
     return endpoint, label
 
 
