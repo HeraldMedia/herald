@@ -230,11 +230,16 @@ class Subtensor:
         if network is None and config is not None:
             network = network_from_config(config)
         self.chain_endpoint, self.network = resolve_network(network or "finney")
-        self._client = bt.Subtensor(
-            self.chain_endpoint, fallback_endpoints=[], archive_endpoints=[], substrate=substrate,
-        )
+        self._substrate = substrate
+        self._client = self._new_client()
         if connect:
             self._client.connect()
+
+    def _new_client(self):
+        return bt.Subtensor(
+            self.chain_endpoint, fallback_endpoints=[], archive_endpoints=[],
+            substrate=self._substrate,
+        )
 
     def __repr__(self) -> str:
         return f"Subtensor(network={self.network!r}, chain_endpoint={self.chain_endpoint!r})"
@@ -430,14 +435,54 @@ class Subtensor:
             "subnet_reveal_period_epochs": int(read("RevealPeriodEpochs")),
         }
 
+    def _forget_cached_nonce(self, address: str) -> None:
+        """Make the next write read `address`'s nonce from the chain again.
+
+        The SDK numbers a write from max(the chain's next index, the last nonce it handed out
+        + 1) and forgets its own count only on inclusion or a definite rejection. After a
+        submission whose outcome it cannot tell (a dropped connection, no answer in time) it
+        keeps counting, so if that transaction never reached a node every later write in this
+        process is numbered one too high and waits in the pool for a nonce that never comes.
+        Dropping the count is safe here: one process signs for this hotkey, one write at a time,
+        and the chain's next index already counts a transaction that did reach the pool.
+        """
+        try:
+            self._client._client._substrate.raw.clear_nonce_cache_for_account(address)
+        except Exception:
+            # No open connection, or the SDK keeps its count elsewhere: a new connection starts
+            # with none.
+            self._reconnect()
+
+    def _reconnect(self) -> None:
+        try:
+            self._client.close()
+        except Exception:
+            pass
+        self._client = self._new_client()
+        try:
+            self._client.connect()
+        except Exception as error:
+            log.warning(f"Could not reconnect to {self.chain_endpoint}: {error}")
+
     def _submit(self, call, wallet, *, period, wait_for_inclusion, wait_for_finalization,
                 mev_protection):
         if mev_protection:
             period = min(int(period), MEV_SHIELD_PERIOD) if period is not None else MEV_SHIELD_PERIOD
-        return self._client.submit_call(
-            call, wallet, signer="hotkey", period=period, wait_for_inclusion=wait_for_inclusion,
-            wait_for_finalization=wait_for_finalization, shielded=bool(mev_protection),
-        )
+        # A shielded write reserves a pair of nonces the SDK must keep track of itself.
+        resync = (lambda: None) if mev_protection else (
+            lambda: self._forget_cached_nonce(wallet.hotkey.ss58_address))
+        try:
+            raw = self._client.submit_call(
+                call, wallet, signer="hotkey", period=period,
+                wait_for_inclusion=wait_for_inclusion,
+                wait_for_finalization=wait_for_finalization, shielded=bool(mev_protection),
+            )
+        except Exception:
+            resync()
+            raise
+        if not getattr(raw, "success", False):
+            resync()
+        return raw
 
     def _commit_timelocked_weights(self, wallet, netuid, mechid, uids, weights, *, block_time,
                                    commit_reveal_version, version_key, period, wait_for_inclusion,
