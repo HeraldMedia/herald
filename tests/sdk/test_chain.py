@@ -30,6 +30,16 @@ class FakeView:
         return self.client.runtime(method, params, block=self.block)
 
 
+class _NonceSpy:
+    """Stands where the SDK keeps its per-account nonce count (client._client._substrate.raw)."""
+
+    def __init__(self):
+        self.cleared = []
+
+    def clear_nonce_cache_for_account(self, address):
+        self.cleared.append(address)
+
+
 class FakeClient:
     """The slice of ``bittensor.Subtensor`` that herald.sdk.chain uses."""
 
@@ -41,6 +51,8 @@ class FakeClient:
         self.reads = []
         self.submitted = []
         self.results = []
+        self.nonces = _NonceSpy()
+        self._client = SimpleNamespace(_substrate=SimpleNamespace(raw=self.nonces))
 
     @property
     def block(self):
@@ -408,3 +420,104 @@ def test_a_failed_commitment_raises_when_asked_to():
     client.results = [SimpleNamespace(success=False, message="TooManyFields", data={},
                                       error=None)]
     assert tuple(_subtensor(client).set_commitment(WALLET, NETUID, "x")) == (False, "TooManyFields")
+
+
+
+# --- the nonce after a failed write ------------------------------------------------------------
+
+def sub_ok(result):
+    return result[0] is True
+
+
+def _with_nonce_spy(client):
+    return client.nonces
+
+
+def test_a_failed_write_makes_the_next_one_read_the_nonce_from_the_chain(monkeypatch):
+    _encrypt_recorder(monkeypatch)
+    client = FakeClient(_registered())
+    spy = _with_nonce_spy(client)
+    failed = SimpleNamespace(success=False, message="connection lost", data={}, error=None)
+    client.results = [failed, failed]
+
+    assert sub_ok(_subtensor(client).set_weights(WALLET, NETUID, [0], [1.0], version_key=22))
+    assert spy.cleared == [HOTKEY.ss58_address] * 2  # once per failed attempt, none for the success
+
+
+def test_a_write_that_raises_also_drops_the_cached_nonce(monkeypatch):
+    _encrypt_recorder(monkeypatch)
+    client = FakeClient(_registered())
+    spy = _with_nonce_spy(client)
+
+    def lost(call, wallet, **kwargs):
+        raise ConnectionError("socket closed before the node answered")
+
+    client.submit_call = lost
+    success, message = _subtensor(client).set_weights(WALLET, NETUID, [0], [1.0], version_key=22)
+    assert success is False and "socket closed" in message
+    assert spy.cleared == [HOTKEY.ss58_address]
+
+
+def test_a_successful_write_keeps_the_sdk_nonce_count(monkeypatch):
+    _encrypt_recorder(monkeypatch)
+    client = FakeClient(_registered())
+    spy = _with_nonce_spy(client)
+    assert sub_ok(_subtensor(client).set_weights(WALLET, NETUID, [0], [1.0], version_key=22))
+    assert spy.cleared == []
+
+
+def test_a_failed_shielded_write_leaves_the_sdk_nonce_pair_alone(monkeypatch):
+    _encrypt_recorder(monkeypatch)
+    client = FakeClient(_registered())
+    spy = _with_nonce_spy(client)
+    client.results = [SimpleNamespace(success=False, message="no", data={}, error=None)] * 5
+    result = _subtensor(client).set_weights(WALLET, NETUID, [0], [1.0], version_key=22,
+                                            mev_protection=True)
+    assert result[0] is False and spy.cleared == []
+
+
+def test_a_failed_commitment_drops_the_cached_nonce_too():
+    client = FakeClient(_registered())
+    spy = _with_nonce_spy(client)
+    client.results = [SimpleNamespace(success=False, message="no", data={}, error=None)]
+    assert _subtensor(client).set_commitment(WALLET, NETUID, "x")[0] is False
+    assert spy.cleared == [HOTKEY.ss58_address]
+
+
+def test_without_the_sdk_nonce_count_a_failed_write_reconnects(monkeypatch):
+    _encrypt_recorder(monkeypatch)
+    client = FakeClient(_registered())
+    del client._client  # the SDK's internals are not where they were
+    client.results = [SimpleNamespace(success=False, message="no", data={}, error=None)]
+    fresh = FakeClient(_registered())
+    fresh.connect = lambda: None
+    sub = _subtensor(client)
+    monkeypatch.setattr(sub, "_new_client", lambda: fresh)
+
+    assert sub_ok(sub.set_weights(WALLET, NETUID, [0], [1.0], version_key=22))
+    assert client.closed is True and sub.client is fresh and len(fresh.submitted) == 1
+
+
+def test_the_sdk_keeps_counting_after_an_unknown_outcome_until_its_count_is_cleared():
+    """The bittensor behaviour the two tests above answer, and where its count lives."""
+    import asyncio
+
+    from bittensor._substrate import RpcSubstrate
+    from bittensor._transport.extrinsics import NonceCache
+    from bittensor._transport import interface
+
+    class Session:
+        async def request(self, method, params):
+            assert method == "account_nextIndex"
+            return 7  # the chain never saw the first transaction
+
+    cache = NonceCache(Session())
+    address = HOTKEY.ss58_address
+    assert asyncio.run(cache.reserve(address)) == 7
+    assert asyncio.run(cache.reserve(address)) == 8  # one too high: it would wait for nonce 7
+    cache.clear(address)
+    assert asyncio.run(cache.reserve(address)) == 7
+
+    assert isinstance(getattr(RpcSubstrate, "raw", None), property)
+    assert any(hasattr(member, "clear_nonce_cache_for_account")
+               for member in vars(interface).values() if isinstance(member, type))
