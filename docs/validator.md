@@ -553,6 +553,31 @@ above 1 those vectors are refused and no weights are set. Check `min_allowed_wei
 
 ### 8.7 Releases 0.2.2 (spec version 22) and 0.2.1 (spec version 21)
 
+**0.2.2 on bittensor 11.3.2.** The validator now runs on `bittensor==11.3.2`. The release number
+and the spec version stay `0.2.2` and `22`.
+- **Unchanged.** The consensus parameters and fingerprint, every flag and `.env` setting, the wallet
+  files, the state files and the score checkpoint. A validator on the earlier 0.2.2 build and one on
+  this build agree, so there is no deadline and nothing to re-pin.
+- **The dependencies must be reinstalled.** bittensor 11 is a different set of packages, and the
+  new code does not start on the old ones (`ModuleNotFoundError: No module named 'bittensor_core'`).
+  Docker: rebuild the image with `--build`; without it the container keeps running the old image.
+  Bare-metal: run `./scripts/setup_env.sh` before `./scripts/run_validator.sh`.
+- **`btcli`.** bittensor 11 ships its own `btcli`, with different command and flag names (§4.1).
+  A bare-metal environment upgraded in place still holds the old `bittensor-cli` package, and
+  `btcli` asks you to remove it: `pip uninstall bittensor-cli`. A new virtual environment avoids
+  that.
+- **Logs.** The same `time | LEVEL | message` layout, without ANSI colours.
+- **No miner neuron.** `neurons/miner.py` and the `herald-miner` CLI are removed; a container
+  started with the miner command prints a notice and exits. Contributors take part through the
+  website.
+
+Upgrading:
+```bash
+git pull
+docker compose --profile validator up -d --build validator
+# bare-metal: git pull && ./scripts/setup_env.sh && ./scripts/run_validator.sh
+```
+
 **0.2.2.**
 - **TAO/USD from CoinGecko.** It survives a refused or rate-limited simple-price endpoint by reading
   the coin's own record, and it spaces its retry rounds (§8.4).
@@ -601,7 +626,7 @@ docker compose --profile validator run --rm --no-deps --entrypoint python \
   validator -m herald.production fingerprint --netuid 69 --subtensor.network finney
 #   -> set HERALD_EXPECTED_CONSENSUS_FP in .env (and on the backend) to the printed value
 docker compose --profile validator up -d --build validator
-# bare-metal: git pull && ./scripts/run_validator.sh
+# bare-metal: git pull && ./scripts/setup_env.sh && ./scripts/run_validator.sh
 ```
 
 ### 8.8 Release 0.2.0 (spec version 20)
