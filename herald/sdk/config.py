@@ -132,8 +132,8 @@ def add_subtensor_args(parser: argparse.ArgumentParser, prefix: str = None):
     p = "" if prefix is None else prefix + "."
     _add(parser, f"--{p}subtensor.network", type=str,
          default=os.getenv("BT_SUBTENSOR_NETWORK") or DEFAULT_NETWORK,
-         help="The subtensor network: finney (main network), test, archive, local, or a ws:// or "
-              "wss:// endpoint.")
+         help="The subtensor network: finney (main network), test, archive, local, or a "
+              "WebSocket endpoint URL.")
     _add(parser, f"--{p}subtensor.chain_endpoint", type=str,
          default=os.getenv("BT_SUBTENSOR_CHAIN_ENDPOINT") or FINNEY_ENDPOINT,
          help="A chain endpoint; used only when --subtensor.network is empty.")
