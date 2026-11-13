@@ -119,7 +119,7 @@ def env(monkeypatch):
     monkeypatch.setattr(fwd, "publish_snapshot",
                         lambda endpoint, snapshot, hotkey: env.snapshots.append(snapshot) or True)
     for level in ("info", "warning", "error"):
-        monkeypatch.setattr(fwd.bt.logging, level, lambda msg, *a, **k: env.logs.append(str(msg)))
+        monkeypatch.setattr(fwd.log, level, lambda msg, *a, **k: env.logs.append(str(msg)))
     monkeypatch.setattr("neurons.validator.WEIGHT_RESUBMIT_BLOCKS", 180)
 
     # One day of miner emission is worth $1000.

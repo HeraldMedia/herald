@@ -46,7 +46,7 @@ def valid_ss58(address) -> bool:
     """True for a string that decodes as an SS58 account address."""
     if not isinstance(address, str) or not 40 <= len(address) <= 64:
         return False
-    from bittensor_wallet import Keypair
+    from herald.sdk.keys import Keypair
     try:
         Keypair(ss58_address=address)
     except Exception:
@@ -70,8 +70,9 @@ def verify_submission(row: dict) -> bool:
         return False
     message = submission_message(row["network"], row["netuid"], row["brief_id"],
                                  draft_digest(row["draft_text"]), hotkey)
-    from bittensor_wallet import Keypair
+    from herald.sdk.keys import Keypair
     try:
-        return bool(Keypair(ss58_address=coldkey).verify(message, signature))
+        # The format check above guarantees 0x followed by 128 hex digits.
+        return bool(Keypair(ss58_address=coldkey).verify(message, bytes.fromhex(signature[2:])))
     except Exception:
         return False

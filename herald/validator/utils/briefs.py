@@ -1,5 +1,5 @@
 import requests
-import bittensor as bt
+from herald.sdk.log import log
 from datetime import datetime, timezone, timedelta
 from diskcache import Cache
 import os
@@ -78,7 +78,7 @@ def get_briefs(all: bool = False, now: datetime = None):
         briefs_data = verify_briefs(response.json())
 
         briefs_list = briefs_data.get("items") or []
-        bt.logging.info(f"Fetched {len(briefs_list)} briefs.")
+        log.info(f"Fetched {len(briefs_list)} briefs.")
 
         filtered_briefs = []
         if not all:
@@ -96,10 +96,10 @@ def get_briefs(all: bool = False, now: datetime = None):
                     if (start_date is None or start_date <= current_date) and current_date <= end_window:
                         filtered_briefs.append(brief)
                 except Exception as e:
-                    bt.logging.error(f"Error parsing dates for brief {brief.get('id', 'unknown')}: {e}")
+                    log.error(f"Error parsing dates for brief {brief.get('id', 'unknown')}: {e}")
 
             if not filtered_briefs:
-                bt.logging.info("No briefs are in their active window.")
+                log.info("No briefs are in their active window.")
         else:
             filtered_briefs = briefs_list
 
@@ -111,7 +111,7 @@ def get_briefs(all: bool = False, now: datetime = None):
         # Try to return cached data if available
         cached_briefs = cache.get(cache_key)
         if cached_briefs is not None:
-            bt.logging.warning("Using cached briefs due to API error")
+            log.warning("Using cached briefs due to API error")
             return cached_briefs
         
         # No cached data available - this is a real error

@@ -3,10 +3,9 @@
 > **PR firms and PR professionals take part through the Herald website, with their own hotkey.**
 > Each contributor registers their own hotkey on netuid 69 from the website and signs every
 > submission with their wallet; validators weight that hotkey by the verified value of its
-> articles. No miner server, axon or command line is needed. `herald-miner`
-> (`python -m herald.miner.cli`) and the miner neuron (`neurons/miner.py`) are deprecated:
-> validators do not query miner neurons or read miner commitments, so commits, claims and served
-> reveals earn nothing.
+> articles. No miner server, axon or command line is needed. The `herald-miner`
+> CLI (`python -m herald.miner.cli`) and the miner neuron (`neurons/miner.py`) were removed:
+> validators do not query miner neurons or read miner commitments.
 
 ---
 
@@ -127,8 +126,9 @@ together exceed the day's emission, they share all of it in proportion to their 
 
 ## 5. If you ran a Herald miner
 
-- The miner neuron, the `herald-miner` commands (`briefs`, `commit`, `claim`, `resubmit`, `list`,
-  `pull-reveals`) and `claims.json` no longer affect rewards, and the neuron can be stopped.
+- The miner neuron and the `herald-miner` commands (`briefs`, `commit`, `claim`, `resubmit`, `list`,
+  `pull-reveals`) were removed; `claims.json` no longer affects rewards. A container still started
+  with `neurons/miner.py` prints a notice and exits.
 - A hotkey earns only through submissions signed on the website by the coldkey that owns it.
 - Vesting entries that started from on-chain claims are expired by validators and pay nothing
   further.

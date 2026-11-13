@@ -9,13 +9,14 @@ import asyncio
 import argparse
 import threading
 import time
-import bittensor as bt
 
 from typing import List, Union
 from traceback import print_exception
 from urllib.parse import urlsplit
 
 from herald.base.neuron import BaseNeuron
+from herald.sdk.chain import Subtensor
+from herald.sdk.log import SDK_LOGGER, log
 from herald.utils.config import add_validator_args
 from herald.validator.news.emission import WeightVectorRefused, allowed_emit_vector
 
@@ -34,7 +35,7 @@ def _env_number(name: str, default, cast, minimum):
     try:
         return max(minimum, cast(raw))
     except ValueError:
-        bt.logging.warning(f"{name}={raw!r} is not a valid number; using {default}")
+        log.warning(f"{name}={raw!r} is not a valid number; using {default}")
         return default
 
 
@@ -89,20 +90,22 @@ def _scrubbed(error: BaseException, *endpoints) -> str:
 
 @contextlib.contextmanager
 def _bittensor_debug_muted():
-    """Hold bittensor's logger at INFO or above for the duration.
+    """Hold the bittensor SDK's logger at INFO or above for the duration.
 
-    Subtensor.__init__ logs its chain endpoint verbatim at DEBUG, and a fallback endpoint may carry a
-    provider key in its URL. The previous level is restored exactly.
+    Connecting is the step that names the endpoint, and a fallback endpoint may carry a provider
+    key in its URL, so nothing below INFO is logged by the SDK while it connects. The previous level
+    is restored exactly.
     """
-    level = bt.logging.get_level()
+    sdk = logging.getLogger(SDK_LOGGER)
+    level = sdk.level
     if level >= logging.INFO:
         yield
         return
-    bt.logging.setLevel(logging.INFO)
+    sdk.setLevel(logging.INFO)
     try:
         yield
     finally:
-        bt.logging.setLevel(level)
+        sdk.setLevel(level)
 
 
 class WeightCommitCheckError(RuntimeError):
@@ -142,12 +145,8 @@ class BaseValidatorNeuron(BaseNeuron):
         # Save a copy of the hotkeys to local memory.
         self.hotkeys = copy.deepcopy(self.metagraph.hotkeys)
 
-        # Dendrite lets us send messages to other nodes (axons) in the network.
-        self.dendrite = bt.Dendrite(wallet=self.wallet)
-        bt.logging.info(f"Dendrite: {self.dendrite}")
-
         # Set up initial scoring weights for validation
-        bt.logging.info("Building validation weights.")
+        log.info("Building validation weights.")
         self.scores = np.zeros(self.metagraph.n, dtype=np.float32)
 
         # Restore before the initial sync: sync() always saves state, so loading afterward would
@@ -162,7 +161,7 @@ class BaseValidatorNeuron(BaseNeuron):
         # No axon. A Herald validator answers no requests: it reads contributor submissions from the
         # Herald backend and queries no miner axons, so there is no handler to attach, no inbound
         # port to open and no address to publish on chain. Every call it makes is outbound (chain
-        # RPC, the Herald backend, article and price fetches). Miners still serve an axon.
+        # RPC, the Herald backend, article and price fetches).
 
         # Create asyncio event loop to manage async tasks.
         self.loop = asyncio.get_event_loop()
@@ -182,7 +181,7 @@ class BaseValidatorNeuron(BaseNeuron):
 
     def run(self):
         """
-        Initiates and manages the main loop for the miner on the Bittensor network. The main loop handles graceful shutdown on keyboard interrupts and logs unforeseen errors.
+        Initiates and manages the main loop for the validator on the Bittensor network. The main loop handles graceful shutdown on keyboard interrupts and logs unforeseen errors.
 
         This function performs the following primary tasks:
         1. Check for registration on the Bittensor network.
@@ -197,19 +196,19 @@ class BaseValidatorNeuron(BaseNeuron):
               backend, article and price fetches).
 
         Raises:
-            KeyboardInterrupt: If the miner is stopped by a manual interruption.
-            Exception: For unforeseen errors during the miner's operation, which are logged for diagnosis.
+            KeyboardInterrupt: If the validator is stopped by a manual interruption.
+            Exception: For unforeseen errors during the validator's operation, which are logged for diagnosis.
         """
 
         # Check that validator is registered on the network.
         self.sync()
 
-        bt.logging.info(f"Validator starting at block: {self.block}")
+        log.info(f"Validator starting at block: {self.block}")
 
         # This loop maintains the validator's operations until intentionally stopped.
         while True:
             try:
-                bt.logging.info(f"step({self.step}) block({self.block})")
+                log.info(f"step({self.step}) block({self.block})")
 
                 # Run multiple forwards concurrently.
                 self.loop.run_until_complete(self.concurrent_forward())
@@ -222,19 +221,19 @@ class BaseValidatorNeuron(BaseNeuron):
                 try:
                     self.sync()
                 except Exception as e:
-                    bt.logging.warning(f"Sync operation failed, continuing validation cycle: {e}")
+                    log.warning(f"Sync operation failed, continuing validation cycle: {e}")
 
                 self.step += 1
 
             # If someone intentionally stops the validator, it'll safely terminate operations.
             except KeyboardInterrupt:
-                bt.logging.success("Validator killed by keyboard interrupt.")
+                log.success("Validator killed by keyboard interrupt.")
                 exit()
 
             # In case of unforeseen errors, the validator will log the error and continue operations.
             except Exception as err:
-                bt.logging.error(f"Error during validation: {str(err)}")
-                bt.logging.debug(
+                log.error(f"Error during validation: {str(err)}")
+                log.debug(
                     str(print_exception(type(err), err, err.__traceback__))
                 )
                 # Increment step even on error to avoid getting stuck
@@ -250,23 +249,23 @@ class BaseValidatorNeuron(BaseNeuron):
         This method facilitates the use of the validator in a 'with' statement.
         """
         if not self.is_running:
-            bt.logging.debug("Starting validator in background thread.")
+            log.debug("Starting validator in background thread.")
             self.should_exit = False
             self.thread = threading.Thread(target=self.run, daemon=True)
             self.thread.start()
             self.is_running = True
-            bt.logging.debug("Started")
+            log.debug("Started")
 
     def stop_run_thread(self):
         """
         Stops the validator's operations that are running in the background thread.
         """
         if self.is_running:
-            bt.logging.debug("Stopping validator in background thread.")
+            log.debug("Stopping validator in background thread.")
             self.should_exit = True
             self.thread.join(5)
             self.is_running = False
-            bt.logging.debug("Stopped")
+            log.debug("Stopped")
 
     def __enter__(self):
         self.run_in_background_thread()
@@ -286,19 +285,19 @@ class BaseValidatorNeuron(BaseNeuron):
                        None if the context was exited without an exception.
         """
         if self.is_running:
-            bt.logging.debug("Stopping validator in background thread.")
+            log.debug("Stopping validator in background thread.")
             self.should_exit = True
             self.thread.join(5)
             self.is_running = False
-            bt.logging.debug("Stopped")
+            log.debug("Stopped")
 
     def _has_pending_weight_commit(self, subtensor=None) -> bool:
-        """True when this hotkey has a timelocked weight commit awaiting reveal.
+        """True when this hotkey has a timelocked weight commit awaiting reveal, in any epoch.
 
-        Reads the chain head (``block=None``). bittensor 10.5 resolves that to a fresh
-        ``chain_getHead`` on every call, so a retry re-reads at the new head rather than asking a
-        load-balanced RPC node again for a block hash it has not imported ("UnknownBlock: Header
-        was not found in the database"). The per-block cache covers the primary connection only.
+        Reads the chain head (``block=None``): the storage read names no block hash, so the node
+        answers at its own best block and a retry never asks a load-balanced RPC node for a block
+        hash it has not imported ("UnknownBlock: Header was not found in the database"). The
+        per-block cache covers the primary connection only.
         """
         hotkey = self.wallet.hotkey.ss58_address
         if subtensor is not None:
@@ -354,7 +353,7 @@ class BaseValidatorNeuron(BaseNeuron):
                     f"{primary} attempt {attempt}/{attempts}: {type(e).__name__}: {reason}"
                 )
                 if attempt < attempts:
-                    bt.logging.warning(
+                    log.warning(
                         f"Pending weight-commit check failed on {primary} "
                         f"(attempt {attempt}/{attempts}): {reason}; retrying at the chain head in "
                         f"{delay:g}s"
@@ -371,7 +370,7 @@ class BaseValidatorNeuron(BaseNeuron):
                     f"{shown} (fallback): {type(e).__name__}: {_scrubbed(e, raw_primary, fallback)}"
                 )
             else:
-                bt.logging.warning(
+                log.warning(
                     f"Pending weight-commit check failed on {primary} and was answered by the "
                     f"fallback endpoint {shown}"
                 )
@@ -384,7 +383,7 @@ class BaseValidatorNeuron(BaseNeuron):
             return cached[1]
         self._drop_weight_check_fallback()
         with _bittensor_debug_muted():
-            subtensor = bt.Subtensor(network=endpoint)  # read-only use: two storage queries
+            subtensor = Subtensor(network=endpoint)  # read-only use: two storage queries
         self._weight_check_fallback = (endpoint, subtensor)
         return subtensor
 
@@ -430,7 +429,7 @@ class BaseValidatorNeuron(BaseNeuron):
             return False
         self._note_weight_check_recovered()
         if pending:
-            bt.logging.info(
+            log.info(
                 "Weight commitment pending automatic reveal; skipping resubmission"
             )
             return False
@@ -439,7 +438,7 @@ class BaseValidatorNeuron(BaseNeuron):
     def _note_suppressed_weight_submission(self, error: Exception):
         count = getattr(self, "_suppressed_weight_submissions", 0) + 1
         self._suppressed_weight_submissions = count
-        bt.logging.error(
+        log.error(
             f"Weight submission suppressed on netuid {self.config.netuid}: could not determine "
             f"whether a weight commit is pending (endpoint {self._chain_endpoint()}; {error}). "
             f"Not submitting blind, since a second commit while one may be pending is a "
@@ -447,7 +446,7 @@ class BaseValidatorNeuron(BaseNeuron):
         )
         threshold = _env_number(WEIGHT_SUPPRESSION_ALERT_ENV, 3, int, 1)
         if count >= threshold:
-            bt.logging.error(
+            log.error(
                 f"{WEIGHT_SUPPRESSION_ALERT_TAG}: {count} consecutive weight submissions suppressed "
                 f"(alert threshold {threshold}) because the pending-commit check keeps failing on "
                 f"{self._chain_endpoint()}. This validator is not setting weights. Set "
@@ -458,7 +457,7 @@ class BaseValidatorNeuron(BaseNeuron):
     def _note_weight_check_recovered(self):
         count = getattr(self, "_suppressed_weight_submissions", 0)
         if count:
-            bt.logging.warning(
+            log.warning(
                 f"Pending weight-commit check recovered after {count} suppressed weight "
                 f"submission(s)"
             )
@@ -476,7 +475,7 @@ class BaseValidatorNeuron(BaseNeuron):
 
         # Check if self.scores contains any NaN values and log a warning if it does.
         if np.isnan(self.scores).any():
-            bt.logging.warning(
+            log.warning(
                 f"Scores contain NaN values. This may be due to a lack of responses from miners, or a bug in your reward functions."
             )
 
@@ -484,7 +483,7 @@ class BaseValidatorNeuron(BaseNeuron):
         norm = np.linalg.norm(self.scores, ord=1, axis=0, keepdims=True)
 
         if np.any(norm == 0):
-            bt.logging.info("No rewarded miners in the current epoch; skipping weight submission")
+            log.info("No rewarded miners in the current epoch; skipping weight submission")
             return False
 
         try:
@@ -493,16 +492,16 @@ class BaseValidatorNeuron(BaseNeuron):
                 self.scores, self.metagraph.hotkeys, self._weight_hotkeys(), min_allowed,
             )
         except WeightVectorRefused as refused:
-            bt.logging.error(f"WEIGHT_VECTOR_REFUSED reason={refused.reason}")
+            log.error(f"WEIGHT_VECTOR_REFUSED reason={refused.reason}")
             return False
         except Exception as e:
             try:
                 detail = _scrubbed(e, self._raw_chain_endpoint())
             except Exception:
                 detail = type(e).__name__
-            bt.logging.error(f"WEIGHT_VECTOR_REFUSED reason=read_error ({detail})")
+            log.error(f"WEIGHT_VECTOR_REFUSED reason=read_error ({detail})")
             return False
-        bt.logging.info(f"WEIGHT_VECTOR uids={uint_uids} weights={uint_weights}")
+        log.info(f"WEIGHT_VECTOR uids={uint_uids} weights={uint_weights}")
         submitted_vector = [[int(uid), int(weight)] for uid, weight in zip(uint_uids, uint_weights)]
         self._last_submitted_weight_vector = submitted_vector
         self._last_submitted_weight_vector_hash = hashlib.sha256(
@@ -524,32 +523,32 @@ class BaseValidatorNeuron(BaseNeuron):
         if result is True:
             self._pending_weight_commit_cache = None
             if commit_reveal:
-                bt.logging.info(
+                log.info(
                     "Weight commitment included on chain; pending automatic reveal"
                 )
             else:
-                bt.logging.info("set_weights on chain successfully!")
+                log.info("set_weights on chain successfully!")
             return True
         else:
-            bt.logging.error("set_weights failed", msg)
+            log.error("set_weights failed", msg)
             return False
 
     def resync_metagraph(self):
         """Resyncs the metagraph and updates the hotkeys and moving averages based on the new metagraph."""
-        bt.logging.info("resync_metagraph()")
+        log.info("resync_metagraph()")
 
-        # Copies state of metagraph before syncing.
-        previous_metagraph = copy.deepcopy(self.metagraph)
+        # The registrations before syncing.
+        previous_hotkeys = list(self.metagraph.hotkeys)
 
         # Sync the metagraph.
         self.sync_core_metagraph()
 
-        # Check if the metagraph axon info has changed.
-        if previous_metagraph.axons == self.metagraph.axons:
+        # Nothing below changes unless a UID's hotkey changed or UIDs were added.
+        if previous_hotkeys == list(self.metagraph.hotkeys):
             return
 
-        bt.logging.info(
-            "Metagraph updated, re-syncing hotkeys, dendrite pool and moving averages"
+        log.info(
+            "Metagraph updated, re-syncing hotkeys and moving averages"
         )
         # A replaced hotkey's score moves to UID 0 (see burn_replaced_scores).
         burn_replaced_scores(self.scores, self.hotkeys, self.metagraph.hotkeys)
@@ -571,7 +570,7 @@ class BaseValidatorNeuron(BaseNeuron):
 
         # Check if rewards contains NaN values.
         if np.isnan(rewards).any():
-            bt.logging.warning(f"NaN values detected in rewards: {rewards}")
+            log.warning(f"NaN values detected in rewards: {rewards}")
             # Replace any NaN values in rewards with 0.
             rewards = np.nan_to_num(rewards, nan=0)
 
@@ -586,8 +585,8 @@ class BaseValidatorNeuron(BaseNeuron):
 
         # Handle edge case: If either rewards or uids_array is empty.
         if rewards.size == 0 or uids_array.size == 0:
-            bt.logging.info(f"rewards: {rewards}, uids_array: {uids_array}")
-            bt.logging.warning(
+            log.info(f"rewards: {rewards}, uids_array: {uids_array}")
+            log.warning(
                 "Either rewards or uids_array is empty. No updates will be performed."
             )
             return
@@ -603,7 +602,7 @@ class BaseValidatorNeuron(BaseNeuron):
         # shape: [ metagraph.n ]
         scattered_rewards: np.ndarray = np.zeros_like(self.scores)
         scattered_rewards[uids_array] = rewards
-        bt.logging.debug(f"Scattered rewards: {rewards}")
+        log.debug(f"Scattered rewards: {rewards}")
 
         # Update scores with rewards produced by this step.
         # shape: [ metagraph.n ]
@@ -611,11 +610,11 @@ class BaseValidatorNeuron(BaseNeuron):
         self.scores: np.ndarray = (
             alpha * scattered_rewards + (1 - alpha) * self.scores
         )
-        bt.logging.debug(f"Updated moving avg scores: {self.scores}")
+        log.debug(f"Updated moving avg scores: {self.scores}")
 
     def save_state(self):
         """Saves the state of the validator to a file."""
-        bt.logging.info("Saving validator state.")
+        log.info("Saving validator state.")
 
         # Save the state of the validator to file.
         np.savez(
@@ -628,7 +627,7 @@ class BaseValidatorNeuron(BaseNeuron):
 
     def load_state(self):
         """Loads the state of the validator from a file."""
-        bt.logging.info("Loading validator state.")
+        log.info("Loading validator state.")
 
         state = np.load(self.config.neuron.full_path + "/state.npz", allow_pickle=False)
         loaded_scores = np.asarray(state["scores"], dtype=np.float32)
@@ -643,7 +642,7 @@ class BaseValidatorNeuron(BaseNeuron):
             scores[:count] = loaded_scores[:count]
             burn_replaced_scores(scores, loaded_hotkeys[:count], current_hotkeys)
         else:
-            bt.logging.warning(
+            log.warning(
                 f"Discarding score checkpoint from spec {saved_spec}; current spec is {self.spec_version}"
             )
 

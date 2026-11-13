@@ -6,7 +6,7 @@ deterministic rules, and only when an LLM provider is configured.
 
 import re
 
-import bittensor as bt
+from herald.sdk.log import log
 
 from herald.validator.utils.config import (
     CHUTES_API_KEY,
@@ -45,13 +45,13 @@ def _verdict(content: str):
     """
     first = re.sub(r"[^a-z]", " ", (content or "").strip().lower()).split()
     if not first:
-        bt.logging.warning("LLM judge returned an empty answer; treating it as unavailable")
+        log.warning("LLM judge returned an empty answer; treating it as unavailable")
         return None
     if first[0] == "yes":
         return True
     if first[0] == "no":
         return False
-    bt.logging.warning(
+    log.warning(
         "LLM judge answered %r, which is neither yes nor no; treating it as unavailable",
         (content or "")[:80],
     )
@@ -73,5 +73,5 @@ def judge(question: str, text: str):
         )
         return _verdict(resp["choices"][0]["message"]["content"])
     except Exception as e:
-        bt.logging.warning(f"LLM judge failed: {e}")
+        log.warning(f"LLM judge failed: {e}")
         return None

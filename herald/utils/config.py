@@ -19,7 +19,9 @@
 import os
 import subprocess
 import argparse
-import bittensor as bt
+
+from herald.sdk import config as sdk_config
+from herald.sdk.log import log, add_args as add_logging_args
 from .logging import setup_events_logger
 
 
@@ -41,9 +43,9 @@ def is_cuda_available():
     return "cpu"
 
 
-def check_config(cls, config: "bt.Config"):
+def check_config(cls, config: "sdk_config.Config"):
     r"""Checks/validates the config namespace object."""
-    bt.logging.check_config(config)
+    log.check_config(config)
 
     full_path = os.path.expanduser(
         "{}/{}/{}/netuid{}/{}".format(
@@ -64,7 +66,7 @@ def check_config(cls, config: "bt.Config"):
         events_logger = setup_events_logger(
             config.neuron.full_path, config.neuron.events_retention_size
         )
-        bt.logging.register_primary_logger(events_logger.name)
+        log.register_primary_logger(events_logger.name)
 
 
 def add_args(cls, parser):
@@ -119,51 +121,12 @@ def add_args(cls, parser):
     )
 
 
-def add_miner_args(cls, parser):
-    """Add miner specific arguments to the parser."""
-
-    parser.add_argument(
-        "--neuron.name",
-        type=str,
-        help="Trials for this neuron go in neuron.root / (wallet_cold - wallet_hot) / neuron.name. ",
-        default="miner",
-    )
-
-    parser.add_argument(
-        "--blacklist.force_validator_permit",
-        action="store_true",
-        help="If set, we will force incoming requests to have a permit.",
-        default=True,
-    )
-
-    parser.add_argument(
-        "--blacklist.allow_non_registered",
-        action="store_true",
-        help="If set, miners will accept queries from non registered entities. (Dangerous!)",
-        default=False,
-    )
-
-    parser.add_argument(
-        "--blacklist.min_stake",
-        type=int,
-        help="Minimum stake required for a validator to query this miner.",
-        default=30000,
-    )
-
-    parser.add_argument(
-        "--dev_mode",
-        action="store_true",
-        help="Enable development mode with additional logging and features.",
-        default=False,
-    )
-
-
 def add_validator_args(cls, parser):
     """Add validator specific arguments to the parser.
 
     A Herald validator serves nothing. It reads contributor submissions from the Herald backend and
-    queries no axons, so it has no axon to switch on or off and takes no inbound port: the --axon.*
-    arguments bittensor adds belong to the miner.
+    queries no axons, so it has no axon to switch on or off and takes no inbound port. The --axon.*
+    arguments are still accepted, and ignored, so existing command lines keep parsing.
     """
 
     parser.add_argument(
@@ -233,15 +196,14 @@ def add_validator_args(cls, parser):
 def config(cls):
     """
     Returns the configuration object specific to this miner or validator after adding relevant arguments.
+
+    Every flag is read from the command line: --wallet.*, --subtensor.*, --logging.*, the neuron's
+    own flags, and --axon.*, which is accepted and ignored.
     """
-    # bittensor 10.x defaults BT_NO_PARSE_CLI_ARGS to "true", which makes bt.Config ignore argv and
-    # silently drop every --wallet/--netuid/--neuron flag. Herald neurons are configured entirely via
-    # these flags, so force parsing on (respecting an explicit operator override).
-    os.environ.setdefault("BT_NO_PARSE_CLI_ARGS", "false")
     parser = argparse.ArgumentParser()
-    bt.Wallet.add_args(parser)
-    bt.Subtensor.add_args(parser)
-    bt.logging.add_args(parser)
-    bt.Axon.add_args(parser)
+    sdk_config.add_wallet_args(parser)
+    sdk_config.add_subtensor_args(parser)
+    add_logging_args(parser)
+    sdk_config.add_axon_args(parser)
     cls.add_args(parser)
-    return bt.Config(parser)
+    return sdk_config.parse_config(parser)

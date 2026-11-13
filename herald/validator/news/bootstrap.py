@@ -64,8 +64,9 @@ def main():
     import argparse
     import os
 
-    import bittensor as bt
     import httpx
+
+    from herald.sdk.chain import Subtensor
 
     from herald.validator.utils.config import HERALD_EPOCH_LAG, VEST_EPOCH_LEN
 
@@ -84,7 +85,7 @@ def main():
     resp.raise_for_status()
     rows = resp.json()
 
-    subtensor = bt.Subtensor(network=args.network)
+    subtensor = Subtensor(network=args.network)
     metagraph = subtensor.metagraph(args.netuid)
     hotkey_to_uid = {hk: uid for uid, hk in enumerate(metagraph.hotkeys)}
     current_epoch = max(0, subtensor.get_current_block() - HERALD_EPOCH_LAG) // VEST_EPOCH_LEN

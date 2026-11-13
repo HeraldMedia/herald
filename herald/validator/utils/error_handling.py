@@ -5,7 +5,7 @@ This module provides simple helper functions to standardize error handling
 and logging patterns throughout the codebase.
 """
 
-import bittensor as bt
+from herald.sdk.log import log
 from typing import Any, Dict, Optional
 
 
@@ -33,7 +33,7 @@ def log_and_raise_api_error(
         safe_params = {k: v for k, v in params.items() 
                       if k.lower() not in ['api_key', 'token', 'password', 'secret']}
     
-    bt.logging.error(
+    log.error(
         f"{context} failed: {error}",
         extra={
             'endpoint': endpoint,
@@ -65,7 +65,7 @@ def log_and_raise_validation_error(
     if data and len(str(data)) > 200:
         safe_data = str(data)[:200] + "... (truncated)"
     
-    bt.logging.error(
+    log.error(
         f"{context} failed: {message}",
         extra={
             'validation_data': safe_data,
@@ -91,7 +91,7 @@ def log_and_raise_processing_error(
     Raises:
         RuntimeError: Always raises with formatted message
     """
-    bt.logging.error(
+    log.error(
         f"Processing operation '{operation}' failed: {error}",
         extra={
             'operation': operation,
@@ -124,7 +124,7 @@ def log_and_raise_config_error(
                            for sensitive in ['key', 'token', 'password', 'secret']):
         safe_value = '***REDACTED***'
     
-    bt.logging.error(
+    log.error(
         f"Configuration error: {message}",
         extra={
             'config_key': config_key,
@@ -151,7 +151,7 @@ def safe_operation(operation_name: str, default_return=None):
             try:
                 return func(*args, **kwargs)
             except Exception as e:
-                bt.logging.error(
+                log.error(
                     f"Operation '{operation_name}' failed: {e}",
                     extra={
                         'operation': operation_name,

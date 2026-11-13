@@ -93,7 +93,7 @@ def test_crv4_submission_waits_for_inclusion_and_reports_pending_reveal(monkeypa
         return True, "included"
 
     validator.subtensor.set_weights = submit
-    monkeypatch.setattr("herald.base.validator.bt.logging.info", messages.append)
+    monkeypatch.setattr("herald.base.validator.log.info", messages.append)
 
     assert validator.set_weights() is True
 
@@ -111,7 +111,7 @@ def test_zero_scores_skip_weight_submission(monkeypatch):
     calls = []
     messages = []
     validator.subtensor.set_weights = lambda **kwargs: calls.append(kwargs)
-    monkeypatch.setattr("herald.base.validator.bt.logging.info", messages.append)
+    monkeypatch.setattr("herald.base.validator.log.info", messages.append)
 
     assert validator.set_weights() is False
 
@@ -139,7 +139,7 @@ def _wide_validator(monkeypatch, scores, *, miner_uid=2, min_allowed=1, limit=0.
     events = []
     validator.subtensor.set_weights = lambda **kwargs: events.append(("submit", kwargs)) or (True, "ok")
     for level in ("info", "warning", "error"):
-        monkeypatch.setattr(base_validator.bt.logging, level,
+        monkeypatch.setattr(base_validator.log, level,
                             lambda msg="", *a, _level=level, **k: events.append((_level, str(msg))))
     return validator, events
 
@@ -250,7 +250,7 @@ def _flaky_validator(monkeypatch, *, failures, pending=False):
     monkeypatch.setattr(base_validator.time, "sleep", sleeps.append)
     logs = {"error": [], "warning": [], "info": []}
     for level, sink in logs.items():
-        monkeypatch.setattr(base_validator.bt.logging, level,
+        monkeypatch.setattr(base_validator.log, level,
                             lambda msg="", *args, _sink=sink, **kwargs: _sink.append(str(msg)))
     return validator, calls, sleeps, logs
 
@@ -353,7 +353,7 @@ def test_fallback_endpoint_answers_when_the_primary_keeps_failing(monkeypatch):
         created.append(network)
         return fallback
 
-    monkeypatch.setattr(base_validator.bt, "Subtensor", make_subtensor)
+    monkeypatch.setattr(base_validator, "Subtensor", make_subtensor)
 
     assert validator.should_set_weights() is False  # pending on the fallback: still blocked
     assert calls["commits"] == 2 and created == [FALLBACK]
@@ -373,7 +373,7 @@ def test_fallback_failure_still_suppresses_and_names_both_endpoints(monkeypatch)
     def unreachable(network):
         raise ConnectionError("fallback down")
 
-    monkeypatch.setattr(base_validator.bt, "Subtensor", unreachable)
+    monkeypatch.setattr(base_validator, "Subtensor", unreachable)
 
     assert validator.should_set_weights() is False
     assert len(logs["error"]) == 1
@@ -420,7 +420,7 @@ def test_endpoint_credentials_never_reach_the_logs(monkeypatch):
         raise ConnectionError(f"handshake with {network} failed")
 
     validator.subtensor.get_timelocked_weight_commits = commits
-    monkeypatch.setattr(base_validator.bt, "Subtensor", unreachable)
+    monkeypatch.setattr(base_validator, "Subtensor", unreachable)
 
     assert validator.should_set_weights() is False
 
@@ -462,24 +462,24 @@ def test_a_closed_submission_window_resets_the_suppression_count(monkeypatch):
 
 
 def test_fallback_connection_is_built_with_bittensor_debug_muted(monkeypatch):
-    # bittensor's Subtensor logs its chain endpoint verbatim at DEBUG while it connects.
+    # Connecting names the endpoint; the SDK's logger is held at INFO or above while it connects.
     monkeypatch.setenv(base_validator.WEIGHT_CHECK_ATTEMPTS_ENV, "1")
     monkeypatch.setenv(base_validator.WEIGHT_CHECK_FALLBACK_ENV, FALLBACK)
     validator, _calls, _sleeps, _logs = _flaky_validator(monkeypatch, failures=-1)
-    level = {"now": logging.DEBUG, "while_connecting": None}
-    monkeypatch.setattr(base_validator.bt.logging, "get_level", lambda: level["now"])
-    monkeypatch.setattr(base_validator.bt.logging, "setLevel", lambda value: level.update(now=value))
+    sdk = logging.getLogger(base_validator.SDK_LOGGER)
+    monkeypatch.setattr(sdk, "level", logging.DEBUG)
+    level = {}
 
     def make_subtensor(network):
-        level["while_connecting"] = level["now"]
+        level["while_connecting"] = sdk.level
         return SimpleNamespace(commit_reveal_enabled=lambda netuid: True,
                                get_timelocked_weight_commits=lambda netuid: [])
 
-    monkeypatch.setattr(base_validator.bt, "Subtensor", make_subtensor)
+    monkeypatch.setattr(base_validator, "Subtensor", make_subtensor)
 
     assert validator.should_set_weights() is True
     assert level["while_connecting"] >= logging.INFO
-    assert level["now"] == logging.DEBUG
+    assert sdk.level == logging.DEBUG
 
 
 # --- a replaced hotkey's score ---------------------------------------------------------------------

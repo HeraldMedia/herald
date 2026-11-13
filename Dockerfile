@@ -6,7 +6,7 @@ LABEL org.opencontainers.image.title="Herald Subnet" \
 
 WORKDIR /app
 
-# System deps for bittensor (substrate-interface needs these)
+# Build tools for any dependency installed from source
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc g++ libssl-dev pkg-config curl git \
     && rm -rf /var/lib/apt/lists/*

@@ -3,7 +3,7 @@ import math
 import os
 import time
 
-import bittensor as bt
+from herald.sdk.log import log
 import numpy as np
 
 from herald.validator.utils.briefs import get_briefs
@@ -105,7 +105,7 @@ def _burn_epoch(self, state: HeraldState, epoch: int, reason: str, *, warn: bool
     state.weight_hotkeys = {}
     state.last_scored_epoch = epoch
     _save_state(self, state)
-    (bt.logging.warning if warn else bt.logging.info)(f"EPOCH_BURN epoch={epoch} reason={reason}")
+    (log.warning if warn else log.info)(f"EPOCH_BURN epoch={epoch} reason={reason}")
 
 
 def _load_registry(self, block: int, network):
@@ -124,14 +124,14 @@ def _judge_fn(briefs):
     # Require a pinned model when the LLM tier is on, or all validators must agree on the
     # per-provider default (they don't). Without a pin, stay rules-only (deterministic).
     if HERALD_USE_LLM_JUDGE and not HERALD_REF_MODEL_ID:
-        bt.logging.warning("HERALD_USE_LLM_JUDGE set without HERALD_REF_MODEL_ID; LLM tier disabled")
+        log.warning("HERALD_USE_LLM_JUDGE set without HERALD_REF_MODEL_ID; LLM tier disabled")
     judge_fn = judge if (HERALD_USE_LLM_JUDGE and HERALD_REF_MODEL_ID) else None
     # topic_matched() falls through to `not keywords`, so a brief with no keywords and no LLM
     # judge accepts ANY article as on-topic. Warn loudly so an operator sees it in the logs.
     if judge_fn is None:
         ungated = [b.get("id") for b in briefs if not (b.get("keywords") or [])]
         if ungated:
-            bt.logging.warning(
+            log.warning(
                 "No topic gate for brief(s) %s: they carry no keywords and the LLM judge is "
                 "off, so every article passes the topic check. Set keywords on the brief, or "
                 "enable HERALD_USE_LLM_JUDGE with a pinned HERALD_REF_MODEL_ID fleet-wide."
@@ -179,7 +179,7 @@ def _verify_submission(row, briefs_by_id, registry, fetch_fn, epoch, judge_fn, n
             uploaded_ts=row["uploaded_ts"],
         )
     except Exception as exc:
-        bt.logging.warning(f"Verifying submission {row['submission_id']} raised: {exc}")
+        log.warning(f"Verifying submission {row['submission_id']} raised: {exc}")
         return None, "verify_error"
     return result, result.reason
 
@@ -204,7 +204,7 @@ def _restrict_scored_epoch(self, state: HeraldState):
         return
     _set_burn_scores(self)
     state.weight_hotkeys = {}
-    bt.logging.info(f"EPOCH_BURN epoch={state.last_scored_epoch} reason=stale_scores")
+    log.info(f"EPOCH_BURN epoch={state.last_scored_epoch} reason=stale_scores")
 
 
 def _burn_reason(exc: Exception) -> str:
@@ -227,7 +227,7 @@ def _fail_epoch(self, epoch: int, before: dict, reason: str):
         self.herald_state = state
         _burn_epoch(self, state, epoch, reason, warn=True)
     except Exception as e:
-        bt.logging.error(f"Saving the weights for epoch {epoch} failed: {e}")
+        log.error(f"Saving the weights for epoch {epoch} failed: {e}")
 
 
 def _resync_before_scoring(self):
@@ -278,7 +278,7 @@ def _score_epoch(self, state: HeraldState, epoch: int, block: int):
     valid_rows = validate_rows(rows, network, self.config.netuid, now_ts)
     selected = select_new(valid_rows, vesting, HERALD_MAX_SUBMISSIONS_PER_EPOCH,
                           HERALD_MAX_CANDIDATES_PER_ARTICLE)
-    bt.logging.info(
+    log.info(
         f"Submissions feed: {len(rows)} row(s), {len(valid_rows)} valid, {len(selected)} to verify"
     )
     # Whether each signing coldkey owns its hotkey is read from the chain at the scoring block.
@@ -288,11 +288,11 @@ def _score_epoch(self, state: HeraldState, epoch: int, block: int):
     for aid, candidates in selected:
         for position, row in enumerate(candidates, start=1):
             if owners.get(row["hotkey"]) != row["coldkey"]:
-                bt.logging.info(f"SUBMISSION_RESULT {row['submission_id']} hotkey_not_owned")
+                log.info(f"SUBMISSION_RESULT {row['submission_id']} hotkey_not_owned")
                 continue
             result, reason = _verify_submission(row, briefs_by_id, registry, fetch_fn, epoch, judge_fn,
                                                 now_ts)
-            bt.logging.info(f"SUBMISSION_RESULT {row['submission_id']} {reason}")
+            log.info(f"SUBMISSION_RESULT {row['submission_id']} {reason}")
             if result is None or not result.passed:
                 continue
             outlet = registry.lookup(row["url"])
@@ -302,7 +302,7 @@ def _score_epoch(self, state: HeraldState, epoch: int, block: int):
                 outlet_id=outlet.outlet_id, tier=outlet.tier, attribution=0,
                 reveal={"submission_id": row["submission_id"], "coldkey": row["coldkey"]},
             )
-            bt.logging.info(
+            log.info(
                 f"SUBMISSION_CREDITED {row['submission_id']} candidate={position}/{len(candidates)} "
                 f"hotkey={row['hotkey']}"
             )
@@ -331,7 +331,7 @@ def _score_epoch(self, state: HeraldState, epoch: int, block: int):
             status = _persistence_status(entry, briefs_by_id, epoch, judge_fn, registry=registry,
                                          fetch_fn=fetch_fn)
         except Exception as exc:
-            bt.logging.warning(f"Liveness check for {entry.url} raised: {exc}; holding")
+            log.warning(f"Liveness check for {entry.url} raised: {exc}; holding")
             status = "hold"
         entry.uid = uid_of.get(entry.hotkey, -1)
         if status == "alive" and entry.uid < 0:
@@ -343,9 +343,9 @@ def _score_epoch(self, state: HeraldState, epoch: int, block: int):
         if installment:
             pending.append((entry, installment))
     if legacy_expired:
-        bt.logging.info(f"LEGACY_VESTING_EXPIRED {legacy_expired}")
+        log.info(f"LEGACY_VESTING_EXPIRED {legacy_expired}")
     if held:
-        bt.logging.info(f"VESTING_HELD_UNREGISTERED {held}")
+        log.info(f"VESTING_HELD_UNREGISTERED {held}")
 
     # Pass 2: client reward pools cap each brief's installments; the rest is paid per miner UID.
     values = {}
@@ -391,14 +391,14 @@ def _score_epoch(self, state: HeraldState, epoch: int, block: int):
     ), self.wallet.hotkey)
 
     _save_state(self, state)
-    bt.logging.info(
+    log.info(
         f"EPOCH_WEIGHTS epoch={epoch} miners={len(usd_by_uid)} payable_usd={payable_usd:.6f} "
         f"daily_usd={price['daily_usd']:.6f} burn={weight_by_uid.get(BURN_UID, 0.0):.6f} "
         f"alpha_tao={price['alpha_tao']:.9f} tao_usd={price['tao_usd']:.6f} "
         f"daily_miner_alpha={price['daily_miner_alpha']:.6f}"
     )
     for uid in sorted(usd_by_uid):
-        bt.logging.info(
+        log.info(
             f"MINER_WEIGHT epoch={epoch} uid={uid} hotkey={hotkeys[uid]} "
             f"usd={usd_by_uid[uid]:.6f} w={weight_by_uid.get(uid, 0.0):.6f}"
         )
@@ -409,7 +409,7 @@ async def forward(self):
         time.sleep(VALIDATOR_WAIT)
         return
 
-    bt.logging.info(f"Herald forward pass at step {self.step} (consensus {_CONSENSUS_FP})")
+    log.info(f"Herald forward pass at step {self.step} (consensus {_CONSENSUS_FP})")
     try:
         state = _state(self)
         block = self.subtensor.get_current_block()
@@ -418,7 +418,7 @@ async def forward(self):
         before = None if scored else _state_data(state)
     except Exception as e:
         # No epoch is known without the ledger and the chain block: nothing is scored or burned.
-        bt.logging.error(f"Error in Herald forward pass: {e}")
+        log.error(f"Error in Herald forward pass: {e}")
         time.sleep(VALIDATOR_WAIT)
         return
 
@@ -426,7 +426,7 @@ async def forward(self):
         try:
             _restrict_scored_epoch(self, state)
         except Exception as e:
-            bt.logging.error(f"Checking the scored epoch's weights failed: {e}")
+            log.error(f"Checking the scored epoch's weights failed: {e}")
         time.sleep(VALIDATOR_WAIT)  # already scored this epoch; don't re-score it
         return
 

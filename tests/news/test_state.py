@@ -32,7 +32,7 @@ def _state_env(monkeypatch):
 
 def _capture(monkeypatch, level):
     messages = []
-    monkeypatch.setattr(state_mod.bt.logging, level,
+    monkeypatch.setattr(state_mod.log, level,
                         lambda msg="", *args, **kwargs: messages.append(str(msg)))
     return messages
 

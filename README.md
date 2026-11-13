@@ -37,9 +37,9 @@ cover goes to UID 0 and is burned.
 
 No miner server or command line is needed to contribute. See [docs/miner.md](docs/miner.md).
 
-**The miner neuron is not used.** Validators do not query miners or read miner commitments; a
-hotkey earns only through signed submissions credited to it. `herald-miner` and the miner neuron
-are deprecated.
+**There is no miner neuron.** Validators do not query miners or read miner commitments; a
+hotkey earns only through signed submissions credited to it. The miner neuron and the
+`herald-miner` CLI were removed.
 
 ## Layout
 
@@ -49,7 +49,6 @@ are deprecated.
   the miners' UIDs), `forward.py` (the epoch pass), `registry.py`, `publish.py`, `state.py`.
 - `herald/registry/admin.py` — operator CLI to manage and sign the outlet registry.
 - `neurons/validator.py` — the validator entrypoint.
-- `herald/miner/`, `neurons/miner.py` — deprecated; contributors do not need them.
 
 ## Running
 
@@ -64,7 +63,8 @@ python neurons/validator.py --netuid 69 --wallet.name <w> --wallet.hotkey <hk> \
   --neuron.disable_auto_update
 ```
 
-The current release is `0.2.2` (spec version 22). Validators verify the outlet registry's ed25519
+The current release is `0.2.2` (spec version 22) on `bittensor==11.3.2`; to upgrade an existing
+validator, see [docs/validator.md §8.7](docs/validator.md). Validators verify the outlet registry's ed25519
 signature when `HERALD_REGISTRY_PUBKEY` is set. See `.env.example` for configuration and
 [docs/validator.md](docs/validator.md) for the validator guide.
 
