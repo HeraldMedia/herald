@@ -16,7 +16,7 @@ Usage:
 """
 
 import time
-import bittensor as bt
+from herald.sdk.log import log
 import requests
 from typing import Dict, Any, Tuple
 from concurrent.futures import ThreadPoolExecutor
@@ -135,7 +135,7 @@ def evaluate_content_against_brief(brief: Dict, duration: str, description: str,
                 cache.set(prompt_content, cached_result, expire=OPENAI_CACHE_EXPIRY)
             
             emoji = "✅" if meets_brief else "❌"
-            bt.logging.info(f"Meets brief '{brief['id']}' (v{prompt_version}): {meets_brief} {emoji} (cache)")
+            log.info(f"Meets brief '{brief['id']}' (v{prompt_version}): {meets_brief} {emoji} (cache)")
             return meets_brief, reasoning
 
         # Run three concurrent evaluations
@@ -144,27 +144,27 @@ def evaluate_content_against_brief(brief: Dict, duration: str, description: str,
             futures = [executor.submit(_make_single_brief_evaluation, client, prompt_content) for _ in range(3)]
             results = [future.result() for future in futures]
         triple_elapsed = time.time() - triple_start
-        bt.logging.info(f"Triple validation for brief '{brief['id']}' completed in {triple_elapsed:.1f}s")
+        log.info(f"Triple validation for brief '{brief['id']}' completed in {triple_elapsed:.1f}s")
         
         # Optimistic: pass if either passes
         meets_brief = any(r["meets_brief"] for r in results)
         reasoning = next((r["reasoning"] for r in results if r["meets_brief"]), results[0]["reasoning"])
         
-        bt.logging.debug(f"Triple validation for '{brief['id']}': {results[0]['meets_brief']}, {results[1]['meets_brief']}, {results[2]['meets_brief']}")
+        log.debug(f"Triple validation for '{brief['id']}': {results[0]['meets_brief']}, {results[1]['meets_brief']}, {results[2]['meets_brief']}")
 
         if cache is not None:
             with client._cache_lock:
                 cache.set(prompt_content, {"meets_brief": meets_brief, "reasoning": reasoning}, expire=OPENAI_CACHE_EXPIRY)
 
         emoji = "✅" if meets_brief else "❌"
-        bt.logging.info(f"Brief {brief['id']} (v{prompt_version}): {meets_brief} {emoji}")
+        log.info(f"Brief {brief['id']} (v{prompt_version}): {meets_brief} {emoji}")
         return meets_brief, reasoning
 
     except requests.exceptions.RequestException as e:
-        bt.logging.error(f"{client.get_provider_name()} API error: {e}")
+        log.error(f"{client.get_provider_name()} API error: {e}")
         return False, f"Error during evaluation: {str(e)}"
     except Exception as e:
-        bt.logging.error(f"Unexpected error during brief evaluation: {e}")
+        log.error(f"Unexpected error during brief evaluation: {e}")
         return False, f"Unexpected error: {str(e)}"
 
 
@@ -187,7 +187,7 @@ def check_for_prompt_injection(description: str, transcript: str) -> bool:
             with client._cache_lock:
                 cache.set(injection_prompt_template, injection_detected, expire=OPENAI_CACHE_EXPIRY)
             
-            bt.logging.info(f"Prompt Injection: {injection_detected} (cache)")
+            log.info(f"Prompt Injection: {injection_detected} (cache)")
             return injection_detected
 
         # Make request to LLM
@@ -206,12 +206,12 @@ def check_for_prompt_injection(description: str, transcript: str) -> bool:
             with client._cache_lock:
                 cache.set(injection_prompt_template, injection_detected, expire=OPENAI_CACHE_EXPIRY)
 
-        bt.logging.info(f"Prompt Injection Check: {'Failed' if injection_detected else 'Passed'}")
+        log.info(f"Prompt Injection Check: {'Failed' if injection_detected else 'Passed'}")
         return injection_detected
 
     except requests.exceptions.RequestException as e:
-        bt.logging.error(f"{client.get_provider_name()} API error during prompt injection check: {e}")
+        log.error(f"{client.get_provider_name()} API error during prompt injection check: {e}")
         return False
     except Exception as e:
-        bt.logging.error(f"Unexpected error during prompt injection check: {e}")
+        log.error(f"Unexpected error during prompt injection check: {e}")
         return False

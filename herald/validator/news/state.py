@@ -28,7 +28,7 @@ import re
 import shutil
 from datetime import datetime, timezone
 
-import bittensor as bt
+from herald.sdk.log import log
 
 from herald.validator.utils.config import EPOCH_LEN, VEST_EPOCHS
 from .commit_index import CommitIndex
@@ -87,7 +87,7 @@ def _backup_keep() -> int:
     try:
         return max(0, int(raw))
     except ValueError:
-        bt.logging.warning(
+        log.warning(
             f"{BACKUP_KEEP_ENV}={raw!r} is not an integer; keeping {DEFAULT_BACKUP_KEEP} backups"
         )
         return DEFAULT_BACKUP_KEEP
@@ -177,7 +177,7 @@ def _backup_previous(path: str) -> None:
             os.remove(target)  # never leave a truncated file that looks like a good backup
         except OSError:
             pass
-        bt.logging.error(
+        log.error(
             f"Could not back up Herald state {path} before saving ({e}); saving without a backup"
         )
 
@@ -188,7 +188,7 @@ def _prune_backups(path: str, keep: int) -> None:
         try:
             os.remove(old)
         except OSError as e:
-            bt.logging.warning(f"Could not remove old Herald state backup {old}: {e}")
+            log.warning(f"Could not remove old Herald state backup {old}: {e}")
 
 
 def _identical_copy(path: str, kind: str):
@@ -235,7 +235,7 @@ def _admit_newer_schema(path: str, version: int, min_reader: int) -> None:
     existing = _identical_copy(path, f"schema{version}")
     if existing:
         # A restart before this version's first save: the copy from the previous start still holds.
-        bt.logging.warning(
+        log.warning(
             f"Herald state {path} (schema_version {version}) is already preserved as {existing}; "
             f"this validator's next save rewrites it as schema_version {SCHEMA_VERSION}"
         )
@@ -250,7 +250,7 @@ def _admit_newer_schema(path: str, version: int, min_reader: int) -> None:
             f"This version's next save would drop what it does not understand, so it will not "
             f"load the file without that copy."
         )) from e
-    bt.logging.warning(
+    log.warning(
         f"Preserved Herald state {path} (schema_version {version}) as {preserved} before this "
         f"validator's next save rewrites it as schema_version {SCHEMA_VERSION}"
     )
@@ -312,12 +312,12 @@ class HeraldState:
         version = schema_version_of(data)
         min_reader_schema_of(data)
         if version > SCHEMA_VERSION:
-            bt.logging.warning(
+            log.warning(
                 f"Herald state schema_version {version} is newer than this validator's "
                 f"{SCHEMA_VERSION} (rolled back?); loading the fields this version understands"
             )
         for key in sorted(set(data) - _TOP_LEVEL_KEYS):
-            bt.logging.warning(
+            log.warning(
                 f"Ignoring unknown top-level Herald state key {key!r}; it is not kept on the next save"
             )
         # Value types are checked while loading, not left to the first scoring pass: a hand-repaired
@@ -359,7 +359,7 @@ class HeraldState:
         tmp = path + ".tmp"
         try:
             with open(tmp, "w", encoding="utf-8") as f:
-                # bittensor 10.x hands numpy scalars (int64 uids, float32 stakes) into the domain
+                # The metagraph hands numpy scalars (int64 uids, float32 stakes) into the domain
                 # objects; unbox them so persistence never dies on "int64 is not JSON serializable".
                 json.dump(self.to_dict(), f, default=_json_np_safe)
                 f.flush()
@@ -383,7 +383,7 @@ class HeraldState:
             if _env_true(name):
                 # Only a failed load acts on these, so an override left set after the emergency
                 # would otherwise stay armed with no trace on a healthy start.
-                bt.logging.warning(
+                log.warning(
                     f"{name} is set. Unset it in the validator's env file and recreate the "
                     f"container once the emergency it was set for is over."
                 )
@@ -428,7 +428,7 @@ class HeraldState:
                     f"({e}), so it will not start fresh and let rotation delete that backup."
                 )) from e
             kept.append(backup + ".kept")
-        bt.logging.error(
+        log.error(
             f"{ALLOW_FRESH_ON_CORRUPT_ENV} is set and Herald state {path} is missing: STARTING WITH "
             f"AN EMPTY LEDGER. Its {len(kept)} backup(s) were renamed out of rotation so they are "
             f"never pruned (newest {kept[-1]}). Unset the variable and recreate the container once "
@@ -449,7 +449,7 @@ class HeraldState:
                 f" {ALLOW_FRESH_ON_CORRUPT_ENV} is set, but copying the file aside to "
                 f"{preserved} failed ({copy_error}), so it will not start fresh either.",
             ) from e
-        bt.logging.error(
+        log.error(
             f"{ALLOW_FRESH_ON_CORRUPT_ENV} is set: Herald state {path} could not be loaded "
             f"({type(e).__name__}: {e}). Preserved it as {preserved} and STARTING WITH AN EMPTY "
             f"LEDGER; no placement recorded in that file is loaded. Unset the variable and "

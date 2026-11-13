@@ -1,21 +1,17 @@
 import pytest
 from pydantic import ValidationError
 
-from herald.protocol import ClaimRecord, ClaimSynapse, MAX_CLAIMS_PER_RESPONSE
+import herald.protocol as protocol
+from herald.protocol import ClaimRecord, MAX_CLAIMS_PER_RESPONSE
 
 BASE = dict(brief_id="b", target_outlet_id="o", article_url="https://x/a",
             claimer_hotkey="hk", nonce="n", bond_atto=1, version_id=1)
 
 
-def test_normal_claim_and_list_ok():
-    ClaimSynapse(claims=[ClaimRecord(**BASE)] * 3)
-
-
-def test_claims_list_over_cap_rejected():
-    # A miner controls this list entirely; an oversized list must be rejected at parse time
-    # so the validator can't be OOM'd before its per-miner slice.
-    with pytest.raises(ValidationError):
-        ClaimSynapse(claims=[ClaimRecord(**BASE)] * (MAX_CLAIMS_PER_RESPONSE + 1))
+def test_normal_claim_ok_and_the_axon_synapse_is_gone():
+    assert ClaimRecord(**BASE).claimer_hotkey == "hk"
+    assert MAX_CLAIMS_PER_RESPONSE == 1000
+    assert not hasattr(protocol, "ClaimSynapse")
 
 
 def test_oversized_record_fields_rejected():

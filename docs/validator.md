@@ -96,10 +96,10 @@ git clone <this repo> herald && cd herald
 python3 -m venv .venv && . .venv/bin/activate
 pip install -r requirements.txt && pip install --no-build-isolation -e .
 
-btcli wallet new_coldkey --wallet.name herald_vali
-btcli wallet new_hotkey  --wallet.name herald_vali --hotkey v1
-btcli subnet register --netuid 69 --wallet.name herald_vali --wallet.hotkey v1 --network finney
-btcli stake add       --netuid 69 --wallet.name herald_vali --wallet.hotkey v1 --amount <TAO>
+btcli wallet new-coldkey -w herald_vali
+btcli wallet new-hotkey  -w herald_vali -H v1
+btcli subnets register --netuid 69 -w herald_vali -H v1 --network finney
+btcli stake add        --netuid 69 -w herald_vali -H v1 --amount-tao <TAO> --network finney
 ```
 
 ### 4.2 Place the signed registry + write `.env`
@@ -549,7 +549,7 @@ from the scores. It is never padded with other registered UIDs and never clipped
 **MinAllowedWeights must be 1.** A burn-only vector (UID 0) has a single entry, and so does a day
 on which one miner's pay covers the whole miner emission, so on a subnet whose MinAllowedWeights is
 above 1 those vectors are refused and no weights are set. Check `min_allowed_weights` with
-`btcli subnet hyperparameters --netuid 69 --network finney`.
+`btcli subnets hyperparameters 69 --network finney`.
 
 ### 8.7 Releases 0.2.2 (spec version 22) and 0.2.1 (spec version 21)
 

@@ -15,9 +15,11 @@ import shutil
 import subprocess
 import sys
 import uuid
+from types import SimpleNamespace
 
 import pytest
 
+from herald.sdk.log import log
 from herald.validator.news.state import SCHEMA_VERSION, HeraldState, backup_paths
 from herald.validator.utils.config import EPOCH_LEN, VEST_EPOCHS
 
@@ -41,7 +43,11 @@ def legacy(tmp_path):
         shutil.copyfile(os.path.join(LEGACY_SOURCES, f"{module}.py.txt"), package / f"{module}.py")
     sys.path.insert(0, str(tmp_path))
     try:
-        yield importlib.import_module(f"{name}.state")
+        module = importlib.import_module(f"{name}.state")
+        # The frozen sources log through ``bt.logging``, which the pinned SDK no longer has; give
+        # them Herald's logger under that name so their error paths run as they did.
+        module.bt = SimpleNamespace(logging=log)
+        yield module
     finally:
         sys.path.remove(str(tmp_path))
         for key in [k for k in sys.modules if k == name or k.startswith(name + ".")]:

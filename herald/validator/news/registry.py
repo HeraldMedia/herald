@@ -124,8 +124,8 @@ def load_registry(anchor_value: str = None, require_anchor: bool = False,
             elif os.getenv("HERALD_REQUIRE_SIGNED_REGISTRY", "false").lower() == "true":
                 raise ValueError("HERALD_REGISTRY_PUBKEY required but not set")
             else:
-                import bittensor as bt
-                bt.logging.warning("Loading UNSIGNED outlet registry; set HERALD_REGISTRY_PUBKEY in production")
+                from herald.sdk.log import log
+                log.warning("Loading UNSIGNED outlet registry; set HERALD_REGISTRY_PUBKEY in production")
             if require_anchor and not anchor_value:
                 raise ValueError("outlet registry on-chain anchor required but missing")
             if anchor_value:

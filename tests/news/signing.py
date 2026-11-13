@@ -2,7 +2,7 @@
 
 from functools import lru_cache
 
-from bittensor_wallet import Keypair
+from herald.sdk.keys import Keypair
 
 from herald.validator.news.signatures import draft_digest, submission_message
 

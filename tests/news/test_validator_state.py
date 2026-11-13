@@ -34,7 +34,6 @@ def test_constructor_restores_scores_before_initial_sync(tmp_path, monkeypatch):
 
     seen = {}
     monkeypatch.setattr(BaseNeuron, "__init__", fake_base_init)
-    monkeypatch.setattr("herald.base.validator.bt.Dendrite", lambda wallet: object())
     monkeypatch.setattr("herald.base.validator.asyncio.get_event_loop", lambda: object())
     monkeypatch.setattr(
         ConcreteValidator,

@@ -37,9 +37,9 @@ cover goes to UID 0 and is burned.
 
 No miner server or command line is needed to contribute. See [docs/miner.md](docs/miner.md).
 
-**The miner neuron is not used.** Validators do not query miners or read miner commitments; a
-hotkey earns only through signed submissions credited to it. `herald-miner` and the miner neuron
-are deprecated.
+**There is no miner neuron.** Validators do not query miners or read miner commitments; a
+hotkey earns only through signed submissions credited to it. The miner neuron and the
+`herald-miner` CLI were removed.
 
 ## Layout
 
@@ -49,7 +49,6 @@ are deprecated.
   the miners' UIDs), `forward.py` (the epoch pass), `registry.py`, `publish.py`, `state.py`.
 - `herald/registry/admin.py` — operator CLI to manage and sign the outlet registry.
 - `neurons/validator.py` — the validator entrypoint.
-- `herald/miner/`, `neurons/miner.py` — deprecated; contributors do not need them.
 
 ## Running
 

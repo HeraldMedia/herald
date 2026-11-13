@@ -3,7 +3,7 @@ from herald.validator.news.chain import get_commitments_with_block
 
 
 def test_extracts_value_and_onchain_block(monkeypatch):
-    # bittensor >= 10 hands query_map keys back already ss58-decoded (strings); mock decode_metadata.
+    # query_map keys come back already ss58-decoded (strings); mock decode_metadata.
     monkeypatch.setattr(chainmod, "decode_metadata", lambda v: v["data"])
 
     entries = [

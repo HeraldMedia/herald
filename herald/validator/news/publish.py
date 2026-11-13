@@ -4,7 +4,7 @@ import hashlib
 import json
 import os
 
-import bittensor as bt
+from herald.sdk.log import log
 import httpx
 
 
@@ -130,7 +130,7 @@ def publish_results(endpoint: str, items: list):
                                   headers=headers)
             response.raise_for_status()
         except Exception as e:
-            bt.logging.warning(f"Result publish failed: {e}")
+            log.warning(f"Result publish failed: {e}")
 
 
 def build_epoch_snapshot(vesting, briefs: list, pool_spent: dict, rewards_by_uid: dict,
@@ -212,7 +212,7 @@ def publish_snapshot(endpoint: str, item: dict, hotkey) -> bool:
         response.raise_for_status()
         return True
     except Exception as exc:
-        bt.logging.warning(f"Snapshot publish failed: {exc}")
+        log.warning(f"Snapshot publish failed: {exc}")
         return False
 
 
@@ -229,5 +229,5 @@ def publish_weight_receipt(endpoint: str, item: dict, hotkey) -> bool:
         response.raise_for_status()
         return True
     except Exception as exc:
-        bt.logging.warning(f"Weight receipt publish failed: {exc}")
+        log.warning(f"Weight receipt publish failed: {exc}")
         return False

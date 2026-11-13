@@ -242,7 +242,7 @@ per tempo. See `docs/validator.md` §8.5.
 
 A validator publishes no address on chain and listens on no port: it reads briefs and
 contributor submissions from the Herald backend, reads the chain over RPC and fetches article
-and price pages, all outbound. `AXON_EXTERNAL_IP` and `AXON_EXTERNAL_PORT` are miner settings.
+and price pages, all outbound. `AXON_EXTERNAL_IP` and `AXON_EXTERNAL_PORT` (and any `--axon.*` flag) are accepted and ignored.
 
 ## Several validators
 

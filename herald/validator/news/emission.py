@@ -3,7 +3,7 @@
 import math
 from typing import Dict, List, Tuple
 
-import bittensor as bt
+from herald.sdk.log import log
 import numpy as np
 
 from herald.base.utils.weight_utils import convert_weights_and_uids_for_emit
@@ -111,7 +111,7 @@ def allowed_emit_vector(scores, hotkeys, weight_hotkeys: Dict[int, str],
     scored = {int(uid): hotkey for uid, hotkey in (weight_hotkeys or {}).items()}
     support = [int(uid) for uid in np.flatnonzero(np.isfinite(values) & (values > 0))]
     if not support:
-        bt.logging.warning("WEIGHT_VECTOR_BURN reason=no_scores")
+        log.warning("WEIGHT_VECTOR_BURN reason=no_scores")
         support_uids, shares = [BURN_UID], np.array([1.0])
     else:
         moved = [uid for uid in support if uid != BURN_UID
@@ -119,7 +119,7 @@ def allowed_emit_vector(scores, hotkeys, weight_hotkeys: Dict[int, str],
         total = math.fsum(values[support])
         share_by_uid = {uid: values[uid] / total for uid in support if uid not in moved}
         if moved:
-            bt.logging.warning(
+            log.warning(
                 f"WEIGHT_VECTOR_BURN reason=hotkey_changed: scores on UIDs {moved[:10]} are not held by "
                 f"the hotkeys the epoch was scored for; their weight moves to UID {BURN_UID}"
             )

@@ -2,11 +2,11 @@ import time
 import os
 import wandb
 import threading
-import bittensor as bt
 import random
 import numpy as np
 
 from herald.base.validator import BaseValidatorNeuron
+from herald.sdk.log import log
 from herald.validator.news.forward import _state, _state_path, forward
 from herald.validator.news.publish import publish_weight_receipt
 from herald.validator.utils.config import __version__, WANDB_PROJECT, WEIGHT_RESUBMIT_BLOCKS
@@ -33,9 +33,9 @@ class Validator(BaseValidatorNeuron):
         # Shows whether this validator signs with the hotkey registered at UID 0.
         try:
             is_uid0 = self.wallet.hotkey.ss58_address == self.metagraph.hotkeys[0]
-            bt.logging.info(f"OWNER_VALIDATOR_CHECK wallet_hotkey_is_uid0={is_uid0}")
+            log.info(f"OWNER_VALIDATOR_CHECK wallet_hotkey_is_uid0={is_uid0}")
         except Exception as e:
-            bt.logging.warning(f"OWNER_VALIDATOR_CHECK unavailable: {e}")
+            log.warning(f"OWNER_VALIDATOR_CHECK unavailable: {e}")
 
         try:
             cw_handler = get_cloudwatch_handler(
@@ -43,10 +43,10 @@ class Validator(BaseValidatorNeuron):
                 stream_name=f"validator-uid-{self.uid}",
             )
             if cw_handler:
-                bt.logging._logger.addHandler(cw_handler)
-                bt.logging.info("CloudWatch logging enabled")
+                log.add_handler(cw_handler)
+                log.info("CloudWatch logging enabled")
         except Exception as e:
-            bt.logging.warning(f"Failed to set up CloudWatch logging: {e}")
+            log.warning(f"Failed to set up CloudWatch logging: {e}")
 
         # Initialize wandb only if disable_set_weights is False
         if not self.config.neuron.disable_set_weights:
@@ -59,7 +59,7 @@ class Validator(BaseValidatorNeuron):
                     reinit="finish_previous"
                 )
             except Exception as e:
-                bt.logging.error(f"Failed to initialize wandb run: {e}")
+                log.error(f"Failed to initialize wandb run: {e}")
 
     async def forward(self):
         """
@@ -84,7 +84,7 @@ class Validator(BaseValidatorNeuron):
         try:
             return max(0, int(self.block) - int(self.metagraph.last_update[self.uid]))
         except Exception as e:
-            bt.logging.warning(f"Unable to read the age of this uid's weight record: {e}")
+            log.warning(f"Unable to read the age of this uid's weight record: {e}")
             return None
 
     def _has_weights_to_submit(self) -> bool:
@@ -93,12 +93,12 @@ class Validator(BaseValidatorNeuron):
         # is retried, counted and alerted on only when this validator would actually submit.
         state = _state(self)
         if state.last_scored_epoch < 0:
-            bt.logging.info("No Herald epoch has been scored yet; skipping weight submission")
+            log.info("No Herald epoch has been scored yet; skipping weight submission")
             return False
 
         scores = np.asarray(self.scores)
         if not np.any(np.isfinite(scores) & (scores > 0)):
-            bt.logging.info(
+            log.info(
                 f"Herald epoch {state.last_scored_epoch} has no rewarded miners; "
                 "skipping weight submission"
             )
@@ -111,7 +111,7 @@ class Validator(BaseValidatorNeuron):
         if age is None:
             return False
         if age < WEIGHT_RESUBMIT_BLOCKS:
-            bt.logging.info(
+            log.info(
                 f"Weights for uid {self.uid} are {age} blocks old "
                 f"(< {WEIGHT_RESUBMIT_BLOCKS}); skipping resubmission"
             )
@@ -127,7 +127,7 @@ class Validator(BaseValidatorNeuron):
             return False
         state = _state(self)
         submitted = state.last_weight_epoch >= state.last_scored_epoch
-        bt.logging.info(
+        log.info(
             f"{'Re-submitting' if submitted else 'Submitting'} Herald epoch "
             f"{state.last_scored_epoch} weights: the chain record for uid {self.uid} is "
             f"{self._weight_record_age_blocks} blocks old (>= {WEIGHT_RESUBMIT_BLOCKS})"

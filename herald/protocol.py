@@ -1,11 +1,15 @@
+"""The claim record a miner revealed against an on-chain commitment.
+
+The axon synapse that carried these records between neurons was removed with the miner neuron; the
+record and its bounds remain for code that still parses stored or exported claims.
+"""
+
 import typing
 
-import bittensor as bt
 from pydantic import BaseModel, Field, StringConstraints
 
-# A miner controls its entire ClaimSynapse response, so bound every collection/number: the
-# validator parses the whole body before its per-miner slice, and an unbounded list (or a
-# huge merkle_path / big-int) would let one miner exhaust its memory.
+# A claim body is untrusted input, so bound every collection/number: an unbounded list (or a huge
+# merkle_path / big-int) would let one sender exhaust the parser's memory.
 # Above the per-miner scoring slice (200) but tight enough that a full list of max-size text
 # fields can't balloon one response into hundreds of MB before the per-miner slice applies.
 MAX_CLAIMS_PER_RESPONSE = 1000
@@ -40,10 +44,3 @@ class ClaimRecord(BaseModel):
     # article and reject a snapshot that does not match it; publisher-API outlets, which validators
     # fetch only as an excerpt, require one.
     snapshot_text: typing.Optional[str] = Field(default=None, max_length=MAX_SNAPSHOT_TEXT)
-
-
-class ClaimSynapse(bt.Synapse):
-    """Validator -> miner pull. The miner fills `claims` with its active reveals."""
-
-    request_brief_ids: typing.Optional[typing.List[_ShortStr]] = Field(default=None, max_length=1000)
-    claims: typing.Optional[typing.List[ClaimRecord]] = Field(default=None, max_length=MAX_CLAIMS_PER_RESPONSE)
