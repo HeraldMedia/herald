@@ -144,6 +144,19 @@ def test_network_names_and_endpoints_resolve_as_before(network, expected, monkey
     assert chain.resolve_network(network) == expected
 
 
+@pytest.mark.parametrize("endpoint", [
+    "ws://node.example:9944", "wss://node.example:9944", "node.example:9944", "node.example",
+    "10.0.0.5:9944", "http://node.example:9944", "https://node.example", "ws:node.example",
+    "wss:/node.example", "xws://node.example", "WS://node.example", "ws://", "wss://", "://x", "",
+])
+def test_only_an_endpoint_without_a_websocket_scheme_gets_the_plain_one(endpoint):
+    # The rule the SDK applied before: keep an address that starts with either WebSocket scheme,
+    # and put the plain one in front of anything else.
+    kept = endpoint.startswith(("ws://", "wss://"))
+    expected = endpoint if kept else "ws://" + endpoint
+    assert chain.resolve_network(endpoint) == (expected, "unknown")
+
+
 def test_construction_is_cold_and_pinned_to_the_one_endpoint():
     sub = chain.Subtensor("wss://node.example:443", connect=False)
     assert (sub.network, sub.chain_endpoint) == ("unknown", "wss://node.example:443")
