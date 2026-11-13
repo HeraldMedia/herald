@@ -119,3 +119,5 @@ def test_added_handlers_and_primary_loggers_receive_records(capsys):
     capsys.readouterr()
     events.log(38, "an event")
     assert any(line.endswith("| an event") for line in _lines(capsys))
+    log.enable_debug()
+    assert events.level == 38  # the flags set Herald's and the SDK's level, not this logger's

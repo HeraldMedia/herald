@@ -131,6 +131,8 @@ class HeraldLogging:
         self._file = None
         self._extra = []
         self._primary = []
+        # The loggers whose level the flags set; other registered loggers keep their own level.
+        self._leveled = [logging.getLogger(HERALD_LOGGER), logging.getLogger(SDK_LOGGER)]
         self._state = None
         self._third_party = False
         for name in (HERALD_LOGGER, SDK_LOGGER):
@@ -211,7 +213,7 @@ class HeraldLogging:
 
     def _set_level(self, level: int, trace_format: bool):
         self._formatter.trace = trace_format
-        for logger in self._primary:
+        for logger in self._leveled:
             logger.setLevel(level)
         if self._third_party:
             logging.getLogger().setLevel(level)
@@ -271,7 +273,7 @@ class HeraldLogging:
         return self._logger.level
 
     def setLevel(self, level: int):
-        for logger in self._primary:
+        for logger in self._leveled:
             logger.setLevel(level)
 
     def set_config(self, config):
